@@ -103,38 +103,6 @@ services:
     networks:
       - a22-net
 
-  avatar-service:
-    build:
-      context: ./remote/avatar-service
-      dockerfile: Dockerfile
-    image: a22/avatar-service:latest
-    restart: unless-stopped
-    command: python -m uvicorn app:app --host 0.0.0.0 --port 19300
-    environment:
-      CUDA_VISIBLE_DEVICES: ${AVATAR_CUDA_VISIBLE_DEVICES:-0}
-      HF_HOME: /cache/huggingface
-      TRANSFORMERS_CACHE: /cache/huggingface
-      TMP_DIR: /tmp/a22/avatar
-      AVATAR_ID: ${AVATAR_ID:-default-2d}
-      AVATAR_RENDERER_MODE: ${AVATAR_RENDERER_MODE:-parameterized_2d}
-      TTS_MODE: ${TTS_MODE:-cosyvoice2_sft}
-      TTS_MODEL: ${TTS_MODEL_PATH:-/models/CosyVoice2-0.5B}
-      TTS_REPO_PATH: ${TTS_REPO_PATH:-/models/CosyVoice}
-      TTS_DEVICE: ${TTS_DEVICE:-cuda:0}
-      TTS_SPEAKER_ID: ${TTS_SPEAKER_ID:-}
-      TTS_WARMUP_ENABLED: ${TTS_WARMUP_ENABLED:-false}
-    volumes:
-      - ${A22_MODEL_ROOT:-/root/autodl-tmp/a22/models}:/models:ro
-      - ./shared:/shared:ro
-      - ${A22_HF_CACHE_ROOT:-/root/autodl-tmp/a22/.cache/huggingface}:/cache/huggingface
-      - ${A22_TMP_ROOT:-/root/autodl-tmp/a22/tmp}:/tmp/a22
-      - ${A22_LOG_ROOT:-/root/autodl-tmp/a22/logs}:/workspace-logs
-    ports:
-      - "19300:19300"
-    gpus: all
-    networks:
-      - a22-net
-
   orchestrator:
     build:
       context: ./remote/orchestrator
@@ -145,7 +113,6 @@ services:
       - qwen-server
       - speech-service
       - vision-service
-      - avatar-service
     command: python -m uvicorn app:app --host 0.0.0.0 --port 19000
     environment:
       LOG_DIR: /workspace-logs/orchestrator
@@ -160,9 +127,6 @@ services:
       VISION_SERVICE_ENABLED: ${VISION_SERVICE_ENABLED:-true}
       VISION_SERVICE_BASE: http://vision-service:19200
       VISION_SERVICE_TIMEOUT_SECONDS: ${VISION_SERVICE_TIMEOUT_SECONDS:-20}
-      AVATAR_SERVICE_ENABLED: ${AVATAR_SERVICE_ENABLED:-true}
-      AVATAR_SERVICE_BASE: http://avatar-service:19300
-      AVATAR_SERVICE_TIMEOUT_SECONDS: ${AVATAR_SERVICE_TIMEOUT_SECONDS:-20}
       EMOTION_SERVICE_ENABLED: ${EMOTION_SERVICE_ENABLED:-false}
       EMOTION_SERVICE_BASE: ${EMOTION_SERVICE_BASE:-http://emotion-service:19400}
       EMOTION_SERVICE_TIMEOUT_SECONDS: ${EMOTION_SERVICE_TIMEOUT_SECONDS:-15}

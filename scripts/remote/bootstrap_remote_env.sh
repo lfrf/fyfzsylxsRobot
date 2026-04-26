@@ -17,7 +17,6 @@ SERVICES=(
   qwen-server
   speech-service
   vision-service
-  avatar-service
   orchestrator
 )
 
@@ -129,11 +128,6 @@ for svc in "${SERVICES[@]}"; do
   "$py_in_env" -m pip install --upgrade pip setuptools wheel
   "$py_in_env" -m pip install -r "$req_file"
 done
-
-if [[ ! -x "$A22_ENV_ROOT/soulx-full/bin/python" ]]; then
-  echo "[warn] soulx runtime env missing: $A22_ENV_ROOT/soulx-full/bin/python"
-  echo "[warn] start_remote_stack_tmux.sh requires SOULX_PYTHON for avatar video rendering."
-fi
 
 if [[ "$WRITE_ENV_SH" == "true" ]]; then
   mkdir -p "$(dirname "$ENV_SH_PATH")"

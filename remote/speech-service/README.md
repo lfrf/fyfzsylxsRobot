@@ -12,7 +12,7 @@
 remote/speech-service/.venv
 ```
 
-不要与 `avatar-service` 或 `orchestrator` 共用环境。
+不要与 `orchestrator` 或其他远端模型服务共用环境。
 
 ## 2. 已固定的关键版本
 

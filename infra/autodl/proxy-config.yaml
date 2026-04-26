@@ -6,10 +6,4 @@ proxies:
     route_path: /health/*
 
   - host_and_port: http://127.0.0.1:19000
-    route_path: /chat
-
-  - host_and_port: http://127.0.0.1:19000
-    route_path: /chat/*
-
-  - host_and_port: http://127.0.0.1:19000
-    route_path: /media/*
+    route_path: /v1/robot/chat_turn

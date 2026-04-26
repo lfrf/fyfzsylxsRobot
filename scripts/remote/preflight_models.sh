@@ -15,9 +15,6 @@ QWEN_ASR_REPO_ID="${QWEN_ASR_REPO_ID:-Qwen/Qwen3-ASR-1.7B}"
 QWEN_VL_REPO_ID="${QWEN_VL_REPO_ID:-Qwen/Qwen2.5-VL-7B-Instruct}"
 EMOTION2VEC_REPO_ID="${EMOTION2VEC_REPO_ID:-emotion2vec/emotion2vec_plus_base}"
 COSYVOICE_300M_REPO_ID="${COSYVOICE_300M_REPO_ID:-FunAudioLLM/CosyVoice-300M-Instruct}"
-WAV2VEC_REPO_ID="${WAV2VEC_REPO_ID:-facebook/wav2vec2-base-960h}"
-SOULX_ROOT_REPO_ID="${SOULX_ROOT_REPO_ID:-Kedreamix/SoulX-FlashHead}"
-SOULX_CKPT_REPO_ID="${SOULX_CKPT_REPO_ID:-Kedreamix/SoulX-FlashHead-1_3B}"
 COSYVOICE_REPO_URL="${COSYVOICE_REPO_URL:-https://github.com/FunAudioLLM/CosyVoice.git}"
 
 REQUIRED_MODELS=(
@@ -28,9 +25,6 @@ REQUIRED_MODELS=(
   "hsemotion"
   "CosyVoice-300M-Instruct"
   "CosyVoice"
-  "SoulX-FlashHead"
-  "SoulX-FlashHead-1_3B"
-  "wav2vec2-base-960h"
 )
 
 usage() {
@@ -46,8 +40,7 @@ Options:
 
 Environment overrides:
   QWEN_LLM_REPO_ID, QWEN_ASR_REPO_ID, QWEN_VL_REPO_ID
-  EMOTION2VEC_REPO_ID, COSYVOICE_300M_REPO_ID, WAV2VEC_REPO_ID
-  SOULX_ROOT_REPO_ID, SOULX_CKPT_REPO_ID, COSYVOICE_REPO_URL
+  EMOTION2VEC_REPO_ID, COSYVOICE_300M_REPO_ID, COSYVOICE_REPO_URL
 EOF
 }
 
@@ -217,15 +210,6 @@ download_model() {
       ;;
     "CosyVoice-300M-Instruct")
       snapshot_download "$COSYVOICE_300M_REPO_ID" "$target_dir"
-      ;;
-    "wav2vec2-base-960h")
-      snapshot_download "$WAV2VEC_REPO_ID" "$target_dir"
-      ;;
-    "SoulX-FlashHead")
-      snapshot_download "$SOULX_ROOT_REPO_ID" "$target_dir"
-      ;;
-    "SoulX-FlashHead-1_3B")
-      snapshot_download "$SOULX_CKPT_REPO_ID" "$target_dir"
       ;;
     *)
       echo "[error] unsupported model name: $model_name" >&2

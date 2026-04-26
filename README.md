@@ -248,19 +248,28 @@ python3 -m pytest tests/test_robot_skeleton.py tests/test_robot_chat_logic.py
 - ROS2；
 - avatar-service、lip-sync 或数字人视频输出。
 
-## 后续删除候选
+## 清理状态
 
-以下旧材料不属于新的机器人主链路，后续清理任务中可以在确认引用关系后删除：
+旧数字人主链路已经从 active runtime 中移除：
 
 ```text
 a22_demo/
-System_Design/
-local/frontend/
-local/edge-backend/
-local/robot-runtime/
-remote/avatar-service/
-avatar / UE / A2F 相关临时材料
-旧数字人 demo 材料
+local/
+tmp/avatar_bridge/
+tmp/ue_a2f_runtime/
+tmp/ready_model/
+compose.local.yaml
+compose.robot.yaml
+old frontend / edge-backend / local robot-runtime startup files
 ```
 
-本任务不删除这些大型目录。
+`remote/avatar-service/` 暂时保留为 quarantine 状态，因为其中包含 CosyVoice/TTS runtime 代码，后续应先把可复用 TTS 能力抽取到机器人 TTS 服务，再删除 avatar 渲染部分。
+
+以下能力仍保留，因为它们可能属于机器人远端脑：
+
+- `remote/orchestrator/`
+- `remote/speech-service/`
+- `remote/qwen-server/`
+- `remote/vision-service/`
+- `shared/`
+- `raspirobot/`

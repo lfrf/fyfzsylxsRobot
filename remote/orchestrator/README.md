@@ -1,47 +1,19 @@
-# orchestrator (remote skeleton)
+# RobotMatch Orchestrator
 
-Minimal HTTP service implementing **contract v0** (`shared/contracts/api_v1.md`).
+Remote brain service for the Raspberry Pi robot runtime.
 
-## Runtime recommendation
+Active V1 endpoint:
 
-Current priority:
-
-1. use `uv + .venv + uvicorn` on the lab server
-2. keep Docker as a future deployment option
-
-This service uses Python 3.11 syntax, so the remote runtime must use **Python 3.11**.
-
-## Required files
-
-- `app.py` — remote HTTP service
-- `pyproject.toml` — `uv` dependency and Python version requirement
-- `requirements.txt` — compatibility fallback
-- `.python-version` — preferred local Python version marker
-
-## Recreate the remote uv environment
-
-If an old environment already exists, delete it first and recreate it with Python 3.11.
-
-```bash
-cd remote/orchestrator
-rm -rf .venv
-uv python install 3.11
-uv venv --python 3.11 .venv
-source .venv/bin/activate
-uv sync
+```text
+POST /v1/robot/chat_turn
+Content-Type: application/json
 ```
 
-If `uv python install 3.11` is unavailable on the server, use an existing Python 3.11 binary instead:
+The old digital-human `/chat`, `/ws/chat`, and avatar media proxy routes are not registered in the active app.
 
-```bash
-cd remote/orchestrator
-rm -rf .venv
-uv venv --python /usr/bin/python3.11 .venv
-source .venv/bin/activate
-uv sync
-```
+## Runtime
 
-## Run without Docker (lab server)
+This service uses Python 3.11 syntax.
 
 ```bash
 cd remote/orchestrator
@@ -49,58 +21,40 @@ source .venv/bin/activate
 uv run uvicorn app:app --host 127.0.0.1 --port 19000
 ```
 
-run llm
-python -m vllm.entrypoints.openai.api_server   --host 127.0.0.1   --port 8000   --model /data/zifeng/siyuan/A22/models/Qwen2.5-7B-Instruct   --served-model-name Qwen2.5-7B-Instruct   --dtype auto   --gpu-memory-utilization 0.80   --trust-remote-code
+For SSH tunnel demos, bind to `127.0.0.1` on the remote server and forward the port from Raspberry Pi.
 
-Bind to `127.0.0.1` when exposing only via SSH tunnel from your laptop.
-
-## Health check
-
-On the remote host itself:
+## Health Check
 
 ```bash
 curl http://127.0.0.1:19000/health
-curl -X POST http://127.0.0.1:19000/chat \
-  -H "Content-Type: application/json" \
-  -d '{"session_id":"demo-001","turn_id":1,"user_text":"hello","input_type":"text"}'
 ```
 
-## Run with Docker (future option)
-
-From repository root:
+## Robot Chat Smoke Request
 
 ```bash
-docker compose -f compose.yaml -f compose.remote.yaml up -d orchestrator
+curl -X POST http://127.0.0.1:19000/v1/robot/chat_turn \
+  -H "Content-Type: application/json" \
+  -d '{
+    "session_id": "demo-session-001",
+    "turn_id": "turn-0001",
+    "mode": "elderly",
+    "input": {
+      "type": "audio_base64",
+      "audio_base64": "UklGRiQAAABXQVZFZm10IBAAAAABAAEA",
+      "audio_format": "wav",
+      "sample_rate": 16000,
+      "channels": 1,
+      "text_hint": "切换为儿童模式"
+    }
+  }'
 ```
 
-## Endpoints
+## Kept Remote Model Services
 
-- `GET /health`
-- `POST /chat`
+The robot project may reuse:
 
-See `../../shared/contracts/` for JSON shapes.
+- `remote/qwen-server` for LLM;
+- `remote/speech-service` for ASR and speech emotion;
+- `remote/vision-service` for visual preprocessing.
 
-
-cd /home/zifeng/siyuan/A22/A22_wmzjbyGroup/remote/qwen-server
-source .venv/bin/activate
-CUDA_VISIBLE_DEVICES=2 vllm serve /data/zifeng/siyuan/A22/models/Qwen2.5-7B-Instruct \
-  --served-model-name Qwen2.5-7B-Instruct \
-  --host 127.0.0.1 \
-  --port 8000 \
-  --gpu-memory-utilization 0.90 \
-  --max-model-len 8192
-
-
-cd /home/zifeng/siyuan/A22/A22_wmzjbyGroup/remote/orchestrator
-source .venv/bin/activate
-export LLM_PROVIDER=qwen
-export LLM_MODEL=Qwen2.5-7B-Instruct
-export LLM_API_BASE=http://127.0.0.1:8000/v1
-export LLM_API_KEY=EMPTY
-export LLM_REQUEST_TIMEOUT_SECONDS=60
-export LLM_TEMPERATURE=0.4
-export LLM_MAX_TOKENS=256
-uv run uvicorn app:app --host 127.0.0.1 --port 19000
-
-ss -ltnp | grep 8000
-ps -ef | grep "uvicorn app:app --host 127.0.0.1 --port 19000"
+`remote/avatar-service` is not part of the active robot runtime. It is retained temporarily only because it contains CosyVoice/TTS runtime code that may need extraction into a de-avatarized robot TTS service.

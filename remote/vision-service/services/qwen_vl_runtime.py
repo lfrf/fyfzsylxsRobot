@@ -176,7 +176,7 @@ class QwenVLRuntime:
 
         prompt_payload = {
             "task": (
-                "You are the visual preprocessing module for an emotional support digital human system. "
+                "You are the visual preprocessing module for an emotional support desktop robot system. "
                 "Analyze the provided event-window keyframes and respond with strict JSON."
             ),
             "output_format": {

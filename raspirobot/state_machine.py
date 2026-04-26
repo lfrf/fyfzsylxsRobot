@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
-from enum import StrEnum
+from enum import Enum
 
 
-class RobotRuntimeState(StrEnum):
+class RobotRuntimeState(str, Enum):
     IDLE = "IDLE"
     WAKE_DETECTED = "WAKE_DETECTED"
     LISTENING = "LISTENING"
@@ -14,7 +16,7 @@ class RobotRuntimeState(StrEnum):
     ERROR_FALLBACK = "ERROR_FALLBACK"
 
 
-class RobotEvent(StrEnum):
+class RobotEvent(str, Enum):
     WAKE_WORD_DETECTED = "WakeWordDetected"
     WAKE_ACK_DONE = "WakeAckDone"
     SPEECH_START = "SpeechStart"
@@ -84,4 +86,3 @@ class RobotStateMachine:
     def apply_mode(self, mode_id: str | None) -> None:
         if mode_id:
             self.mode_id = mode_id
-

@@ -28,7 +28,7 @@ class AvatarClient:
         avatar_action: AvatarAction,
         tts_plan: TTSRenderPlan | None = None,
     ) -> AvatarGenerationResult:
-        if settings.avatar_service_enabled:
+        if getattr(settings, "avatar_service_enabled", False):
             try:
                 return await self._call_service(
                     request=request,
@@ -89,8 +89,10 @@ class AvatarClient:
             ),
         }
 
-        async with httpx.AsyncClient(timeout=settings.avatar_service_timeout_seconds) as client:
-            response = await client.post(f"{settings.avatar_service_base}/generate", json=payload)
+        timeout_seconds = getattr(settings, "avatar_service_timeout_seconds", 20)
+        service_base = getattr(settings, "avatar_service_base", "http://127.0.0.1:19300")
+        async with httpx.AsyncClient(timeout=timeout_seconds) as client:
+            response = await client.post(f"{service_base}/generate", json=payload)
             response.raise_for_status()
 
         body = response.json()
@@ -167,13 +169,15 @@ class AvatarClient:
 
         profile_id = _non_empty_string(getattr(request, "avatar_profile_id", None))
         if profile_id:
-            mapped = _non_empty_string(settings.avatar_profile_ref_image_map.get(profile_id))
+            profile_map = getattr(settings, "avatar_profile_ref_image_map", {})
+            mapped = _non_empty_string(profile_map.get(profile_id))
             if mapped:
                 return mapped
 
-        default_profile_id = _non_empty_string(settings.avatar_default_profile_id)
+        default_profile_id = _non_empty_string(getattr(settings, "avatar_default_profile_id", None))
         if default_profile_id:
-            mapped_default = _non_empty_string(settings.avatar_profile_ref_image_map.get(default_profile_id))
+            profile_map = getattr(settings, "avatar_profile_ref_image_map", {})
+            mapped_default = _non_empty_string(profile_map.get(default_profile_id))
             if mapped_default:
                 return mapped_default
         return None
