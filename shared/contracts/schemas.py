@@ -286,7 +286,7 @@ class ModeInfo(BaseModel):
     mode_id: str = Field(default="elderly")
     display_name: str = Field(default="老年模式")
     prompt_policy: str = Field(default="elderly_gentle")
-    rag_namespace: str = Field(default="elderly_companion")
+    rag_namespace: str = Field(default="elderly_care")
     action_style: str = Field(default="calm_supportive")
 
 
@@ -315,6 +315,8 @@ class RobotChatResponse(BaseModel):
     turn_id: str = Field(..., min_length=1)
     mode: ModeInfo = Field(default_factory=ModeInfo)
     mode_switch: ModeSwitchResult | None = None
+    mode_changed: bool = False
+    active_rag_namespace: str | None = None
     asr_text: str = Field(default="")
     reply_text: str = Field(default="")
     emotion: EmotionResult = Field(default_factory=EmotionResult)
