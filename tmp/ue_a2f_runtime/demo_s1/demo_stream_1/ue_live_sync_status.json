@@ -1,0 +1,12 @@
+{
+  "ts_ms": 1776671104922,
+  "state": {
+    "running": true,
+    "last_check_ts": 1776671104.8469384,
+    "last_seen_turn": 30001,
+    "last_applied_turn": 30001
+  },
+  "event": "applied",
+  "turn_id": 30001,
+  "info": "ok"
+}

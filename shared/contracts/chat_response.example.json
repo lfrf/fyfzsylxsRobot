@@ -1,0 +1,79 @@
+{
+  "server_status": "ok",
+  "reply_text": "我在，你可以慢慢说。",
+  "emotion_style": "gentle",
+  "avatar_action": {
+    "facial_expression": "soft_concern",
+    "head_motion": "slow_nod"
+  },
+  "avatar_output": {
+    "contract_version": "v1",
+    "renderer_mode": "parameterized_2d",
+    "transport_mode": "http_poll",
+    "websocket_endpoint": "/ws/avatar",
+    "sequence_id": 3,
+    "avatar_id": "default-2d",
+    "emotion_style": "gentle",
+    "audio": {
+      "audio_url": "https://example.com/audio/demo-001-turn-3.wav",
+      "mime_type": "audio/wav",
+      "duration_ms": 1860,
+      "sample_rate_hz": 24000,
+      "cache_key": "demo-001:3:tts"
+    },
+    "viseme_seq": [
+      {
+        "start_ms": 0,
+        "end_ms": 620,
+        "label": "a",
+        "weight": 0.55
+      },
+      {
+        "start_ms": 620,
+        "end_ms": 1240,
+        "label": "e",
+        "weight": 0.5
+      },
+      {
+        "start_ms": 1240,
+        "end_ms": 1860,
+        "label": "sil",
+        "weight": 0.45
+      }
+    ],
+    "expression_seq": [
+      {
+        "start_ms": 0,
+        "end_ms": 1860,
+        "expression": "soft_concern",
+        "intensity": 0.72
+      }
+    ],
+    "motion_seq": [
+      {
+        "start_ms": 0,
+        "end_ms": 1860,
+        "motion": "slow_nod",
+        "intensity": 0.6
+      }
+    ]
+  },
+  "server_ts": 1710000001,
+  "response_source": "mock",
+  "context_summary": "user:你好，我今天有点难受",
+  "reasoning_hint": "detected-emotional-keywords",
+  "turn_time_window": {
+    "window_id": "demo-001-turn-3",
+    "source_clock": "browser_epoch_ms",
+    "transport_mode": "http_turn",
+    "sequence_id": 3,
+    "capture_started_at_ms": 1710000000123,
+    "capture_ended_at_ms": 1710000004243,
+    "audio_started_at_ms": 1710000000123,
+    "audio_ended_at_ms": 1710000004243,
+    "video_started_at_ms": 1710000004010,
+    "video_ended_at_ms": 1710000004250,
+    "window_duration_ms": 4120
+  },
+  "alignment_mode": "video_audio"
+}

@@ -1,0 +1,5 @@
+{
+  "backend": "lexical_tfidf",
+  "chunk_count": 44,
+  "source": "processed/chunks.jsonl"
+}

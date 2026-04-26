@@ -1,0 +1,41 @@
+<svg width="640" height="800" viewBox="0 0 640 800" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="320" y1="0" x2="320" y2="800" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1E3A8A"/>
+      <stop offset="1" stop-color="#0F172A"/>
+    </linearGradient>
+    <linearGradient id="coat" x1="320" y1="428" x2="320" y2="800" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1D4ED8"/>
+      <stop offset="1" stop-color="#172554"/>
+    </linearGradient>
+    <linearGradient id="skin" x1="320" y1="132" x2="320" y2="512" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F8D9C4"/>
+      <stop offset="1" stop-color="#E8B79D"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(320 196) rotate(90) scale(310 248)">
+      <stop stop-color="#93C5FD" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#93C5FD" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="640" height="800" rx="44" fill="url(#bg)"/>
+  <ellipse cx="320" cy="202" rx="248" ry="220" fill="url(#glow)"/>
+
+  <path d="M146 800C162 648 234 548 320 548C406 548 478 648 494 800H146Z" fill="url(#coat)"/>
+  <path d="M254 532L320 602L386 532V800H254V532Z" fill="#F8FAFC" fill-opacity="0.92"/>
+
+  <path d="M404 216C404 308 368 390 320 390C272 390 236 308 236 216C236 124 272 80 320 80C368 80 404 124 404 216Z" fill="url(#skin)"/>
+  <path d="M232 212C232 124 274 60 320 60C366 60 408 124 408 212V230C382 180 355 150 320 150C285 150 258 180 232 230V212Z" fill="#0F172A"/>
+  <path d="M232 230C256 182 287 156 320 156C353 156 384 182 408 230V262C384 234 354 220 320 220C286 220 256 234 232 262V230Z" fill="#111827"/>
+
+  <ellipse cx="278" cy="248" rx="16" ry="18" fill="#0F172A"/>
+  <ellipse cx="362" cy="248" rx="16" ry="18" fill="#0F172A"/>
+  <path d="M286 318C306 338 334 338 354 318" stroke="#1E293B" stroke-width="10" stroke-linecap="round"/>
+  <path d="M304 278L320 304L336 278" stroke="#C08457" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" opacity="0.7"/>
+
+  <path d="M248 460C268 426 294 408 320 408C346 408 372 426 392 460C365 484 342 496 320 496C298 496 275 484 248 460Z" fill="#E8B79D"/>
+  <path d="M244 460C208 480 174 532 160 588L240 646L274 530L244 460Z" fill="#1E40AF"/>
+  <path d="M396 460C432 480 466 532 480 588L400 646L366 530L396 460Z" fill="#1E40AF"/>
+
+  <text x="320" y="740" text-anchor="middle" fill="#BFDBFE" font-size="26" font-family="Arial, sans-serif" letter-spacing="2">Replace with your portrait</text>
+</svg>

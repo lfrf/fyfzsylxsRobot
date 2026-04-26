@@ -1,0 +1,202 @@
+{
+  "contract_version": "a2f-ab-v1",
+  "generated_at_ms": 1776460321114,
+  "session_id": "demo_s1",
+  "stream_id": "demo_stream_1",
+  "turn_id": 106,
+  "emotion_style": "supportive",
+  "events": [
+    "turn_start",
+    "audio_ready",
+    "motion_plan",
+    "turn_end"
+  ],
+  "valid": true,
+  "invalid_reason": null,
+  "audio": {
+    "local_path": "C:\\Users\\FYF\\Documents\\GitHub\\FuChuangSai_A22\\tmp\\avatar_bridge\\demo_s1\\demo_stream_1\\turn-106.wav",
+    "source": "data_url",
+    "mime_type": "audio/wav",
+    "duration_ms": 3420,
+    "sample_rate_hz": 22050
+  },
+  "viseme_seq": [
+    {
+      "start_ms": 0,
+      "end_ms": 570,
+      "label": "a",
+      "weight": 0.45
+    },
+    {
+      "start_ms": 570,
+      "end_ms": 1140,
+      "label": "e",
+      "weight": 0.55
+    },
+    {
+      "start_ms": 1140,
+      "end_ms": 1710,
+      "label": "i",
+      "weight": 0.65
+    },
+    {
+      "start_ms": 1710,
+      "end_ms": 2280,
+      "label": "o",
+      "weight": 0.45
+    },
+    {
+      "start_ms": 2280,
+      "end_ms": 2850,
+      "label": "u",
+      "weight": 0.55
+    },
+    {
+      "start_ms": 2850,
+      "end_ms": 3420,
+      "label": "m",
+      "weight": 0.65
+    }
+  ],
+  "expression_seq": [
+    {
+      "start_ms": 0,
+      "end_ms": 3420,
+      "expression": "smile",
+      "intensity": 0.72
+    }
+  ],
+  "motion_seq": [
+    {
+      "start_ms": 0,
+      "end_ms": 3420,
+      "motion": "nod",
+      "intensity": 0.6
+    }
+  ],
+  "ue_tracks": {
+    "session_id": "demo_s1",
+    "stream_id": "demo_stream_1",
+    "turn_id": 106,
+    "audio_path": "C:\\Users\\FYF\\Documents\\GitHub\\FuChuangSai_A22\\tmp\\avatar_bridge\\demo_s1\\demo_stream_1\\turn-106.wav",
+    "audio_remote_url": null,
+    "emotion_style": "supportive",
+    "viseme_curves": [
+      {
+        "start_ms": 0,
+        "end_ms": 570,
+        "curve": "Mouth_AA",
+        "weight": 0.45
+      },
+      {
+        "start_ms": 570,
+        "end_ms": 1140,
+        "curve": "Mouth_EH",
+        "weight": 0.55
+      },
+      {
+        "start_ms": 1140,
+        "end_ms": 1710,
+        "curve": "Mouth_IH",
+        "weight": 0.65
+      },
+      {
+        "start_ms": 1710,
+        "end_ms": 2280,
+        "curve": "Mouth_OH",
+        "weight": 0.45
+      },
+      {
+        "start_ms": 2280,
+        "end_ms": 2850,
+        "curve": "Mouth_OO",
+        "weight": 0.55
+      },
+      {
+        "start_ms": 2850,
+        "end_ms": 3420,
+        "curve": "Mouth_Closed",
+        "weight": 0.65
+      }
+    ],
+    "expressions": [
+      {
+        "start_ms": 0,
+        "end_ms": 3420,
+        "expression": "smile",
+        "intensity": 0.72
+      }
+    ],
+    "body_actions": [
+      {
+        "start_ms": 0,
+        "end_ms": 3420,
+        "action": "nod",
+        "intensity": 0.6
+      }
+    ]
+  },
+  "a2f_tracks": {
+    "session_id": "demo_s1",
+    "stream_id": "demo_stream_1",
+    "turn_id": 106,
+    "audio_path": "C:\\Users\\FYF\\Documents\\GitHub\\FuChuangSai_A22\\tmp\\avatar_bridge\\demo_s1\\demo_stream_1\\turn-106.wav",
+    "audio_remote_url": null,
+    "sample_rate_hz": 22050,
+    "duration_ms": 3420,
+    "viseme_seq": [
+      {
+        "start_ms": 0,
+        "end_ms": 570,
+        "label": "a",
+        "weight": 0.45
+      },
+      {
+        "start_ms": 570,
+        "end_ms": 1140,
+        "label": "e",
+        "weight": 0.55
+      },
+      {
+        "start_ms": 1140,
+        "end_ms": 1710,
+        "label": "i",
+        "weight": 0.65
+      },
+      {
+        "start_ms": 1710,
+        "end_ms": 2280,
+        "label": "o",
+        "weight": 0.45
+      },
+      {
+        "start_ms": 2280,
+        "end_ms": 2850,
+        "label": "u",
+        "weight": 0.55
+      },
+      {
+        "start_ms": 2850,
+        "end_ms": 3420,
+        "label": "m",
+        "weight": 0.65
+      }
+    ],
+    "expression_seq": [
+      {
+        "start_ms": 0,
+        "end_ms": 3420,
+        "expression": "smile",
+        "intensity": 0.72
+      }
+    ],
+    "motion_seq": [
+      {
+        "start_ms": 0,
+        "end_ms": 3420,
+        "motion": "nod",
+        "intensity": 0.6
+      }
+    ]
+  }
+}

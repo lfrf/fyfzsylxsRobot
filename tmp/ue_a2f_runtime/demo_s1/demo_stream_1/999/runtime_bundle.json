@@ -1,0 +1,724 @@
+{
+  "contract_version": "a2f-ab-v1",
+  "generated_at_ms": 1776619367928,
+  "session_id": "demo_s1",
+  "stream_id": "demo_stream_1",
+  "turn_id": 999,
+  "emotion_style": "supportive",
+  "events": [
+    "turn_start",
+    "audio_ready",
+    "motion_plan",
+    "turn_end"
+  ],
+  "valid": true,
+  "invalid_reason": null,
+  "audio": {
+    "local_path": "C:\\Users\\FYF\\Documents\\GitHub\\FuChuangSai_A22\\tmp\\avatar_bridge\\demo_s1\\demo_stream_1\\turn-999.wav",
+    "source": "data_url",
+    "mime_type": "audio/wav",
+    "duration_ms": 8267,
+    "sample_rate_hz": 22050
+  },
+  "viseme_seq": [
+    {
+      "start_ms": 0,
+      "end_ms": 239,
+      "label": "a",
+      "weight": 0.74
+    },
+    {
+      "start_ms": 239,
+      "end_ms": 479,
+      "label": "e",
+      "weight": 0.64
+    },
+    {
+      "start_ms": 479,
+      "end_ms": 718,
+      "label": "i",
+      "weight": 0.6
+    },
+    {
+      "start_ms": 718,
+      "end_ms": 958,
+      "label": "o",
+      "weight": 0.71
+    },
+    {
+      "start_ms": 958,
+      "end_ms": 1197,
+      "label": "u",
+      "weight": 0.67
+    },
+    {
+      "start_ms": 1197,
+      "end_ms": 1436,
+      "label": "m",
+      "weight": 0.52
+    },
+    {
+      "start_ms": 1436,
+      "end_ms": 1676,
+      "label": "a",
+      "weight": 0.74
+    },
+    {
+      "start_ms": 1676,
+      "end_ms": 1915,
+      "label": "e",
+      "weight": 0.64
+    },
+    {
+      "start_ms": 1915,
+      "end_ms": 2155,
+      "label": "i",
+      "weight": 0.6
+    },
+    {
+      "start_ms": 2155,
+      "end_ms": 2394,
+      "label": "o",
+      "weight": 0.71
+    },
+    {
+      "start_ms": 2394,
+      "end_ms": 2633,
+      "label": "u",
+      "weight": 0.67
+    },
+    {
+      "start_ms": 2633,
+      "end_ms": 2873,
+      "label": "m",
+      "weight": 0.52
+    },
+    {
+      "start_ms": 2873,
+      "end_ms": 3112,
+      "label": "a",
+      "weight": 0.74
+    },
+    {
+      "start_ms": 3112,
+      "end_ms": 3351,
+      "label": "e",
+      "weight": 0.64
+    },
+    {
+      "start_ms": 3351,
+      "end_ms": 3591,
+      "label": "i",
+      "weight": 0.6
+    },
+    {
+      "start_ms": 3591,
+      "end_ms": 3830,
+      "label": "o",
+      "weight": 0.71
+    },
+    {
+      "start_ms": 3830,
+      "end_ms": 3958,
+      "label": "sil",
+      "weight": 0.05
+    },
+    {
+      "start_ms": 3958,
+      "end_ms": 4197,
+      "label": "u",
+      "weight": 0.67
+    },
+    {
+      "start_ms": 4197,
+      "end_ms": 4437,
+      "label": "m",
+      "weight": 0.52
+    },
+    {
+      "start_ms": 4437,
+      "end_ms": 4676,
+      "label": "a",
+      "weight": 0.74
+    },
+    {
+      "start_ms": 4676,
+      "end_ms": 4916,
+      "label": "e",
+      "weight": 0.64
+    },
+    {
+      "start_ms": 4916,
+      "end_ms": 5155,
+      "label": "i",
+      "weight": 0.6
+    },
+    {
+      "start_ms": 5155,
+      "end_ms": 5394,
+      "label": "o",
+      "weight": 0.71
+    },
+    {
+      "start_ms": 5394,
+      "end_ms": 5634,
+      "label": "u",
+      "weight": 0.67
+    },
+    {
+      "start_ms": 5634,
+      "end_ms": 5873,
+      "label": "m",
+      "weight": 0.52
+    },
+    {
+      "start_ms": 5873,
+      "end_ms": 6112,
+      "label": "a",
+      "weight": 0.74
+    },
+    {
+      "start_ms": 6112,
+      "end_ms": 6352,
+      "label": "e",
+      "weight": 0.64
+    },
+    {
+      "start_ms": 6352,
+      "end_ms": 6591,
+      "label": "i",
+      "weight": 0.6
+    },
+    {
+      "start_ms": 6591,
+      "end_ms": 6831,
+      "label": "o",
+      "weight": 0.71
+    },
+    {
+      "start_ms": 6831,
+      "end_ms": 7070,
+      "label": "u",
+      "weight": 0.67
+    },
+    {
+      "start_ms": 7070,
+      "end_ms": 7309,
+      "label": "m",
+      "weight": 0.52
+    },
+    {
+      "start_ms": 7309,
+      "end_ms": 7549,
+      "label": "a",
+      "weight": 0.74
+    },
+    {
+      "start_ms": 7549,
+      "end_ms": 7788,
+      "label": "e",
+      "weight": 0.64
+    },
+    {
+      "start_ms": 7788,
+      "end_ms": 8028,
+      "label": "i",
+      "weight": 0.6
+    },
+    {
+      "start_ms": 8028,
+      "end_ms": 8267,
+      "label": "o",
+      "weight": 0.71
+    }
+  ],
+  "expression_seq": [
+    {
+      "start_ms": 0,
+      "end_ms": 8267,
+      "expression": "neutral_smile",
+      "intensity": 0.72
+    }
+  ],
+  "motion_seq": [
+    {
+      "start_ms": 0,
+      "end_ms": 8267,
+      "motion": "steady",
+      "intensity": 0.6
+    }
+  ],
+  "ue_tracks": {
+    "session_id": "demo_s1",
+    "stream_id": "demo_stream_1",
+    "turn_id": 999,
+    "audio_path": "C:\\Users\\FYF\\Documents\\GitHub\\FuChuangSai_A22\\tmp\\avatar_bridge\\demo_s1\\demo_stream_1\\turn-999.wav",
+    "audio_remote_url": null,
+    "emotion_style": "supportive",
+    "viseme_curves": [
+      {
+        "start_ms": 0,
+        "end_ms": 239,
+        "curve": "Mouth_AA",
+        "weight": 0.6
+      },
+      {
+        "start_ms": 239,
+        "end_ms": 479,
+        "curve": "Mouth_EH",
+        "weight": 0.5568
+      },
+      {
+        "start_ms": 479,
+        "end_ms": 718,
+        "curve": "Mouth_IH",
+        "weight": 0.46799999999999997
+      },
+      {
+        "start_ms": 718,
+        "end_ms": 958,
+        "curve": "Mouth_OH",
+        "weight": 0.6
+      },
+      {
+        "start_ms": 958,
+        "end_ms": 1197,
+        "curve": "Mouth_OO",
+        "weight": 0.6
+      },
+      {
+        "start_ms": 1197,
+        "end_ms": 1436,
+        "curve": "Mouth_Closed",
+        "weight": 0.364
+      },
+      {
+        "start_ms": 1436,
+        "end_ms": 1676,
+        "curve": "Mouth_AA",
+        "weight": 0.6
+      },
+      {
+        "start_ms": 1676,
+        "end_ms": 1915,
+        "curve": "Mouth_EH",
+        "weight": 0.5568
+      },
+      {
+        "start_ms": 1915,
+        "end_ms": 2155,
+        "curve": "Mouth_IH",
+        "weight": 0.46799999999999997
+      },
+      {
+        "start_ms": 2155,
+        "end_ms": 2394,
+        "curve": "Mouth_OH",
+        "weight": 0.6
+      },
+      {
+        "start_ms": 2394,
+        "end_ms": 2633,
+        "curve": "Mouth_OO",
+        "weight": 0.6
+      },
+      {
+        "start_ms": 2633,
+        "end_ms": 2873,
+        "curve": "Mouth_Closed",
+        "weight": 0.364
+      },
+      {
+        "start_ms": 2873,
+        "end_ms": 3112,
+        "curve": "Mouth_AA",
+        "weight": 0.6
+      },
+      {
+        "start_ms": 3112,
+        "end_ms": 3351,
+        "curve": "Mouth_EH",
+        "weight": 0.5568
+      },
+      {
+        "start_ms": 3351,
+        "end_ms": 3591,
+        "curve": "Mouth_IH",
+        "weight": 0.46799999999999997
+      },
+      {
+        "start_ms": 3591,
+        "end_ms": 3830,
+        "curve": "Mouth_OH",
+        "weight": 0.6
+      },
+      {
+        "start_ms": 3830,
+        "end_ms": 3958,
+        "curve": "Mouth_Closed",
+        "weight": 0.018
+      },
+      {
+        "start_ms": 3958,
+        "end_ms": 4197,
+        "curve": "Mouth_OO",
+        "weight": 0.6
+      },
+      {
+        "start_ms": 4197,
+        "end_ms": 4437,
+        "curve": "Mouth_Closed",
+        "weight": 0.364
+      },
+      {
+        "start_ms": 4437,
+        "end_ms": 4676,
+        "curve": "Mouth_AA",
+        "weight": 0.6
+      },
+      {
+        "start_ms": 4676,
+        "end_ms": 4916,
+        "curve": "Mouth_EH",
+        "weight": 0.5568
+      },
+      {
+        "start_ms": 4916,
+        "end_ms": 5155,
+        "curve": "Mouth_IH",
+        "weight": 0.46799999999999997
+      },
+      {
+        "start_ms": 5155,
+        "end_ms": 5394,
+        "curve": "Mouth_OH",
+        "weight": 0.6
+      },
+      {
+        "start_ms": 5394,
+        "end_ms": 5634,
+        "curve": "Mouth_OO",
+        "weight": 0.6
+      },
+      {
+        "start_ms": 5634,
+        "end_ms": 5873,
+        "curve": "Mouth_Closed",
+        "weight": 0.364
+      },
+      {
+        "start_ms": 5873,
+        "end_ms": 6112,
+        "curve": "Mouth_AA",
+        "weight": 0.6
+      },
+      {
+        "start_ms": 6112,
+        "end_ms": 6352,
+        "curve": "Mouth_EH",
+        "weight": 0.5568
+      },
+      {
+        "start_ms": 6352,
+        "end_ms": 6591,
+        "curve": "Mouth_IH",
+        "weight": 0.46799999999999997
+      },
+      {
+        "start_ms": 6591,
+        "end_ms": 6831,
+        "curve": "Mouth_OH",
+        "weight": 0.6
+      },
+      {
+        "start_ms": 6831,
+        "end_ms": 7070,
+        "curve": "Mouth_OO",
+        "weight": 0.6
+      },
+      {
+        "start_ms": 7070,
+        "end_ms": 7309,
+        "curve": "Mouth_Closed",
+        "weight": 0.364
+      },
+      {
+        "start_ms": 7309,
+        "end_ms": 7549,
+        "curve": "Mouth_AA",
+        "weight": 0.6
+      },
+      {
+        "start_ms": 7549,
+        "end_ms": 7788,
+        "curve": "Mouth_EH",
+        "weight": 0.5568
+      },
+      {
+        "start_ms": 7788,
+        "end_ms": 8028,
+        "curve": "Mouth_IH",
+        "weight": 0.46799999999999997
+      },
+      {
+        "start_ms": 8028,
+        "end_ms": 8267,
+        "curve": "Mouth_OH",
+        "weight": 0.6
+      }
+    ],
+    "expressions": [
+      {
+        "start_ms": 0,
+        "end_ms": 8267,
+        "expression": "neutral_smile",
+        "intensity": 0.72
+      }
+    ],
+    "body_actions": [
+      {
+        "start_ms": 0,
+        "end_ms": 8267,
+        "action": "steady",
+        "intensity": 0.6
+      }
+    ]
+  },
+  "a2f_tracks": {
+    "session_id": "demo_s1",
+    "stream_id": "demo_stream_1",
+    "turn_id": 999,
+    "audio_path": "C:\\Users\\FYF\\Documents\\GitHub\\FuChuangSai_A22\\tmp\\avatar_bridge\\demo_s1\\demo_stream_1\\turn-999.wav",
+    "audio_remote_url": null,
+    "sample_rate_hz": 22050,
+    "duration_ms": 8267,
+    "viseme_seq": [
+      {
+        "start_ms": 0,
+        "end_ms": 239,
+        "label": "a",
+        "weight": 0.74
+      },
+      {
+        "start_ms": 239,
+        "end_ms": 479,
+        "label": "e",
+        "weight": 0.64
+      },
+      {
+        "start_ms": 479,
+        "end_ms": 718,
+        "label": "i",
+        "weight": 0.6
+      },
+      {
+        "start_ms": 718,
+        "end_ms": 958,
+        "label": "o",
+        "weight": 0.71
+      },
+      {
+        "start_ms": 958,
+        "end_ms": 1197,
+        "label": "u",
+        "weight": 0.67
+      },
+      {
+        "start_ms": 1197,
+        "end_ms": 1436,
+        "label": "m",
+        "weight": 0.52
+      },
+      {
+        "start_ms": 1436,
+        "end_ms": 1676,
+        "label": "a",
+        "weight": 0.74
+      },
+      {
+        "start_ms": 1676,
+        "end_ms": 1915,
+        "label": "e",
+        "weight": 0.64
+      },
+      {
+        "start_ms": 1915,
+        "end_ms": 2155,
+        "label": "i",
+        "weight": 0.6
+      },
+      {
+        "start_ms": 2155,
+        "end_ms": 2394,
+        "label": "o",
+        "weight": 0.71
+      },
+      {
+        "start_ms": 2394,
+        "end_ms": 2633,
+        "label": "u",
+        "weight": 0.67
+      },
+      {
+        "start_ms": 2633,
+        "end_ms": 2873,
+        "label": "m",
+        "weight": 0.52
+      },
+      {
+        "start_ms": 2873,
+        "end_ms": 3112,
+        "label": "a",
+        "weight": 0.74
+      },
+      {
+        "start_ms": 3112,
+        "end_ms": 3351,
+        "label": "e",
+        "weight": 0.64
+      },
+      {
+        "start_ms": 3351,
+        "end_ms": 3591,
+        "label": "i",
+        "weight": 0.6
+      },
+      {
+        "start_ms": 3591,
+        "end_ms": 3830,
+        "label": "o",
+        "weight": 0.71
+      },
+      {
+        "start_ms": 3830,
+        "end_ms": 3958,
+        "label": "sil",
+        "weight": 0.05
+      },
+      {
+        "start_ms": 3958,
+        "end_ms": 4197,
+        "label": "u",
+        "weight": 0.67
+      },
+      {
+        "start_ms": 4197,
+        "end_ms": 4437,
+        "label": "m",
+        "weight": 0.52
+      },
+      {
+        "start_ms": 4437,
+        "end_ms": 4676,
+        "label": "a",
+        "weight": 0.74
+      },
+      {
+        "start_ms": 4676,
+        "end_ms": 4916,
+        "label": "e",
+        "weight": 0.64
+      },
+      {
+        "start_ms": 4916,
+        "end_ms": 5155,
+        "label": "i",
+        "weight": 0.6
+      },
+      {
+        "start_ms": 5155,
+        "end_ms": 5394,
+        "label": "o",
+        "weight": 0.71
+      },
+      {
+        "start_ms": 5394,
+        "end_ms": 5634,
+        "label": "u",
+        "weight": 0.67
+      },
+      {
+        "start_ms": 5634,
+        "end_ms": 5873,
+        "label": "m",
+        "weight": 0.52
+      },
+      {
+        "start_ms": 5873,
+        "end_ms": 6112,
+        "label": "a",
+        "weight": 0.74
+      },
+      {
+        "start_ms": 6112,
+        "end_ms": 6352,
+        "label": "e",
+        "weight": 0.64
+      },
+      {
+        "start_ms": 6352,
+        "end_ms": 6591,
+        "label": "i",
+        "weight": 0.6
+      },
+      {
+        "start_ms": 6591,
+        "end_ms": 6831,
+        "label": "o",
+        "weight": 0.71
+      },
+      {
+        "start_ms": 6831,
+        "end_ms": 7070,
+        "label": "u",
+        "weight": 0.67
+      },
+      {
+        "start_ms": 7070,
+        "end_ms": 7309,
+        "label": "m",
+        "weight": 0.52
+      },
+      {
+        "start_ms": 7309,
+        "end_ms": 7549,
+        "label": "a",
+        "weight": 0.74
+      },
+      {
+        "start_ms": 7549,
+        "end_ms": 7788,
+        "label": "e",
+        "weight": 0.64
+      },
+      {
+        "start_ms": 7788,
+        "end_ms": 8028,
+        "label": "i",
+        "weight": 0.6
+      },
+      {
+        "start_ms": 8028,
+        "end_ms": 8267,
+        "label": "o",
+        "weight": 0.71
+      }
+    ],
+    "expression_seq": [
+      {
+        "start_ms": 0,
+        "end_ms": 8267,
+        "expression": "neutral_smile",
+        "intensity": 0.72
+      }
+    ],
+    "motion_seq": [
+      {
+        "start_ms": 0,
+        "end_ms": 8267,
+        "motion": "steady",
+        "intensity": 0.6
+      }
+    ]
+  }
+}

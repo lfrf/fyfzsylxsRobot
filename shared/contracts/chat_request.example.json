@@ -1,0 +1,93 @@
+{
+  "session_id": "demo-001",
+  "turn_id": 3,
+  "user_text": "我最近有点焦虑，也有一点累",
+  "input_type": "audio",
+  "client_ts": 1710000000,
+  "text_source": "browser_speech_api",
+  "audio_format": "wav",
+  "audio_duration_ms": 4120,
+  "audio_sample_rate_hz": 48000,
+  "audio_channels": 1,
+  "client_asr_text": "我最近有点焦虑，也有一点累",
+  "client_asr_source": "browser_speech_api",
+  "turn_time_window": {
+    "window_id": "demo-001-turn-3",
+    "source_clock": "browser_epoch_ms",
+    "transport_mode": "http_turn",
+    "capture_strategy": "event_window_keyframes",
+    "sequence_id": 3,
+    "capture_started_at_ms": 1710000000123,
+    "capture_ended_at_ms": 1710000004243,
+    "triggered_at_ms": 1710000003000,
+    "pre_roll_ms": 6000,
+    "post_roll_ms": 1200,
+    "audio_started_at_ms": 1710000000123,
+    "audio_ended_at_ms": 1710000004243,
+    "window_duration_ms": 4120
+  },
+  "audio_meta": {
+    "format": "wav",
+    "duration_ms": 4120,
+    "sample_rate_hz": 48000,
+    "channels": 1,
+    "source": "browser_microphone",
+    "frame_count": 197760
+  },
+  "video_frames": [
+    {
+      "frame_id": "demo-001-turn-3-frame-1",
+      "timestamp_ms": 1710000004010,
+      "mime_type": "image/jpeg",
+      "image_base64": "<frame-1-base64>",
+      "width": 640,
+      "height": 360,
+      "source": "browser_camera"
+    },
+    {
+      "frame_id": "demo-001-turn-3-frame-2",
+      "timestamp_ms": 1710000004130,
+      "mime_type": "image/jpeg",
+      "image_base64": "<frame-2-base64>",
+      "width": 640,
+      "height": 360,
+      "source": "browser_camera"
+    },
+    {
+      "frame_id": "demo-001-turn-3-frame-3",
+      "timestamp_ms": 1710000004250,
+      "mime_type": "image/jpeg",
+      "image_base64": "<frame-3-base64>",
+      "width": 640,
+      "height": 360,
+      "source": "browser_camera"
+    }
+  ],
+  "video_meta": {
+    "format": "jpeg_event_window",
+    "duration_ms": 240,
+    "buffer_duration_ms": 15000,
+    "frame_count": 3,
+    "buffered_frame_count": 15,
+    "sampled_frame_count": 3,
+    "width": 640,
+    "height": 360,
+    "fps": 12.5,
+    "source": "browser_camera",
+    "keyframe_strategy": "rolling_buffer_event_window"
+  },
+  "speech_features": {
+    "transcript_confidence": 0.65,
+    "speaking_rate": 3.4,
+    "pause_ratio": 0.18,
+    "rms_energy": 0.0712,
+    "peak_level": 0.514,
+    "pitch_hz": 183.4,
+    "dominant_channel": 1,
+    "emotion_tags": ["hesitant", "fatigued"],
+    "channel_rms_levels": [0.0712],
+    "source": "remote_belle_whisper"
+  },
+  "vision_features": null,
+  "alignment_mode": "video_audio"
+}

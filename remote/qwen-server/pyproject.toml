@@ -1,0 +1,11 @@
+[project]
+name = "a22-qwen-server"
+version = "0.1.0"
+description = "Remote Qwen vLLM OpenAI-compatible serving service for A22"
+requires-python = ">=3.11"
+dependencies = [
+  "vllm>=0.18.0",
+]
+
+[tool.uv]
+package = false

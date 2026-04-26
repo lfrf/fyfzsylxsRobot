@@ -1,0 +1,32 @@
+{
+  "doc_count": 24,
+  "chunk_count": 44,
+  "by_primary_topic": {
+    "anxiety": 11,
+    "bipolar_risk": 4,
+    "depression": 8,
+    "elderly_support": 6,
+    "escalation": 4,
+    "sleep": 5,
+    "stress": 2,
+    "support_strategy": 4
+  },
+  "by_chunk_type": {
+    "knowledge_fact": 13,
+    "support_guidance": 10,
+    "safety_rule": 11,
+    "faq": 6,
+    "support_template": 4
+  },
+  "by_risk_level": {
+    "low": 17,
+    "medium": 17,
+    "high": 10
+  },
+  "by_source_level": {
+    "core": 23,
+    "safety": 11,
+    "dialogue": 10
+  },
+  "invalid_record_count": 0
+}

@@ -1,0 +1,213 @@
+{
+  "contract_version": "a2f-ab-v1",
+  "generated_at_ms": 1776661883569,
+  "session_id": "demo_s1",
+  "stream_id": "demo_stream_1",
+  "turn_id": 9901,
+  "emotion_style": "supportive",
+  "events": [
+    "turn_start",
+    "motion_plan",
+    "turn_end"
+  ],
+  "valid": true,
+  "invalid_reason": null,
+  "audio": {},
+  "viseme_seq": [
+    {
+      "start_ms": 0,
+      "end_ms": 180,
+      "label": "a",
+      "weight": 0.74
+    },
+    {
+      "start_ms": 180,
+      "end_ms": 360,
+      "label": "e",
+      "weight": 0.64
+    },
+    {
+      "start_ms": 360,
+      "end_ms": 540,
+      "label": "i",
+      "weight": 0.6
+    },
+    {
+      "start_ms": 540,
+      "end_ms": 720,
+      "label": "o",
+      "weight": 0.71
+    },
+    {
+      "start_ms": 720,
+      "end_ms": 900,
+      "label": "u",
+      "weight": 0.67
+    },
+    {
+      "start_ms": 900,
+      "end_ms": 1080,
+      "label": "m",
+      "weight": 0.52
+    },
+    {
+      "start_ms": 1080,
+      "end_ms": 1260,
+      "label": "a",
+      "weight": 0.74
+    }
+  ],
+  "expression_seq": [
+    {
+      "start_ms": 0,
+      "end_ms": 1260,
+      "expression": "smile",
+      "intensity": 0.72
+    }
+  ],
+  "motion_seq": [
+    {
+      "start_ms": 0,
+      "end_ms": 1260,
+      "motion": "nod",
+      "intensity": 0.6
+    }
+  ],
+  "ue_tracks": {
+    "session_id": "demo_s1",
+    "stream_id": "demo_stream_1",
+    "turn_id": 9901,
+    "audio_path": null,
+    "audio_remote_url": null,
+    "emotion_style": "supportive",
+    "viseme_curves": [
+      {
+        "start_ms": 0,
+        "end_ms": 180,
+        "curve": "Mouth_AA",
+        "weight": 0.6
+      },
+      {
+        "start_ms": 180,
+        "end_ms": 360,
+        "curve": "Mouth_EH",
+        "weight": 0.5568
+      },
+      {
+        "start_ms": 360,
+        "end_ms": 540,
+        "curve": "Mouth_IH",
+        "weight": 0.46799999999999997
+      },
+      {
+        "start_ms": 540,
+        "end_ms": 720,
+        "curve": "Mouth_OH",
+        "weight": 0.6
+      },
+      {
+        "start_ms": 720,
+        "end_ms": 900,
+        "curve": "Mouth_OO",
+        "weight": 0.6
+      },
+      {
+        "start_ms": 900,
+        "end_ms": 1080,
+        "curve": "Mouth_Closed",
+        "weight": 0.364
+      },
+      {
+        "start_ms": 1080,
+        "end_ms": 1260,
+        "curve": "Mouth_AA",
+        "weight": 0.6
+      }
+    ],
+    "expressions": [
+      {
+        "start_ms": 0,
+        "end_ms": 1260,
+        "expression": "smile",
+        "intensity": 0.72
+      }
+    ],
+    "body_actions": [
+      {
+        "start_ms": 0,
+        "end_ms": 1260,
+        "action": "nod",
+        "intensity": 0.6
+      }
+    ]
+  },
+  "a2f_tracks": {
+    "session_id": "demo_s1",
+    "stream_id": "demo_stream_1",
+    "turn_id": 9901,
+    "audio_path": null,
+    "audio_remote_url": null,
+    "sample_rate_hz": null,
+    "duration_ms": null,
+    "viseme_seq": [
+      {
+        "start_ms": 0,
+        "end_ms": 180,
+        "label": "a",
+        "weight": 0.74
+      },
+      {
+        "start_ms": 180,
+        "end_ms": 360,
+        "label": "e",
+        "weight": 0.64
+      },
+      {
+        "start_ms": 360,
+        "end_ms": 540,
+        "label": "i",
+        "weight": 0.6
+      },
+      {
+        "start_ms": 540,
+        "end_ms": 720,
+        "label": "o",
+        "weight": 0.71
+      },
+      {
+        "start_ms": 720,
+        "end_ms": 900,
+        "label": "u",
+        "weight": 0.67
+      },
+      {
+        "start_ms": 900,
+        "end_ms": 1080,
+        "label": "m",
+        "weight": 0.52
+      },
+      {
+        "start_ms": 1080,
+        "end_ms": 1260,
+        "label": "a",
+        "weight": 0.74
+      }
+    ],
+    "expression_seq": [
+      {
+        "start_ms": 0,
+        "end_ms": 1260,
+        "expression": "smile",
+        "intensity": 0.72
+      }
+    ],
+    "motion_seq": [
+      {
+        "start_ms": 0,
+        "end_ms": 1260,
+        "motion": "nod",
+        "intensity": 0.6
+      }
+    ]
+  }
+}

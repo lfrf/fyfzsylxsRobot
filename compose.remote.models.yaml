@@ -1,0 +1,175 @@
+# Full remote model stack: one service per container.
+# Usage:
+#   cp .env.remote.models.example .env.remote.models
+#   docker compose --env-file .env.remote.models -f compose.yaml -f compose.remote.models.yaml up -d --build
+
+services:
+  qwen-server:
+    build:
+      context: ./remote/qwen-server
+      dockerfile: Dockerfile
+    image: a22/qwen-server:latest
+    restart: unless-stopped
+    command: >-
+      python -m vllm.entrypoints.openai.api_server
+      --host 0.0.0.0
+      --port 8000
+      --model ${QWEN_MODEL_PATH:-/models/Qwen2.5-7B-Instruct}
+      --served-model-name ${QWEN_SERVED_MODEL_NAME:-Qwen2.5-7B-Instruct}
+      --dtype ${QWEN_DTYPE:-auto}
+      --gpu-memory-utilization ${QWEN_GPU_MEMORY_UTILIZATION:-0.50}
+      --max-model-len ${QWEN_MAX_MODEL_LEN:-4096}
+      --max-num-seqs ${QWEN_MAX_NUM_SEQS:-2}
+      --trust-remote-code
+    environment:
+      CUDA_VISIBLE_DEVICES: ${QWEN_CUDA_VISIBLE_DEVICES:-0}
+      HF_HOME: /cache/huggingface
+      TRANSFORMERS_CACHE: /cache/huggingface
+      VLLM_CONFIG_ROOT: /cache/vllm
+      VLLM_DISABLE_USAGE_STATS: "1"
+    volumes:
+      - ${A22_MODEL_ROOT:-/root/autodl-tmp/a22/models}:/models:ro
+      - ${A22_HF_CACHE_ROOT:-/root/autodl-tmp/a22/.cache/huggingface}:/cache/huggingface
+      - ${A22_VLLM_CACHE_ROOT:-/root/autodl-tmp/a22/.cache/vllm}:/cache/vllm
+      - ${A22_LOG_ROOT:-/root/autodl-tmp/a22/logs}:/workspace-logs
+    ports:
+      - "8000:8000"
+    gpus: all
+    networks:
+      - a22-net
+
+  speech-service:
+    build:
+      context: ./remote/speech-service
+      dockerfile: Dockerfile
+    image: a22/speech-service:latest
+    restart: unless-stopped
+    command: python -m uvicorn app:app --host 0.0.0.0 --port 19100
+    environment:
+      CUDA_VISIBLE_DEVICES: ${SPEECH_CUDA_VISIBLE_DEVICES:-0}
+      HF_HOME: /cache/huggingface
+      TRANSFORMERS_CACHE: /cache/huggingface
+      TMP_DIR: /tmp/a22/speech
+      ASR_PROVIDER: ${ASR_PROVIDER:-qwen3_asr}
+      ASR_MODEL: ${ASR_MODEL_PATH:-/models/Qwen3-ASR-1.7B}
+      ASR_LANGUAGE: ${ASR_LANGUAGE:-Chinese}
+      ASR_DEVICE: ${ASR_DEVICE:-cuda:0}
+      ASR_WARMUP_ENABLED: ${ASR_WARMUP_ENABLED:-false}
+      QWEN_ASR_USE_FLASH_ATTN: ${QWEN_ASR_USE_FLASH_ATTN:-true}
+      QWEN_ASR_USE_ITN: ${QWEN_ASR_USE_ITN:-false}
+    volumes:
+      - ${A22_MODEL_ROOT:-/root/autodl-tmp/a22/models}:/models:ro
+      - ./shared:/shared:ro
+      - ${A22_HF_CACHE_ROOT:-/root/autodl-tmp/a22/.cache/huggingface}:/cache/huggingface
+      - ${A22_TMP_ROOT:-/root/autodl-tmp/a22/tmp}:/tmp/a22
+      - ${A22_LOG_ROOT:-/root/autodl-tmp/a22/logs}:/workspace-logs
+    ports:
+      - "19100:19100"
+    gpus: all
+    networks:
+      - a22-net
+
+  vision-service:
+    build:
+      context: ./remote/vision-service
+      dockerfile: Dockerfile
+    image: a22/vision-service:latest
+    restart: unless-stopped
+    command: python -m uvicorn app:app --host 0.0.0.0 --port 19200
+    environment:
+      CUDA_VISIBLE_DEVICES: ${VISION_CUDA_VISIBLE_DEVICES:-0}
+      HF_HOME: /cache/huggingface
+      TRANSFORMERS_CACHE: /cache/huggingface
+      TMP_DIR: /tmp/a22/vision
+      VISION_EXTRACTOR_MODE: ${VISION_EXTRACTOR_MODE:-qwen2_5_vl}
+      VISION_MODEL: ${VISION_MODEL_PATH:-/models/Qwen2.5-VL-7B-Instruct}
+      VISION_DEVICE: ${VISION_DEVICE:-cuda:0}
+      VISION_DTYPE: ${VISION_DTYPE:-float16}
+      VISION_WARMUP_ENABLED: ${VISION_WARMUP_ENABLED:-false}
+      VISION_RING_BUFFER_ENABLED: ${VISION_RING_BUFFER_ENABLED:-true}
+      VISION_RING_BUFFER_MAX_FRAMES: ${VISION_RING_BUFFER_MAX_FRAMES:-120}
+      VISION_RING_BUFFER_MAX_AGE_MS: ${VISION_RING_BUFFER_MAX_AGE_MS:-30000}
+      VISION_RING_BUFFER_WINDOW_DEFAULT_MS: ${VISION_RING_BUFFER_WINDOW_DEFAULT_MS:-6000}
+      VISION_RING_BUFFER_WINDOW_MAX_FRAMES: ${VISION_RING_BUFFER_WINDOW_MAX_FRAMES:-10}
+    volumes:
+      - ${A22_MODEL_ROOT:-/root/autodl-tmp/a22/models}:/models:ro
+      - ./shared:/shared:ro
+      - ${A22_HF_CACHE_ROOT:-/root/autodl-tmp/a22/.cache/huggingface}:/cache/huggingface
+      - ${A22_TMP_ROOT:-/root/autodl-tmp/a22/tmp}:/tmp/a22
+      - ${A22_LOG_ROOT:-/root/autodl-tmp/a22/logs}:/workspace-logs
+    ports:
+      - "19200:19200"
+    gpus: all
+    networks:
+      - a22-net
+
+  avatar-service:
+    build:
+      context: ./remote/avatar-service
+      dockerfile: Dockerfile
+    image: a22/avatar-service:latest
+    restart: unless-stopped
+    command: python -m uvicorn app:app --host 0.0.0.0 --port 19300
+    environment:
+      CUDA_VISIBLE_DEVICES: ${AVATAR_CUDA_VISIBLE_DEVICES:-0}
+      HF_HOME: /cache/huggingface
+      TRANSFORMERS_CACHE: /cache/huggingface
+      TMP_DIR: /tmp/a22/avatar
+      AVATAR_ID: ${AVATAR_ID:-default-2d}
+      AVATAR_RENDERER_MODE: ${AVATAR_RENDERER_MODE:-parameterized_2d}
+      TTS_MODE: ${TTS_MODE:-cosyvoice2_sft}
+      TTS_MODEL: ${TTS_MODEL_PATH:-/models/CosyVoice2-0.5B}
+      TTS_REPO_PATH: ${TTS_REPO_PATH:-/models/CosyVoice}
+      TTS_DEVICE: ${TTS_DEVICE:-cuda:0}
+      TTS_SPEAKER_ID: ${TTS_SPEAKER_ID:-}
+      TTS_WARMUP_ENABLED: ${TTS_WARMUP_ENABLED:-false}
+    volumes:
+      - ${A22_MODEL_ROOT:-/root/autodl-tmp/a22/models}:/models:ro
+      - ./shared:/shared:ro
+      - ${A22_HF_CACHE_ROOT:-/root/autodl-tmp/a22/.cache/huggingface}:/cache/huggingface
+      - ${A22_TMP_ROOT:-/root/autodl-tmp/a22/tmp}:/tmp/a22
+      - ${A22_LOG_ROOT:-/root/autodl-tmp/a22/logs}:/workspace-logs
+    ports:
+      - "19300:19300"
+    gpus: all
+    networks:
+      - a22-net
+
+  orchestrator:
+    build:
+      context: ./remote/orchestrator
+      dockerfile: Dockerfile
+    image: a22/orchestrator:latest
+    restart: unless-stopped
+    depends_on:
+      - qwen-server
+      - speech-service
+      - vision-service
+      - avatar-service
+    command: python -m uvicorn app:app --host 0.0.0.0 --port 19000
+    environment:
+      LOG_DIR: /workspace-logs/orchestrator
+      LLM_PROVIDER: qwen
+      LLM_MODEL: ${QWEN_SERVED_MODEL_NAME:-Qwen2.5-7B-Instruct}
+      LLM_API_BASE: http://qwen-server:8000/v1
+      LLM_API_KEY: ${LLM_API_KEY:-EMPTY}
+      LLM_REQUEST_TIMEOUT_SECONDS: ${LLM_REQUEST_TIMEOUT_SECONDS:-60}
+      SPEECH_SERVICE_ENABLED: ${SPEECH_SERVICE_ENABLED:-true}
+      SPEECH_SERVICE_BASE: http://speech-service:19100
+      SPEECH_SERVICE_TIMEOUT_SECONDS: ${SPEECH_SERVICE_TIMEOUT_SECONDS:-60}
+      VISION_SERVICE_ENABLED: ${VISION_SERVICE_ENABLED:-true}
+      VISION_SERVICE_BASE: http://vision-service:19200
+      VISION_SERVICE_TIMEOUT_SECONDS: ${VISION_SERVICE_TIMEOUT_SECONDS:-20}
+      AVATAR_SERVICE_ENABLED: ${AVATAR_SERVICE_ENABLED:-true}
+      AVATAR_SERVICE_BASE: http://avatar-service:19300
+      AVATAR_SERVICE_TIMEOUT_SECONDS: ${AVATAR_SERVICE_TIMEOUT_SECONDS:-20}
+      EMOTION_SERVICE_ENABLED: ${EMOTION_SERVICE_ENABLED:-false}
+      EMOTION_SERVICE_BASE: ${EMOTION_SERVICE_BASE:-http://emotion-service:19400}
+      EMOTION_SERVICE_TIMEOUT_SECONDS: ${EMOTION_SERVICE_TIMEOUT_SECONDS:-15}
+    volumes:
+      - ./shared:/shared:ro
+      - ${A22_LOG_ROOT:-/root/autodl-tmp/a22/logs}:/workspace-logs
+    ports:
+      - "19000:19000"
+    networks:
+      - a22-net

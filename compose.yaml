@@ -1,0 +1,9 @@
+name: a22
+
+networks:
+  a22-net:
+    driver: bridge
+
+volumes:
+  a22_logs:
+  a22_data:

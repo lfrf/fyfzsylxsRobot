@@ -1,0 +1,400 @@
+{
+  "contract_version": "a2f-ab-v1",
+  "generated_at_ms": 1776621189774,
+  "session_id": "demo_s1",
+  "stream_id": "demo_stream_1",
+  "turn_id": 4,
+  "emotion_style": "supportive",
+  "events": [
+    "turn_start",
+    "audio_ready",
+    "motion_plan",
+    "turn_end"
+  ],
+  "valid": true,
+  "invalid_reason": null,
+  "audio": {
+    "local_path": "C:\\Users\\FYF\\Documents\\GitHub\\FuChuangSai_A22\\tmp\\avatar_bridge\\demo_s1\\demo_stream_1\\turn-4.wav",
+    "source": "data_url",
+    "mime_type": "audio/wav",
+    "duration_ms": 3878,
+    "sample_rate_hz": 22050
+  },
+  "viseme_seq": [
+    {
+      "start_ms": 0,
+      "end_ms": 241,
+      "label": "a",
+      "weight": 0.74
+    },
+    {
+      "start_ms": 241,
+      "end_ms": 483,
+      "label": "e",
+      "weight": 0.64
+    },
+    {
+      "start_ms": 483,
+      "end_ms": 724,
+      "label": "i",
+      "weight": 0.6
+    },
+    {
+      "start_ms": 724,
+      "end_ms": 965,
+      "label": "o",
+      "weight": 0.71
+    },
+    {
+      "start_ms": 965,
+      "end_ms": 1207,
+      "label": "u",
+      "weight": 0.67
+    },
+    {
+      "start_ms": 1207,
+      "end_ms": 1448,
+      "label": "m",
+      "weight": 0.52
+    },
+    {
+      "start_ms": 1448,
+      "end_ms": 1690,
+      "label": "a",
+      "weight": 0.74
+    },
+    {
+      "start_ms": 1690,
+      "end_ms": 1931,
+      "label": "e",
+      "weight": 0.64
+    },
+    {
+      "start_ms": 1931,
+      "end_ms": 2172,
+      "label": "i",
+      "weight": 0.6
+    },
+    {
+      "start_ms": 2172,
+      "end_ms": 2414,
+      "label": "o",
+      "weight": 0.71
+    },
+    {
+      "start_ms": 2414,
+      "end_ms": 2542,
+      "label": "sil",
+      "weight": 0.05
+    },
+    {
+      "start_ms": 2542,
+      "end_ms": 2784,
+      "label": "u",
+      "weight": 0.67
+    },
+    {
+      "start_ms": 2784,
+      "end_ms": 3025,
+      "label": "m",
+      "weight": 0.52
+    },
+    {
+      "start_ms": 3025,
+      "end_ms": 3267,
+      "label": "a",
+      "weight": 0.74
+    },
+    {
+      "start_ms": 3267,
+      "end_ms": 3508,
+      "label": "e",
+      "weight": 0.64
+    },
+    {
+      "start_ms": 3508,
+      "end_ms": 3749,
+      "label": "i",
+      "weight": 0.6
+    },
+    {
+      "start_ms": 3749,
+      "end_ms": 3878,
+      "label": "sil",
+      "weight": 0.05
+    }
+  ],
+  "expression_seq": [
+    {
+      "start_ms": 0,
+      "end_ms": 3878,
+      "expression": "neutral_smile",
+      "intensity": 0.72
+    }
+  ],
+  "motion_seq": [
+    {
+      "start_ms": 0,
+      "end_ms": 3878,
+      "motion": "steady",
+      "intensity": 0.6
+    }
+  ],
+  "ue_tracks": {
+    "session_id": "demo_s1",
+    "stream_id": "demo_stream_1",
+    "turn_id": 4,
+    "audio_path": "C:\\Users\\FYF\\Documents\\GitHub\\FuChuangSai_A22\\tmp\\avatar_bridge\\demo_s1\\demo_stream_1\\turn-4.wav",
+    "audio_remote_url": null,
+    "emotion_style": "supportive",
+    "viseme_curves": [
+      {
+        "start_ms": 0,
+        "end_ms": 241,
+        "curve": "Mouth_AA",
+        "weight": 0.6
+      },
+      {
+        "start_ms": 241,
+        "end_ms": 483,
+        "curve": "Mouth_EH",
+        "weight": 0.5568
+      },
+      {
+        "start_ms": 483,
+        "end_ms": 724,
+        "curve": "Mouth_IH",
+        "weight": 0.46799999999999997
+      },
+      {
+        "start_ms": 724,
+        "end_ms": 965,
+        "curve": "Mouth_OH",
+        "weight": 0.6
+      },
+      {
+        "start_ms": 965,
+        "end_ms": 1207,
+        "curve": "Mouth_OO",
+        "weight": 0.6
+      },
+      {
+        "start_ms": 1207,
+        "end_ms": 1448,
+        "curve": "Mouth_Closed",
+        "weight": 0.364
+      },
+      {
+        "start_ms": 1448,
+        "end_ms": 1690,
+        "curve": "Mouth_AA",
+        "weight": 0.6
+      },
+      {
+        "start_ms": 1690,
+        "end_ms": 1931,
+        "curve": "Mouth_EH",
+        "weight": 0.5568
+      },
+      {
+        "start_ms": 1931,
+        "end_ms": 2172,
+        "curve": "Mouth_IH",
+        "weight": 0.46799999999999997
+      },
+      {
+        "start_ms": 2172,
+        "end_ms": 2414,
+        "curve": "Mouth_OH",
+        "weight": 0.6
+      },
+      {
+        "start_ms": 2414,
+        "end_ms": 2542,
+        "curve": "Mouth_Closed",
+        "weight": 0.018
+      },
+      {
+        "start_ms": 2542,
+        "end_ms": 2784,
+        "curve": "Mouth_OO",
+        "weight": 0.6
+      },
+      {
+        "start_ms": 2784,
+        "end_ms": 3025,
+        "curve": "Mouth_Closed",
+        "weight": 0.364
+      },
+      {
+        "start_ms": 3025,
+        "end_ms": 3267,
+        "curve": "Mouth_AA",
+        "weight": 0.6
+      },
+      {
+        "start_ms": 3267,
+        "end_ms": 3508,
+        "curve": "Mouth_EH",
+        "weight": 0.5568
+      },
+      {
+        "start_ms": 3508,
+        "end_ms": 3749,
+        "curve": "Mouth_IH",
+        "weight": 0.46799999999999997
+      },
+      {
+        "start_ms": 3749,
+        "end_ms": 3878,
+        "curve": "Mouth_Closed",
+        "weight": 0.018
+      }
+    ],
+    "expressions": [
+      {
+        "start_ms": 0,
+        "end_ms": 3878,
+        "expression": "neutral_smile",
+        "intensity": 0.72
+      }
+    ],
+    "body_actions": [
+      {
+        "start_ms": 0,
+        "end_ms": 3878,
+        "action": "steady",
+        "intensity": 0.6
+      }
+    ]
+  },
+  "a2f_tracks": {
+    "session_id": "demo_s1",
+    "stream_id": "demo_stream_1",
+    "turn_id": 4,
+    "audio_path": "C:\\Users\\FYF\\Documents\\GitHub\\FuChuangSai_A22\\tmp\\avatar_bridge\\demo_s1\\demo_stream_1\\turn-4.wav",
+    "audio_remote_url": null,
+    "sample_rate_hz": 22050,
+    "duration_ms": 3878,
+    "viseme_seq": [
+      {
+        "start_ms": 0,
+        "end_ms": 241,
+        "label": "a",
+        "weight": 0.74
+      },
+      {
+        "start_ms": 241,
+        "end_ms": 483,
+        "label": "e",
+        "weight": 0.64
+      },
+      {
+        "start_ms": 483,
+        "end_ms": 724,
+        "label": "i",
+        "weight": 0.6
+      },
+      {
+        "start_ms": 724,
+        "end_ms": 965,
+        "label": "o",
+        "weight": 0.71
+      },
+      {
+        "start_ms": 965,
+        "end_ms": 1207,
+        "label": "u",
+        "weight": 0.67
+      },
+      {
+        "start_ms": 1207,
+        "end_ms": 1448,
+        "label": "m",
+        "weight": 0.52
+      },
+      {
+        "start_ms": 1448,
+        "end_ms": 1690,
+        "label": "a",
+        "weight": 0.74
+      },
+      {
+        "start_ms": 1690,
+        "end_ms": 1931,
+        "label": "e",
+        "weight": 0.64
+      },
+      {
+        "start_ms": 1931,
+        "end_ms": 2172,
+        "label": "i",
+        "weight": 0.6
+      },
+      {
+        "start_ms": 2172,
+        "end_ms": 2414,
+        "label": "o",
+        "weight": 0.71
+      },
+      {
+        "start_ms": 2414,
+        "end_ms": 2542,
+        "label": "sil",
+        "weight": 0.05
+      },
+      {
+        "start_ms": 2542,
+        "end_ms": 2784,
+        "label": "u",
+        "weight": 0.67
+      },
+      {
+        "start_ms": 2784,
+        "end_ms": 3025,
+        "label": "m",
+        "weight": 0.52
+      },
+      {
+        "start_ms": 3025,
+        "end_ms": 3267,
+        "label": "a",
+        "weight": 0.74
+      },
+      {
+        "start_ms": 3267,
+        "end_ms": 3508,
+        "label": "e",
+        "weight": 0.64
+      },
+      {
+        "start_ms": 3508,
+        "end_ms": 3749,
+        "label": "i",
+        "weight": 0.6
+      },
+      {
+        "start_ms": 3749,
+        "end_ms": 3878,
+        "label": "sil",
+        "weight": 0.05
+      }
+    ],
+    "expression_seq": [
+      {
+        "start_ms": 0,
+        "end_ms": 3878,
+        "expression": "neutral_smile",
+        "intensity": 0.72
+      }
+    ],
+    "motion_seq": [
+      {
+        "start_ms": 0,
+        "end_ms": 3878,
+        "motion": "steady",
+        "intensity": 0.6
+      }
+    ]
+  }
+}

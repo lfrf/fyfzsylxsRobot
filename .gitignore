@@ -1,0 +1,26 @@
+# Node
+local/frontend/node_modules/
+local/frontend/dist/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+**/.venv/
+
+# Local runtime data
+logs/
+data/
+
+# Env files
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
