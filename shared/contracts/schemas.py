@@ -223,3 +223,103 @@ class ChatResponseSchema(BaseModel):
 class ErrorResponseSchema(BaseModel):
     detail: str
 
+
+SUPPORTED_ROBOT_MODES = {"elderly", "child", "student", "normal"}
+
+
+class RobotFaceState(BaseModel):
+    timestamp: float | None = None
+    face_detected: bool = False
+    face_center: dict[str, float] | None = None
+    face_bbox: dict[str, float] | None = None
+    tracking_state: str = Field(default="mock")
+
+
+class RobotInput(BaseModel):
+    type: str = Field(default="audio_base64")
+    audio_base64: str = Field(..., min_length=1)
+    audio_format: str = Field(default="wav")
+    sample_rate: int | None = Field(default=16000, ge=1)
+    channels: int | None = Field(default=1, ge=1)
+    duration_ms: int | None = Field(default=None, ge=0)
+    text_hint: str | None = None
+
+
+class VisionContext(BaseModel):
+    source: str = Field(default="mock")
+    latest: RobotFaceState | None = None
+    recent: list[RobotFaceState] = Field(default_factory=list)
+    image_frames: list[VideoFrameSchema] = Field(default_factory=list)
+
+
+class RobotState(BaseModel):
+    state: str = Field(default="IDLE")
+    current_expression: str = Field(default="neutral")
+    head_pose: dict[str, float] | None = None
+    hardware_ready: dict[str, bool] = Field(default_factory=dict)
+    mode_id: str = Field(default="elderly")
+
+
+class TTSResult(BaseModel):
+    type: str = Field(default="audio_url")
+    audio_url: str | None = None
+    format: str = Field(default="wav")
+    duration_ms: int | None = Field(default=None, ge=0)
+
+
+class EmotionResult(BaseModel):
+    label: str = Field(default="neutral")
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    valence: str | None = None
+    arousal: str | None = None
+
+
+class RobotAction(BaseModel):
+    expression: str = Field(default="neutral")
+    motion: str = Field(default="none")
+    speech_style: str = Field(default="normal")
+    head_target: dict[str, float] | None = None
+    priority: str = Field(default="normal")
+
+
+class ModeInfo(BaseModel):
+    mode_id: str = Field(default="elderly")
+    display_name: str = Field(default="老年模式")
+    prompt_policy: str = Field(default="elderly_gentle")
+    rag_namespace: str = Field(default="elderly_companion")
+    action_style: str = Field(default="calm_supportive")
+
+
+class ModeSwitchResult(BaseModel):
+    switched: bool = False
+    from_mode: str | None = None
+    to_mode: str | None = None
+    reason: str | None = None
+    confirmation_text: str | None = None
+
+
+class RobotChatRequest(BaseModel):
+    session_id: str = Field(..., min_length=1)
+    turn_id: str = Field(..., min_length=1)
+    timestamp: float | None = None
+    mode: str = Field(default="elderly")
+    input: RobotInput
+    vision_context: VisionContext | None = None
+    robot_state: RobotState | None = None
+    request_options: dict = Field(default_factory=dict)
+
+
+class RobotChatResponse(BaseModel):
+    success: bool
+    session_id: str = Field(..., min_length=1)
+    turn_id: str = Field(..., min_length=1)
+    mode: ModeInfo = Field(default_factory=ModeInfo)
+    mode_switch: ModeSwitchResult | None = None
+    asr_text: str = Field(default="")
+    reply_text: str = Field(default="")
+    emotion: EmotionResult = Field(default_factory=EmotionResult)
+    tts: TTSResult = Field(default_factory=TTSResult)
+    robot_action: RobotAction = Field(default_factory=RobotAction)
+    error: dict | None = None
+    fallback: dict | None = None
+    debug: dict = Field(default_factory=dict)

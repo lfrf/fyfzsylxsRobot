@@ -4,6 +4,7 @@ from routes.chat import router as chat_router
 from routes.chat_ws import router as chat_ws_router
 from routes.health import router as health_router
 from routes.media import router as media_router
+from routes.robot_chat import router as robot_chat_router
 from config import settings
 from services.observability import orchestrator_observability
 from services.rag import rag_service
@@ -13,6 +14,7 @@ app.include_router(health_router)
 app.include_router(chat_router)
 app.include_router(chat_ws_router)
 app.include_router(media_router)
+app.include_router(robot_chat_router)
 
 
 @app.on_event("startup")
