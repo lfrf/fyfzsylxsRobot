@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from time import perf_counter
 from typing import Any, Protocol
 from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin
@@ -17,6 +18,7 @@ from shared.schemas import (
 )
 
 from raspirobot.config import load_settings
+from shared.logging_utils import log_event
 
 
 class RemoteClientProtocol(Protocol):
@@ -70,15 +72,53 @@ class RemoteClient:
             method="POST",
         )
 
+        log_event(
+            "remote_request_started",
+            url=self.url,
+            session_id=request.session_id,
+            turn_id=request.turn_id,
+            timeout_seconds=self.timeout_seconds,
+            audio_base64_len=len(request.input.audio_base64 or ""),
+        )
+        started = perf_counter()
         try:
             with urlopen(http_request, timeout=self.timeout_seconds) as response:
                 raw = response.read().decode("utf-8")
+                status = getattr(response, "status", None)
         except HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")
+            log_event(
+                "remote_request_failed",
+                url=self.url,
+                session_id=request.session_id,
+                turn_id=request.turn_id,
+                status=exc.code,
+                latency_ms=round((perf_counter() - started) * 1000, 2),
+                error=detail[:300],
+                level="error",
+            )
             raise RemoteClientError(f"Robot chat endpoint returned HTTP {exc.code}: {detail}") from exc
         except URLError as exc:
+            log_event(
+                "remote_request_failed",
+                url=self.url,
+                session_id=request.session_id,
+                turn_id=request.turn_id,
+                latency_ms=round((perf_counter() - started) * 1000, 2),
+                error=str(exc.reason),
+                level="error",
+            )
             raise RemoteClientError(f"Robot chat endpoint is unavailable: {exc.reason}") from exc
         except TimeoutError as exc:
+            log_event(
+                "remote_request_failed",
+                url=self.url,
+                session_id=request.session_id,
+                turn_id=request.turn_id,
+                latency_ms=round((perf_counter() - started) * 1000, 2),
+                error="timeout",
+                level="error",
+            )
             raise RemoteClientError("Robot chat endpoint timed out.") from exc
 
         try:
@@ -88,10 +128,20 @@ class RemoteClient:
 
         try:
             if hasattr(RobotChatResponse, "model_validate"):
-                return RobotChatResponse.model_validate(data)
-            return RobotChatResponse.parse_obj(data)
+                parsed = RobotChatResponse.model_validate(data)
+            else:
+                parsed = RobotChatResponse.parse_obj(data)
         except Exception as exc:
             raise RemoteClientError(f"Robot chat endpoint response does not match RobotChatResponse: {exc}") from exc
+        log_event(
+            "remote_request_succeeded",
+            url=self.url,
+            session_id=request.session_id,
+            turn_id=request.turn_id,
+            status=status,
+            latency_ms=round((perf_counter() - started) * 1000, 2),
+        )
+        return parsed
 
     def send_chat_turn(self, request: RobotChatRequest) -> RobotChatResponse:
         return self.chat_turn(request)

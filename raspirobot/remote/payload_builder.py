@@ -8,6 +8,7 @@ from shared.schemas import RobotChatRequest, RobotInput, RobotState, VisionConte
 from raspirobot.audio.wav_utils import read_wav_info
 from raspirobot.utils import encode_file_to_base64, unix_timestamp
 from raspirobot.vision import VisionContextProvider
+from shared.logging_utils import log_event
 
 
 @dataclass
@@ -31,6 +32,19 @@ class RobotPayloadBuilder:
         vision_context: VisionContext | None = None
         if self.vision_context_provider is not None:
             vision_context = self.vision_context_provider.get_context()
+        audio_base64 = encode_file_to_base64(wav_info.path)
+        log_event(
+            "payload_built",
+            session_id=self.session_id,
+            turn_id=turn_id,
+            mode=active_mode,
+            sample_rate=wav_info.sample_rate,
+            channels=wav_info.channels,
+            audio_format="wav",
+            audio_base64_len=len(audio_base64),
+            duration_ms=wav_info.duration_ms,
+            vision_context_present=vision_context is not None,
+        )
 
         return RobotChatRequest(
             session_id=self.session_id,
@@ -39,7 +53,7 @@ class RobotPayloadBuilder:
             mode=active_mode,
             input=RobotInput(
                 type="audio_base64",
-                audio_base64=encode_file_to_base64(wav_info.path),
+                audio_base64=audio_base64,
                 audio_format="wav",
                 sample_rate=wav_info.sample_rate,
                 channels=wav_info.channels,

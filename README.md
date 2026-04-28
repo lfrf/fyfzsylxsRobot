@@ -373,6 +373,105 @@ python3.11 -m raspirobot.scripts.live_audio_loop
 
 该入口使用 `arecord -t raw` 持续读取音频帧，通过 `EnergyVAD` 切出一句话，发送给远端，收到结果后播放返回音频，再回到监听。
 
+## 运行日志与链路诊断
+
+raspirobot 和 remote/orchestrator 共享 `shared/logging_utils.py`，默认输出人类可读终端日志。
+
+建议调试时打开：
+
+```bash
+export ROBOT_LOG_LEVEL=INFO
+export ROBOT_DEBUG_TRACE=true
+```
+
+如果需要 JSON 风格日志：
+
+```bash
+export ROBOT_LOG_JSON=true
+```
+
+日志不会打印完整 `audio_base64`，只会打印长度和音频元数据，例如：
+
+```text
+event=payload_built session_id=demo-session-001 turn_id=turn-0001 mode=elderly sample_rate=16000 channels=2 audio_base64_len=123456
+```
+
+Pi 侧关键日志：
+
+```text
+listening_started
+speech_started
+speech_ended
+utterance_saved
+payload_built
+remote_request_started
+remote_request_succeeded
+remote_response_received
+playback_started / playback_skipped / playback_done
+```
+
+远端关键日志：
+
+```text
+robot_chat_request_received
+asr_request_started
+asr_result
+mode_switch_detected
+llm_request_started
+llm_result
+tts_request_started
+tts_result
+robot_chat_response_ready
+```
+
+判断是否使用真实服务：
+
+- ASR 真实：`asr_result source=remote_qwen3_asr` 或 speech-service 返回的真实来源，且 `fallback=false`。
+- ASR mock：`source=mock_enabled_or_missing_base` 或 `source=fallback_after_error:...`。
+- ASR text_hint 绕过：`source=text_hint`，这是测试路径。
+- LLM 真实：`llm_result source=qwen_vllm fallback=false`。
+- LLM fallback/mock：`source=mock` 或 `source=fallback:qwen_vllm:... fallback=true`。
+- TTS 真实：`tts_result audio_url=/v1/robot/media/tts/...wav` 或 speech-service URL，且 `fallback=false`。
+- TTS mock：`audio_url=mock://... fallback=true`，Pi 会跳过播放并回到监听。
+
+`RobotChatResponse.debug` 会包含诊断信息：
+
+```json
+{
+  "trace_id": "...",
+  "sources": {
+    "asr": "...",
+    "llm": "...",
+    "tts": "..."
+  },
+  "latency_ms": {
+    "asr": 0,
+    "llm": 0,
+    "tts": 0,
+    "total": 0
+  },
+  "service_urls": {
+    "speech_service": "http://127.0.0.1:19100",
+    "tts_service": "http://127.0.0.1:19100",
+    "llm_api_base": "http://127.0.0.1:8000/v1"
+  },
+  "fallback": {
+    "asr": false,
+    "llm": false,
+    "tts": false
+  }
+}
+```
+
+常见问题：
+
+- ASR service 不通：看 `asr_result source=fallback_after_error:...`，检查 `SPEECH_SERVICE_BASE` 和 `curl http://127.0.0.1:19100/health`。
+- Qwen server 不通：看 `llm_result source=fallback:qwen_vllm:...`，检查 `LLM_API_BASE` 和 `curl http://127.0.0.1:8000/v1/models`。
+- TTS service 不通：看 `tts_result source=fallback:... audio_url=mock://...`，检查 `TTS_SERVICE_BASE`。
+- 缺少 `audio_url`：Pi 会输出 `playback_skipped skipped_reason=empty audio_url`。
+- `mock://` audio_url：Pi 会输出 `playback_skipped skipped_reason=mock audio_url is not playable`。
+- 没有音频设备：先运行 `bash scripts/check_raspi_env.sh`，再检查 `arecord -l` 和 `aplay -l`。
+
 启动 raspirobot skeleton health app：
 
 ```bash

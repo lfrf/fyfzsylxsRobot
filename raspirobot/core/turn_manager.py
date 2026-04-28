@@ -10,6 +10,7 @@ from raspirobot.actions import RobotActionDispatcher
 from raspirobot.audio import AudioOutputProvider, PlaybackResult
 from raspirobot.remote import RemoteClientProtocol, RobotPayloadBuilder
 from raspirobot.session import SessionManager, TurnLogger
+from shared.logging_utils import log_event
 
 
 @dataclass
@@ -58,6 +59,22 @@ class TurnManager:
         if before_playback is not None:
             before_playback(response)
 
+        log_event(
+            "remote_response_received",
+            session_id=response.session_id,
+            turn_id=response.turn_id,
+            asr_text=response.asr_text,
+            reply_text=response.reply_text,
+            tts_audio_url=response.tts.audio_url if response.tts else None,
+            mode=response.mode.mode_id if response.mode else None,
+            mode_changed=response.mode_changed,
+            active_rag_namespace=response.active_rag_namespace,
+            robot_action={
+                "expression": response.robot_action.expression,
+                "motion": response.robot_action.motion,
+                "speech_style": response.robot_action.speech_style,
+            },
+        )
         self.action_dispatcher.dispatch(response.robot_action)
 
         playback = self.audio_output.play_audio_url(

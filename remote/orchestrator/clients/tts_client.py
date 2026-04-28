@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from time import perf_counter
 from urllib.parse import quote, urljoin
 
 import httpx
 
 from config import settings
 from contracts.schemas import TTSResult
+from logging_utils import log_event
 from services.robot_media_store import robot_media_store
 
 
@@ -15,6 +17,9 @@ class TTSClientResult:
     tts: TTSResult
     source: str
     detail: str | None = None
+    latency_ms: float | None = None
+    fallback: bool = False
+    service_url: str | None = None
 
 
 class TTSClient:
@@ -38,11 +43,37 @@ class TTSClient:
         mode: str,
         speech_style: str,
     ) -> TTSClientResult:
+        service_url = f"{self.base_url}/tts/synthesize" if self.base_url else None
+        log_event(
+            "tts_request_started",
+            service_url=service_url,
+            text_len=len(text or ""),
+            mode=mode,
+            speech_style=speech_style,
+            mock_enabled=self.use_mock,
+        )
+        started = perf_counter()
         if not text.strip():
-            return TTSClientResult(tts=TTSResult(type="none", audio_url=None, format="wav"), source="empty_text")
+            result = TTSClientResult(
+                tts=TTSResult(type="none", audio_url=None, format="wav"),
+                source="empty_text",
+                latency_ms=round((perf_counter() - started) * 1000, 2),
+                fallback=False,
+                service_url=service_url,
+            )
+            self._log_result(result)
+            return result
 
         if self.use_mock or not self.base_url:
-            return TTSClientResult(tts=self._mock_tts(session_id=session_id, turn_id=turn_id), source="mock")
+            result = TTSClientResult(
+                tts=self._mock_tts(session_id=session_id, turn_id=turn_id),
+                source="mock",
+                latency_ms=round((perf_counter() - started) * 1000, 2),
+                fallback=True,
+                service_url=service_url,
+            )
+            self._log_result(result)
+            return result
 
         payload = {
             "session_id": session_id,
@@ -54,7 +85,7 @@ class TTSClient:
         }
         try:
             with httpx.Client(timeout=self.timeout_seconds) as client:
-                response = client.post(f"{self.base_url}/tts/synthesize", json=payload)
+                response = client.post(service_url, json=payload)
                 response.raise_for_status()
             body = response.json()
             raw_audio_url = body.get("audio_url")
@@ -63,7 +94,7 @@ class TTSClient:
                 session_id=session_id,
                 turn_id=turn_id,
             )
-            return TTSClientResult(
+            result = TTSClientResult(
                 tts=TTSResult(
                     type=body.get("type") or "audio_url",
                     audio_url=audio_url,
@@ -71,13 +102,23 @@ class TTSClient:
                     duration_ms=body.get("duration_ms"),
                 ),
                 source=body.get("source") or "speech_service_tts",
+                latency_ms=round((perf_counter() - started) * 1000, 2),
+                fallback=False,
+                service_url=service_url,
             )
+            self._log_result(result)
+            return result
         except Exception as exc:
-            return TTSClientResult(
+            result = TTSClientResult(
                 tts=self._mock_tts(session_id=session_id, turn_id=turn_id),
                 source=f"fallback:{type(exc).__name__}",
                 detail=str(exc),
+                latency_ms=round((perf_counter() - started) * 1000, 2),
+                fallback=True,
+                service_url=service_url,
             )
+            self._log_result(result)
+            return result
 
     def _resolve_robot_audio_url(self, *, raw_audio_url: str | None, session_id: str, turn_id: str) -> str | None:
         if not raw_audio_url:
@@ -102,6 +143,16 @@ class TTSClient:
         safe_session = quote(session_id, safe="")
         safe_turn = quote(turn_id, safe="")
         return TTSResult(type="audio_url", audio_url=f"mock://tts/{safe_session}/{safe_turn}.wav", format="wav")
+
+    def _log_result(self, result: TTSClientResult) -> None:
+        log_event(
+            "tts_result",
+            audio_url=result.tts.audio_url,
+            format=result.tts.format,
+            source=result.source,
+            latency_ms=result.latency_ms,
+            fallback=result.fallback,
+        )
 
 
 tts_client = TTSClient()

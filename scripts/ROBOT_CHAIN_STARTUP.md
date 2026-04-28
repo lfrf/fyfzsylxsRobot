@@ -78,6 +78,8 @@ export LLM_API_KEY=EMPTY
 export ROBOT_CHAT_USE_MOCK_ASR=false
 export ROBOT_CHAT_USE_MOCK_LLM=false
 export ROBOT_CHAT_USE_MOCK_TTS=false
+export ROBOT_LOG_LEVEL=INFO
+export ROBOT_DEBUG_TRACE=true
 export PYTHONPATH="$A22_CODE/shared:$A22_CODE/remote/orchestrator"
 python -m uvicorn app:app --app-dir remote/orchestrator --host 127.0.0.1 --port 19000
 ```
@@ -124,6 +126,8 @@ export ROBOT_AUDIO_CAPTURE_DEVICE=plughw:3,0
 export ROBOT_AUDIO_PLAYBACK_DEVICE=plughw:3,0
 export ROBOT_AUDIO_SAMPLE_RATE=16000
 export ROBOT_AUDIO_CHANNELS=2
+export ROBOT_LOG_LEVEL=INFO
+export ROBOT_DEBUG_TRACE=true
 ```
 
 ### 4. Smoke test existing wav
@@ -173,6 +177,7 @@ Reserved or mock:
 - `speech-service unreachable`: check `curl http://127.0.0.1:19100/health` on remote.
 - `TTS service unreachable`: verify `TTS_SERVICE_BASE=http://127.0.0.1:19100`.
 - `audio_url download fails`: ensure Pi is using orchestrator tunnel and response URL starts with `/v1/robot/media/tts/`.
+- Real ASR/LLM/TTS not being used: inspect `RobotChatResponse.debug.sources` and `RobotChatResponse.debug.fallback`.
 
 ## Validation
 

@@ -6,6 +6,7 @@ from pathlib import Path
 from time import time
 
 from raspirobot.utils import ensure_dir, utc_compact_timestamp
+from shared.logging_utils import log_event
 
 from .input_provider import AudioFrame, AudioInputProvider
 from .recorder import WavRecorder
@@ -42,6 +43,13 @@ class AudioListenWorker:
         )
 
     def listen_once(self) -> Utterance | None:
+        log_event(
+            "listening_started",
+            sample_rate=self.input_provider.sample_rate,
+            channels=self.input_provider.channels,
+            frame_ms=self.input_provider.frame_ms,
+            output_dir=str(self.output_dir),
+        )
         config = self.vad.config
         pre_roll_frames = max(0, int(config.pre_roll_ms / max(1, config.frame_ms)))
         pre_roll: deque[AudioFrame] = deque(maxlen=pre_roll_frames)
@@ -59,6 +67,12 @@ class AudioListenWorker:
                     voiced_streak += 1
                     if voiced_streak >= config.speech_start_frames:
                         started_at = frame.timestamp or time()
+                        log_event(
+                            "speech_started",
+                            sample_rate=frame.sample_rate,
+                            channels=frame.channels,
+                            rms=round(self.vad.rms(frame), 2),
+                        )
                         utterance_frames.extend(pre_roll)
                         utterance_frames.append(frame)
                         recorded_ms = sum(item.duration_ms for item in utterance_frames)
@@ -78,12 +92,24 @@ class AudioListenWorker:
                 silence_ms += frame.duration_ms
 
             if silence_ms >= config.silence_timeout_ms:
+                log_event(
+                    "speech_ended",
+                    reason="silence_timeout",
+                    silence_ms=silence_ms,
+                    recorded_ms=recorded_ms,
+                )
                 return self._save_utterance(utterance_frames, started_at)
 
             if recorded_ms >= int(config.max_utterance_seconds * 1000):
+                log_event(
+                    "speech_ended",
+                    reason="max_utterance_seconds",
+                    recorded_ms=recorded_ms,
+                )
                 return self._save_utterance(utterance_frames, started_at)
 
         if started_at is not None and utterance_frames:
+            log_event("speech_ended", reason="input_stream_ended")
             return self._save_utterance(utterance_frames, started_at)
         return None
 
@@ -91,6 +117,16 @@ class AudioListenWorker:
         ended_at = time()
         filename = f"utterance_{utc_compact_timestamp()}_{int(time() * 1000) % 1000000:06d}.wav"
         wav_info = self.recorder.save_frames(frames, filename=filename)
+        file_size = wav_info.path.stat().st_size if wav_info.path.exists() else None
+        log_event(
+            "utterance_saved",
+            wav_path=str(wav_info.path),
+            duration_ms=wav_info.duration_ms,
+            file_size_bytes=file_size,
+            sample_rate=wav_info.sample_rate,
+            channels=wav_info.channels,
+            frame_count=wav_info.frame_count,
+        )
         return Utterance(
             wav_path=wav_info.path,
             started_at=started_at,

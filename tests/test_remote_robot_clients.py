@@ -82,6 +82,26 @@ def test_robot_chat_normal_chat_uses_mock_llm_and_tts() -> None:
     assert response.tts.audio_url
     assert response.debug["llm_source"] == "mock"
     assert response.debug["tts_source"] == "mock"
+    assert response.debug["sources"]["asr"] == "text_hint"
+    assert response.debug["sources"]["llm"] == "mock"
+    assert response.debug["sources"]["tts"] == "mock"
+    assert response.debug["fallback"]["llm"] is True
+    assert response.debug["fallback"]["tts"] is True
+
+
+def test_robot_chat_mode_switch_skips_llm() -> None:
+    service = RobotChatService(
+        asr=ASRClient(use_mock=True),
+        llm=LLMClient(use_mock=True),
+        tts=TTSClient(use_mock=True),
+    )
+
+    response = service.handle_chat_turn(_request("切换为儿童模式"))
+
+    assert response.mode_changed is True
+    assert response.mode.mode_id == "child"
+    assert response.debug["sources"]["llm"] == "mode_switch"
+    assert response.debug["latency_ms"]["llm"] is None
 
 
 def test_robot_chat_response_contains_no_avatar_fields_after_real_layering() -> None:

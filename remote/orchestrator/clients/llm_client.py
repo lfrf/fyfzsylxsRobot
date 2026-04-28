@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from time import perf_counter
 
 import httpx
 
 from config import settings
+from logging_utils import log_event
 from services.mode_policy import ModePolicy
 from services.rag_router import RagRoute
 
@@ -14,6 +16,9 @@ class LLMResult:
     reply_text: str
     source: str
     reasoning_hint: str | None = None
+    latency_ms: float | None = None
+    fallback: bool = False
+    service_url: str | None = None
 
 
 class LLMClient:
@@ -42,8 +47,27 @@ class LLMClient:
         rag_route: RagRoute,
         rag_context: str | None = None,
     ) -> LLMResult:
+        service_url = f"{self.api_base}/chat/completions" if self.api_base else None
+        log_event(
+            "llm_request_started",
+            api_base=self.api_base,
+            model=self.model,
+            mode=mode_policy.mode_id,
+            active_rag_namespace=rag_route.namespace,
+            asr_text=asr_text,
+            mock_enabled=self.use_mock or settings.llm_provider == "mock",
+        )
+        started = perf_counter()
         if self.use_mock or not self.api_base or settings.llm_provider == "mock":
-            return self._mock_result(asr_text=asr_text, mode_policy=mode_policy)
+            result = self._mock_result(
+                asr_text=asr_text,
+                mode_policy=mode_policy,
+                latency_ms=round((perf_counter() - started) * 1000, 2),
+                fallback=True,
+                service_url=service_url,
+            )
+            self._log_result(result)
+            return result
 
         system_prompt = self._build_system_prompt(mode_policy, rag_route, rag_context)
         payload = {
@@ -61,18 +85,38 @@ class LLMClient:
         }
         try:
             with httpx.Client(timeout=self.timeout_seconds) as client:
-                response = client.post(f"{self.api_base}/chat/completions", headers=headers, json=payload)
+                response = client.post(service_url, headers=headers, json=payload)
                 response.raise_for_status()
             body = response.json()
             reply_text = body["choices"][0]["message"]["content"].strip()
-            return LLMResult(reply_text=reply_text, source="qwen_vllm", reasoning_hint="live-openai-compatible")
+            result = LLMResult(
+                reply_text=reply_text,
+                source="qwen_vllm",
+                reasoning_hint="live-openai-compatible",
+                latency_ms=round((perf_counter() - started) * 1000, 2),
+                fallback=False,
+                service_url=service_url,
+            )
+            self._log_result(result)
+            return result
         except Exception as exc:
-            fallback = self._mock_result(asr_text=asr_text, mode_policy=mode_policy)
-            return LLMResult(
+            fallback = self._mock_result(
+                asr_text=asr_text,
+                mode_policy=mode_policy,
+                latency_ms=round((perf_counter() - started) * 1000, 2),
+                fallback=True,
+                service_url=service_url,
+            )
+            result = LLMResult(
                 reply_text=fallback.reply_text,
                 source=f"fallback:qwen_vllm:{type(exc).__name__}",
                 reasoning_hint=str(exc),
+                latency_ms=fallback.latency_ms,
+                fallback=True,
+                service_url=service_url,
             )
+            self._log_result(result)
+            return result
 
     def _build_system_prompt(self, mode_policy: ModePolicy, rag_route: RagRoute, rag_context: str | None) -> str:
         parts = [
@@ -87,17 +131,40 @@ class LLMClient:
             parts.append(f"Optional retrieved context:\n{rag_context}")
         return "\n".join(parts)
 
-    def _mock_result(self, *, asr_text: str, mode_policy: ModePolicy) -> LLMResult:
+    def _mock_result(
+        self,
+        *,
+        asr_text: str,
+        mode_policy: ModePolicy,
+        latency_ms: float | None,
+        fallback: bool,
+        service_url: str | None,
+    ) -> LLMResult:
         if asr_text == "mock audio received":
             return LLMResult(
                 reply_text=mode_policy.normal_reply,
                 source="mock",
                 reasoning_hint="audio-placeholder",
+                latency_ms=latency_ms,
+                fallback=fallback,
+                service_url=service_url,
             )
         return LLMResult(
             reply_text=f"{mode_policy.normal_reply} 你刚才说的是：{asr_text}",
             source="mock",
             reasoning_hint="echo-with-mode-policy",
+            latency_ms=latency_ms,
+            fallback=fallback,
+            service_url=service_url,
+        )
+
+    def _log_result(self, result: LLMResult) -> None:
+        log_event(
+            "llm_result",
+            reply_text=result.reply_text,
+            source=result.source,
+            latency_ms=result.latency_ms,
+            fallback=result.fallback,
         )
 
 
