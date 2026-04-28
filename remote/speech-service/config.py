@@ -55,6 +55,33 @@ class Settings:
             "yes",
             "on",
         }
+        self.tts_provider = os.getenv("TTS_PROVIDER", os.getenv("ROBOT_TTS_PROVIDER", "cosyvoice")).strip().lower()
+        self.tts_model = (
+            os.getenv(
+                "TTS_MODEL",
+                "/root/autodl-tmp/a22/models/CosyVoice-300M-Instruct",
+            ).strip()
+            or "/root/autodl-tmp/a22/models/CosyVoice-300M-Instruct"
+        )
+        self.tts_repo_path = os.getenv("TTS_REPO_PATH", "").strip()
+        self.tts_device = os.getenv("TTS_DEVICE", self.asr_device).strip() or self.asr_device
+        self.tts_mode = os.getenv("TTS_MODE", "cosyvoice_300m_instruct").strip().lower() or "cosyvoice_300m_instruct"
+        self.tts_warmup_enabled = os.getenv("TTS_WARMUP_ENABLED", "false").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+        self.tts_allow_mock_fallback = os.getenv("TTS_ALLOW_MOCK_FALLBACK", "true").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+        self.tts_speaker_id = os.getenv("TTS_SPEAKER_ID", "").strip() or None
+        self.tts_speed = float(os.getenv("TTS_SPEED", "1.0"))
+        self.tts_sample_rate = int(os.getenv("TTS_SAMPLE_RATE", "22050"))
+        self.speech_public_base_url = os.getenv("SPEECH_PUBLIC_BASE_URL", "").strip().rstrip("/")
         self.tmp_dir = os.getenv("TMP_DIR", "/root/autodl-tmp/a22/tmp/speech").strip() or "/root/autodl-tmp/a22/tmp/speech"
 
 

@@ -39,7 +39,7 @@ class TurnTimeWindow(TurnTimeWindowSchema):
 
 class TranscribeRequest(BaseModel):
     session_id: str = Field(..., min_length=1)
-    turn_id: int = Field(..., ge=1)
+    turn_id: int | str = Field(...)
     user_text: str = Field(default="")
     client_asr_text: str | None = None
     client_asr_source: str | None = None
@@ -66,6 +66,39 @@ class TranscribeResponse(BaseModel):
     device: str | None = None
 
 
+class ASRRequest(BaseModel):
+    session_id: str = Field(..., min_length=1)
+    turn_id: str = Field(..., min_length=1)
+    audio_base64: str | None = None
+    audio_format: str | None = Field(default="wav")
+    sample_rate: int | None = Field(default=None, ge=1)
+    channels: int | None = Field(default=None, ge=1)
+    duration_ms: int | None = Field(default=None, ge=0)
+    text_hint: str | None = None
+
+
+class TTSRequest(BaseModel):
+    session_id: str = Field(..., min_length=1)
+    turn_id: str = Field(..., min_length=1)
+    text: str = Field(..., min_length=1)
+    mode: str = Field(default="elderly")
+    speech_style: str = Field(default="normal")
+    provider: str | None = None
+    speaker_id: str | None = None
+    speed: float | None = Field(default=None, gt=0)
+
+
+class TTSResponse(BaseModel):
+    type: str = Field(default="audio_url")
+    audio_url: str | None = None
+    format: str = Field(default="wav")
+    duration_ms: int | None = Field(default=None, ge=0)
+    sample_rate: int | None = Field(default=None, ge=1)
+    source: str = Field(default="speech_service_tts")
+    model_ref: str | None = None
+    device: str | None = None
+
+
 class HealthResponse(BaseModel):
     status: str
     asr_provider: str
@@ -75,3 +108,6 @@ class HealthResponse(BaseModel):
     ser_provider: str
     ser_model: str
     ser_device: str
+    tts_provider: str | None = None
+    tts_model: str | None = None
+    tts_device: str | None = None

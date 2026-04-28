@@ -6,6 +6,7 @@ from raspirobot.audio import (
     EnergyVAD,
     EnergyVADConfig,
     FileAudioInputProvider,
+    LocalCommandAudioOutputProvider,
     MockAudioInputProvider,
     MockAudioOutputProvider,
     make_silence_pcm,
@@ -127,3 +128,15 @@ def test_runtime_transitions_through_one_file_turn(tmp_path: Path) -> None:
     assert eyes.last_expression == "neutral"
     assert head.last_motion == "none"
     assert audio.played_urls == [None]
+
+
+def test_local_audio_output_skips_missing_or_mock_tts_url(tmp_path: Path) -> None:
+    player = LocalCommandAudioOutputProvider(command="aplay", download_dir=tmp_path)
+
+    empty = player.play_audio_url(None)
+    mock = player.play_audio_url("mock://tts/session/turn.wav")
+
+    assert empty.played is False
+    assert empty.skipped_reason == "empty audio_url"
+    assert mock.played is False
+    assert "mock" in (mock.skipped_reason or "")

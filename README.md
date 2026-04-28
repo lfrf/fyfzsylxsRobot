@@ -15,7 +15,10 @@ audio listener / VAD / state machine / remote client / hardware interfaces
         ↓
 SSH tunnel / HTTP JSON
 remote/orchestrator
-ASR stub / mode logic / RAG routing stub / TTS stub / robot action
+ASR client / Qwen LLM client / TTS client / mode logic / RAG routing stub / robot action
+        ↓
+remote/speech-service + remote/qwen-server
+ASR + robot TTS / Qwen2.5-7B-Instruct OpenAI-compatible API
 ```
 
 笔记本电脑只用于开发、SSH 登录、日志查看和调试，不属于主运行链路。
@@ -30,7 +33,9 @@ ASR stub / mode logic / RAG routing stub / TTS stub / robot action
 - JSON + `audio_base64` 请求格式，不使用 multipart 作为 V1 主路径；
 - session-based 模式切换；
 - 模式到 RAG namespace 的路由 stub；
-- de-avatarized TTS stub；
+- de-avatarized robot TTS client；
+- remote/speech-service ASR/TTS 路由；
+- remote/qwen-server OpenAI-compatible LLM 接入；
 - robot action 生成；
 - 最小 smoke tests。
 
@@ -48,7 +53,7 @@ continuous microphone listening
 → 回到 LISTENING
 ```
 
-OLED、舵机、摄像头、人脸跟踪和唤醒词仍是接口/mock。远端 ASR/TTS/LLM/RAG 仍由后续任务接入。
+OLED、舵机、摄像头、人脸跟踪和唤醒词仍是接口/mock。RAG 仍是 namespace 路由 stub。
 
 ## 目录结构
 
@@ -70,17 +75,27 @@ fyfzsylxsRobot/
 ├── remote/
 │   ├── orchestrator/
 │   │   ├── app.py
+│   │   ├── clients/
+│   │   │   ├── asr_client.py
+│   │   │   ├── llm_client.py
+│   │   │   └── tts_client.py
 │   │   ├── routes/
-│   │   │   └── robot_chat.py
+│   │   │   ├── robot_chat.py
+│   │   │   └── robot_media.py
 │   │   └── services/
 │   │       ├── robot_chat_service.py
 │   │       ├── mode_manager.py
 │   │       ├── mode_policy.py
 │   │       ├── rag_router.py
-│   │       ├── tts_service.py
 │   │       └── robot_action_service.py
 │   ├── qwen-server/
 │   └── speech-service/
+│       ├── routes/
+│       │   ├── asr.py
+│       │   └── tts.py
+│       └── services/
+│           ├── asr_service.py
+│           └── tts_service.py
 ├── shared/
 │   ├── schemas.py
 │   └── contracts/
@@ -115,7 +130,7 @@ Content-Type: application/json
 }
 ```
 
-V1 测试里 `text_hint` 用来模拟 ASR 结果。真实 ASR 后续接入后，应由远端 ASR 结果触发同一套模式切换逻辑。
+测试里 `text_hint` 可以绕过 ASR。正常机器人路径会由 `remote/orchestrator/clients/asr_client.py` 调用 `remote/speech-service` 的 ASR 路由。
 
 响应遵循 `RobotChatResponse`，包含：
 
@@ -206,7 +221,36 @@ curl -X POST http://127.0.0.1:19000/v1/robot/chat_turn \
   }'
 ```
 
+真实 ASR/LLM/TTS 链路启动细节见：
+
+```text
+scripts/ROBOT_CHAIN_STARTUP.md
+```
+
+orchestrator 的真实链路环境变量示例：
+
+```bash
+export SPEECH_SERVICE_BASE=http://127.0.0.1:19100
+export TTS_SERVICE_BASE=http://127.0.0.1:19100
+export LLM_PROVIDER=qwen
+export LLM_API_BASE=http://127.0.0.1:8000/v1
+export LLM_MODEL=Qwen2.5-7B-Instruct
+export LLM_API_KEY=EMPTY
+export ROBOT_CHAT_USE_MOCK_ASR=false
+export ROBOT_CHAT_USE_MOCK_LLM=false
+export ROBOT_CHAT_USE_MOCK_TTS=false
+```
+
 ## 检查 raspirobot
+
+创建树莓派本地 venv：
+
+```bash
+cd fyfzsylxsRobot
+bash scripts/setup_raspi_venv.sh
+source .venv/bin/activate
+bash scripts/check_raspi_env.sh
+```
 
 Pi 侧配置通过环境变量控制：
 
@@ -311,7 +355,7 @@ python3.11 -m raspirobot.scripts.audio_tunnel_smoke --wav /tmp/robot_test.wav
 python3.11 -m raspirobot.scripts.audio_tunnel_smoke --wav /tmp/robot_test.wav --play
 ```
 
-当前远端 TTS 仍可能返回 `mock://...`，这种 URL 不会被本地播放器播放。
+如果 orchestrator 仍在 mock TTS 模式，远端可能返回 `mock://...`，这种 URL 不会被本地播放器播放。真实 TTS 模式下应返回 `/v1/robot/media/tts/...wav`，树莓派会通过 orchestrator 隧道下载。
 
 ### 3. 真实麦克风持续监听循环
 
@@ -354,7 +398,7 @@ python3.11 -m pytest tests/test_robot_skeleton.py tests/test_robot_chat_logic.py
 - PCA9685 / 舵机控制；
 - 唤醒词引擎；
 - 人脸跟踪算法；
-- 完整 ASR/TTS/LLM/RAG；
+- 真实 RAG 检索；
 - 数据库 session 存储；
 - ROS2；
 - avatar-service、lip-sync 或数字人视频输出。
@@ -367,6 +411,13 @@ python3.11 -m pytest tests/test_robot_skeleton.py tests/test_robot_chat_logic.py
 - `LocalCommandAudioOutputProvider`：下载并播放远端音频 URL；
 - `RobotPayloadBuilder`：wav 到 base64 JSON；
 - `RaspiRobotRuntime`：单线程 turn-based 语音循环。
+
+本轮远端机器人路径新增：
+
+- `ASRClient`：调用 speech-service `/asr/transcribe`；
+- `LLMClient`：调用 qwen-server OpenAI-compatible `/chat/completions`；
+- `TTSClient`：调用 speech-service `/tts/synthesize`；
+- `robot_media`：把 speech-service TTS 音频代理成 `/v1/robot/media/tts/...wav`，方便树莓派只通过 orchestrator 隧道下载。
 
 硬件同事后续需要实现：
 

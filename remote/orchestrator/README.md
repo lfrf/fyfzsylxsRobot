@@ -11,6 +11,17 @@ Content-Type: application/json
 
 The old digital-human `/chat`, `/ws/chat`, and avatar media proxy routes are not registered in the active app.
 
+The active robot path is layered:
+
+```text
+routes/robot_chat.py
+  -> services/robot_chat_service.py
+  -> clients/asr_client.py      -> remote/speech-service /asr/transcribe
+  -> clients/llm_client.py      -> remote/qwen-server /v1/chat/completions
+  -> clients/tts_client.py      -> remote/speech-service /tts/synthesize
+  -> routes/robot_media.py      -> proxies TTS wav for Raspberry Pi tunnel access
+```
+
 ## Runtime
 
 This service uses Python 3.11 syntax.
@@ -18,6 +29,15 @@ This service uses Python 3.11 syntax.
 ```bash
 cd remote/orchestrator
 source .venv/bin/activate
+export SPEECH_SERVICE_BASE=http://127.0.0.1:19100
+export TTS_SERVICE_BASE=http://127.0.0.1:19100
+export LLM_PROVIDER=qwen
+export LLM_API_BASE=http://127.0.0.1:8000/v1
+export LLM_MODEL=Qwen2.5-7B-Instruct
+export LLM_API_KEY=EMPTY
+export ROBOT_CHAT_USE_MOCK_ASR=false
+export ROBOT_CHAT_USE_MOCK_LLM=false
+export ROBOT_CHAT_USE_MOCK_TTS=false
 uv run uvicorn app:app --host 127.0.0.1 --port 19000
 ```
 
@@ -54,7 +74,7 @@ curl -X POST http://127.0.0.1:19000/v1/robot/chat_turn \
 The robot project may reuse:
 
 - `remote/qwen-server` for LLM;
-- `remote/speech-service` for ASR and speech emotion;
+- `remote/speech-service` for ASR, robot TTS, and speech emotion;
 - `remote/vision-service` for visual preprocessing.
 
-`remote/avatar-service` is not part of the active robot runtime. It is retained temporarily only because it contains CosyVoice/TTS runtime code that may need extraction into a de-avatarized robot TTS service.
+`remote/avatar-service` is not part of the active robot runtime. Robot TTS is now represented as standalone speech synthesis under `remote/speech-service` and must not return avatar, viseme, lip-sync, or video fields.

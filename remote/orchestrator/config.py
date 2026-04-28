@@ -13,6 +13,12 @@ class Settings:
         self.llm_temperature = float(os.getenv("LLM_TEMPERATURE", "0.4"))
         self.llm_max_tokens = int(os.getenv("LLM_MAX_TOKENS", "256"))
         self.llm_request_timeout_seconds = int(os.getenv("LLM_REQUEST_TIMEOUT_SECONDS", "60"))
+        self.robot_chat_use_mock_llm = os.getenv("ROBOT_CHAT_USE_MOCK_LLM", "true").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
 
         self.max_context_messages = int(os.getenv("MAX_CONTEXT_MESSAGES", "8"))
         self.context_summary_turns = int(os.getenv("CONTEXT_SUMMARY_TURNS", "4"))
@@ -28,6 +34,32 @@ class Settings:
             or "http://127.0.0.1:19100"
         )
         self.speech_service_timeout_seconds = float(os.getenv("SPEECH_SERVICE_TIMEOUT_SECONDS", "60"))
+        self.robot_chat_use_mock_asr = os.getenv("ROBOT_CHAT_USE_MOCK_ASR", "true").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+        self.tts_service_base = (
+            os.getenv("TTS_SERVICE_BASE", self.speech_service_base).strip().rstrip("/")
+            or self.speech_service_base
+        )
+        self.tts_service_timeout_seconds = float(
+            os.getenv("TTS_SERVICE_TIMEOUT_SECONDS", os.getenv("SPEECH_SERVICE_TIMEOUT_SECONDS", "60"))
+        )
+        self.robot_chat_use_mock_tts = os.getenv("ROBOT_CHAT_USE_MOCK_TTS", "true").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+        self.robot_tts_provider = os.getenv("ROBOT_TTS_PROVIDER", "cosyvoice").strip().lower() or "cosyvoice"
+        self.robot_tts_proxy_media = os.getenv("ROBOT_TTS_PROXY_MEDIA", "true").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
         self.vision_service_enabled = os.getenv("VISION_SERVICE_ENABLED", "true").strip().lower() in {
             "1",
             "true",

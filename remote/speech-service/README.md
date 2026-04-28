@@ -1,6 +1,16 @@
 # Speech Service
 
-`speech-service` 负责远端 ASR 转写和基础语音特征提取。
+`speech-service` 负责远端 ASR 转写、机器人 TTS 语音合成和基础语音特征提取。
+
+Robot path uses:
+
+```text
+POST /asr/transcribe
+POST /tts/synthesize
+GET  /tts/audio/{session_id}/{turn_id}.wav
+```
+
+This service is not an avatar renderer and must not return viseme, lip-sync or video output.
 
 当前仓库已经把依赖版本锁住。下次换服务器时，直接重建独立环境，不要混装。
 
@@ -29,16 +39,24 @@ remote/speech-service/.venv
 - 不要把 `qwen-asr` 单独升到未验证版本
 - 不要复用旧服务器打包出来的 `.venv`
 
-## 3. 当前支持的 ASR 后端
+## 3. 当前支持的 ASR/TTS 后端
 
 见 [config.py](D:\a22\FuChuangSai_A22\remote\speech-service\config.py) 与 [asr_runtime.py](D:\a22\FuChuangSai_A22\remote\speech-service\services\asr_runtime.py)：
 
 - `ASR_PROVIDER=belle_whisper`
 - `ASR_PROVIDER=qwen3_asr`
 
-当前默认配置仍是 `belle_whisper`。
+当前默认 ASR 配置是 `qwen3_asr`。
 
 如果你没有明确切到 `qwen3_asr`，就不要改这个值。
+
+TTS 由 `remote/speech-service/services/tts_service.py` 管理：
+
+- `TTS_PROVIDER=cosyvoice`
+- `TTS_MODEL=/root/autodl-tmp/a22/models/CosyVoice-300M-Instruct`
+- `TTS_MODE=cosyvoice_300m_instruct`
+
+如果真实 CosyVoice 不可用且 `TTS_ALLOW_MOCK_FALLBACK=true`，服务会返回一个可播放的 mock wav，方便链路不断。
 
 ## 4. 新服务器安装步骤
 
@@ -80,6 +98,10 @@ uv pip install -r requirements.txt
 - `ASR_MODEL`
 - `ASR_LANGUAGE`
 - `ASR_DEVICE`
+- `TTS_PROVIDER`
+- `TTS_MODEL`
+- `TTS_DEVICE`
+- `TTS_MODE`
 - `TMP_DIR`
 
 ## 6. 启动命令
@@ -102,9 +124,23 @@ curl http://127.0.0.1:19100/health
 转写接口：
 
 ```bash
-curl -X POST http://127.0.0.1:19100/transcribe \
+curl -X POST http://127.0.0.1:19100/asr/transcribe \
   -H "Content-Type: application/json" \
-  -d '{"session_id":"demo-test","turn_id":1,"user_text":"你好"}'
+  -d '{"session_id":"demo-test","turn_id":"turn-0001","text_hint":"你好"}'
+```
+
+TTS 接口：
+
+```bash
+curl -X POST http://127.0.0.1:19100/tts/synthesize \
+  -H "Content-Type: application/json" \
+  -d '{
+    "session_id": "demo-test",
+    "turn_id": "turn-0001",
+    "text": "你好，我是瓦力家伴。",
+    "mode": "elderly",
+    "speech_style": "elderly_gentle"
+  }'
 ```
 
 ## 8. 迁移时必须规避的坑

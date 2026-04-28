@@ -17,4 +17,7 @@ async def health() -> HealthResponse:
         ser_provider=settings.ser_provider,
         ser_model=settings.ser_model,
         ser_device=settings.ser_device,
+        tts_provider=settings.tts_provider,
+        tts_model=settings.tts_model,
+        tts_device=settings.tts_device,
     )
