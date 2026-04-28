@@ -21,10 +21,14 @@ def create_app():
     async def health() -> dict:
         return {
             "status": "ok",
-            "hardware_mode": "mock",
+            "hardware_mode": "audio_runtime_with_mock_body",
             "remote_base_url": settings.remote_base_url,
             "state": state_machine.state.value,
             "mode": state_machine.mode_id,
+            "audio_capture_provider": settings.audio_capture_provider,
+            "audio_output_provider": settings.audio_output_provider,
+            "audio_sample_rate": settings.audio_sample_rate,
+            "audio_channels": settings.audio_channels,
         }
 
     return app

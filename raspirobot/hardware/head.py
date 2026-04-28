@@ -3,6 +3,12 @@ from typing import Protocol
 
 
 class HeadDriver(Protocol):
+    def play_motion(self, motion: str) -> None:
+        ...
+
+    def set_pose(self, pan: float | None, tilt: float | None) -> None:
+        ...
+
     def set_motion(self, motion: str) -> None:
         ...
 
@@ -16,10 +22,15 @@ class MockHeadDriver:
     last_pan: float | None = None
     last_tilt: float | None = None
 
+    def play_motion(self, motion: str) -> None:
+        self.set_motion(motion)
+
+    def set_pose(self, pan: float | None, tilt: float | None) -> None:
+        self.set_target(pan, tilt)
+
     def set_motion(self, motion: str) -> None:
         self.last_motion = motion or "none"
 
     def set_target(self, pan: float | None, tilt: float | None) -> None:
         self.last_pan = pan
         self.last_tilt = tilt
-

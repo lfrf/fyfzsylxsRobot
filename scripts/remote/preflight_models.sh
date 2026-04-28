@@ -83,15 +83,11 @@ resolve_downloader_python() {
     DOWNLOADER_PYTHON="$A22_ENV_ROOT/qwen-server/bin/python"
     return 0
   fi
-  if command -v python3 >/dev/null 2>&1; then
-    DOWNLOADER_PYTHON="$(command -v python3)"
+  if command -v python3.11 >/dev/null 2>&1; then
+    DOWNLOADER_PYTHON="$(command -v python3.11)"
     return 0
   fi
-  if command -v python >/dev/null 2>&1; then
-    DOWNLOADER_PYTHON="$(command -v python)"
-    return 0
-  fi
-  echo "[error] no python interpreter available for model download." >&2
+  echo "[error] no Python 3.11 interpreter available for model download." >&2
   exit 1
 }
 

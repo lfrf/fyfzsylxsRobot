@@ -22,6 +22,9 @@ class FaceTracker(Protocol):
         ...
 
 
+FaceTrackerProvider = FaceTracker
+
+
 @dataclass
 class MockFaceTracker:
     running: bool = False
@@ -52,4 +55,3 @@ class MockFaceTracker:
             face_detected=False,
             tracking_state="mock",
         )
-

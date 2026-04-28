@@ -1,2 +1,1 @@
-"""Raspberry Pi robot runtime skeleton."""
-
+"""Raspberry Pi robot runtime package."""
