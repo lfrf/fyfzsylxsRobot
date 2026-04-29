@@ -82,9 +82,19 @@ class SpeechRuntime:
         model_ref = settings.asr_model
         load_kwargs = {
             "device_map": "cuda" if settings.asr_device.startswith("cuda") else "cpu",
-            "use_flash_attn": bool(settings.qwen_asr_use_flash_attn and settings.asr_device.startswith("cuda")),
         }
-        return Qwen3ASRModel.from_pretrained(model_ref, **load_kwargs)
+        if settings.qwen_asr_use_flash_attn and settings.asr_device.startswith("cuda"):
+            load_kwargs["use_flash_attn"] = True
+
+        try:
+            return Qwen3ASRModel.from_pretrained(model_ref, **load_kwargs)
+        except TypeError as exc:
+            error_text = str(exc)
+            if "unexpected keyword argument 'use_flash_attn'" not in error_text:
+                raise
+            # Compatibility fallback for qwen-asr / transformers combos that do not expose use_flash_attn.
+            load_kwargs.pop("use_flash_attn", None)
+            return Qwen3ASRModel.from_pretrained(model_ref, **load_kwargs)
 
     def _is_qwen_provider(self) -> bool:
         return settings.asr_provider in {"qwen3_asr", "qwen_asr", "qwen3"}
