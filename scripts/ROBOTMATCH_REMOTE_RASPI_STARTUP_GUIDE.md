@@ -464,37 +464,40 @@ curl http://127.0.0.1:19100/health
 ### 5.3 终端 3：启动 TTS service，端口 19200，独立 TTS 环境
 
 ```bash
-set -euo pipefail
+cd /root/autodl-tmp/a22/code/fyfzsylxsRobot
+
+pkill -f "uvicorn app:app.*--port 19200" || true
+
 source /root/autodl-tmp/a22/code/fyfzsylxsRobot/scripts/env_robot.sh
-source "$A22_ENV_ROOT/tts-service/bin/activate"
+source "$A22_ENV_ROOT/avatar-service/bin/activate"
+
 cd "$A22_CODE/remote/speech-service"
 
-# TTS 独立环境：不使用 avatar-service
+export ASR_PROVIDER=qwen3_asr
+export ASR_WARMUP_ENABLED=false
+export ASR_DEVICE=cpu
+export SER_WARMUP_ENABLED=false
+
 export TTS_PROVIDER=cosyvoice
 export TTS_MODEL="$A22_MODEL_ROOT/CosyVoice-300M-Instruct"
 export TTS_REPO_PATH="$A22_MODEL_ROOT/CosyVoice"
-export TTS_CODE_ROOT="$TTS_REPO_PATH"
+export TTS_CODE_ROOT="$A22_MODEL_ROOT/CosyVoice"
 export TTS_MODE=cosyvoice_300m_instruct
 export TTS_DEVICE=cuda:0
-export TTS_WARMUP_ENABLED=false
-export TTS_ALLOW_MOCK_FALLBACK=true
 
-# 关键：TTS-only 服务不 warmup ASR / SER
-export ASR_WARMUP_ENABLED=false
-export SER_WARMUP_ENABLED=false
-export ASR_PROVIDER=qwen3_asr
-export ASR_DEVICE=cpu
+# 关键：真实诊断模式
+export TTS_WARMUP_ENABLED=true
+export TTS_ALLOW_MOCK_FALLBACK=false
 
 export TMP_DIR="$A22_TMP_ROOT/speech_tts"
 mkdir -p "$TMP_DIR"
 
-export PYTHONPATH="$A22_CODE/shared:$A22_CODE/remote/speech-service:$TTS_REPO_PATH:$TTS_REPO_PATH/third_party/Matcha-TTS:${PYTHONPATH:-}"
+export PYTHONPATH="$A22_CODE/shared:$A22_CODE/remote/speech-service:$TTS_CODE_ROOT:$TTS_CODE_ROOT/third_party/Matcha-TTS:${PYTHONPATH:-}"
+
 export ROBOT_LOG_LEVEL=INFO
 export ROBOT_DEBUG_TRACE=true
 
-python -c "import routes.asr, routes.tts; print('speech-service route imports ok')"
-
-python -m uvicorn app:app --host 127.0.0.1 --port 19200
+python -m uvicorn app:app --host 127.0.0.1 --port 19200 --log-level debug
 ```
 
 检查：
