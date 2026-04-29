@@ -461,10 +461,9 @@ class SpeechRuntime:
             with NamedTemporaryFile(suffix=suffix) as temp_audio:
                 temp_audio.write(audio_bytes)
                 temp_audio.flush()
-                result = pipeline_instance.transcribe(
-                    temp_audio.name,
-                    language=self._resolve_qwen_language(),
-                    use_itn=settings.qwen_asr_use_itn,
+                result = self._invoke_qwen_transcribe(
+                    pipeline_instance=pipeline_instance,
+                    audio_path=temp_audio.name,
                 )
             text = self._extract_qwen_text(result)
             return text or "Audio input received from the remote speech service."
@@ -472,13 +471,41 @@ class SpeechRuntime:
         with NamedTemporaryFile(suffix=".wav") as temp_audio:
             temp_audio.write(wav_bytes)
             temp_audio.flush()
-            result = pipeline_instance.transcribe(
-                temp_audio.name,
-                language=self._resolve_qwen_language(),
-                use_itn=settings.qwen_asr_use_itn,
+            result = self._invoke_qwen_transcribe(
+                pipeline_instance=pipeline_instance,
+                audio_path=temp_audio.name,
             )
         text = self._extract_qwen_text(result)
         return text or "Audio input received from the remote speech service."
+
+    def _invoke_qwen_transcribe(self, *, pipeline_instance, audio_path: str):
+        language = self._resolve_qwen_language()
+        attempt_kwargs: list[dict] = []
+
+        # Some qwen-asr versions support use_itn/language, some do not.
+        if settings.qwen_asr_use_itn:
+            attempt_kwargs.append({"language": language, "use_itn": True})
+        attempt_kwargs.append({"language": language})
+        attempt_kwargs.append({})
+
+        last_type_error: TypeError | None = None
+        tried: set[tuple] = set()
+        for kwargs in attempt_kwargs:
+            key = tuple(sorted(kwargs.items()))
+            if key in tried:
+                continue
+            tried.add(key)
+            try:
+                return pipeline_instance.transcribe(audio_path, **kwargs)
+            except TypeError as exc:
+                if "unexpected keyword argument" not in str(exc):
+                    raise
+                last_type_error = exc
+                continue
+
+        if last_type_error is not None:
+            raise last_type_error
+        return pipeline_instance.transcribe(audio_path)
 
     def _resolve_qwen_language(self) -> str:
         raw = (settings.asr_language or "auto").strip().lower()
