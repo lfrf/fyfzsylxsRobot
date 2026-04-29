@@ -64,6 +64,12 @@ class TurnManager:
             session_id=response.session_id,
             turn_id=response.turn_id,
             asr_text=response.asr_text,
+            asr_source=response.debug.get("asr_source") if response.debug else None,
+            asr_fallback=(
+                response.debug.get("fallback", {}).get("asr")
+                if response.debug and isinstance(response.debug.get("fallback"), dict)
+                else None
+            ),
             reply_text=response.reply_text,
             tts_audio_url=response.tts.audio_url if response.tts else None,
             mode=response.mode.mode_id if response.mode else None,
