@@ -379,37 +379,36 @@ PY
 
 ## 5. 启动远程服务
 
-建议四个 tmux session：`qwen`、`asr`、`tts`、`orchestrator`。
+建议打开四个远程终端窗口，分别前台启动：`qwen`、`asr`、`tts`、`orchestrator`。
+前台启动的好处是日志会直接打印在当前终端，便于定位 ASR / LLM / TTS 哪一步失败。
 
-### 5.0 清理旧 tmux session（可选）
+### 5.0 清理旧端口进程（可选）
 
 ```bash
-tmux kill-session -t qwen 2>/dev/null || true
-tmux kill-session -t asr 2>/dev/null || true
-tmux kill-session -t tts 2>/dev/null || true
-tmux kill-session -t orchestrator 2>/dev/null || true
+pkill -f "vllm.entrypoints.openai.api_server.*--port 8000" || true
+pkill -f "uvicorn app:app.*--port 19100" || true
+pkill -f "uvicorn app:app.*--port 19200" || true
+pkill -f "uvicorn app:app.*--port 19000" || true
 ```
 
-### 5.1 启动 Qwen LLM server
+### 5.1 终端 1：启动 Qwen LLM server
 
 ```bash
-tmux new-session -d -s qwen "bash -lc '
 set -euo pipefail
 source /root/autodl-tmp/a22/code/fyfzsylxsRobot/scripts/env_robot.sh
-source \"$A22_ENV_ROOT/qwen-server/bin/activate\"
-cd \"$A22_CODE/remote/qwen-server\"
-export CUDA_VISIBLE_DEVICES=\"$QWEN_CUDA_VISIBLE_DEVICES\"
-python -m vllm.entrypoints.openai.api_server \\
-  --host 127.0.0.1 \\
-  --port 8000 \\
-  --model \"$QWEN_MODEL_PATH\" \\
-  --served-model-name \"$QWEN_MODEL_NAME\" \\
-  --dtype auto \\
-  --gpu-memory-utilization \"$QWEN_GPU_MEMORY_UTILIZATION\" \\
-  --max-model-len \"$QWEN_MAX_MODEL_LEN\" \\
-  --max-num-seqs \"$QWEN_MAX_NUM_SEQS\" \\
+source "$A22_ENV_ROOT/qwen-server/bin/activate"
+cd "$A22_CODE/remote/qwen-server"
+export CUDA_VISIBLE_DEVICES="$QWEN_CUDA_VISIBLE_DEVICES"
+python -m vllm.entrypoints.openai.api_server \
+  --host 127.0.0.1 \
+  --port 8000 \
+  --model "$QWEN_MODEL_PATH" \
+  --served-model-name "$QWEN_MODEL_NAME" \
+  --dtype auto \
+  --gpu-memory-utilization "$QWEN_GPU_MEMORY_UTILIZATION" \
+  --max-model-len "$QWEN_MAX_MODEL_LEN" \
+  --max-num-seqs "$QWEN_MAX_NUM_SEQS" \
   --trust-remote-code
-'"
 ```
 
 检查：
@@ -420,13 +419,14 @@ curl http://127.0.0.1:8000/v1/models
 
 ---
 
-### 5.2 启动 ASR service：端口 19100
+### 5.2 终端 2：启动 ASR service，端口 19100
 
 ```bash
 cd /root/autodl-tmp/a22/code/fyfzsylxsRobot
 
-pkill -f "uvicorn app:app --host 127.0.0.1 --port 19100" || true
+pkill -f "uvicorn app:app.*--port 19100" || true
 
+set -euo pipefail
 source /root/autodl-tmp/a22/env_robot.sh
 source "$A22_ENV_ROOT/speech-service/bin/activate"
 
@@ -444,7 +444,11 @@ export TTS_DEVICE=cpu
 export TMP_DIR="$A22_TMP_ROOT/speech_asr"
 mkdir -p "$TMP_DIR"
 
-export PYTHONPATH="$A22_CODE/shared:$A22_CODE/remote/speech-service:$TTS_CODE_ROOT"
+export PYTHONPATH="$A22_CODE/shared:$A22_CODE/remote/speech-service:${PYTHONPATH:-}"
+export ROBOT_LOG_LEVEL=INFO
+export ROBOT_DEBUG_TRACE=true
+
+python -c "import routes.asr, routes.tts; print('speech-service route imports ok')"
 
 python -m uvicorn app:app --host 127.0.0.1 --port 19100 --log-level debug
 ```
@@ -457,20 +461,19 @@ curl http://127.0.0.1:19100/health
 
 ---
 
-### 5.3 启动 TTS service：端口 19200，独立 TTS 环境
+### 5.3 终端 3：启动 TTS service，端口 19200，独立 TTS 环境
 
 ```bash
-tmux new-session -d -s tts "bash -lc '
 set -euo pipefail
 source /root/autodl-tmp/a22/code/fyfzsylxsRobot/scripts/env_robot.sh
-source \"$A22_ENV_ROOT/tts-service/bin/activate\"
-cd \"$A22_CODE/remote/speech-service\"
+source "$A22_ENV_ROOT/tts-service/bin/activate"
+cd "$A22_CODE/remote/speech-service"
 
 # TTS 独立环境：不使用 avatar-service
 export TTS_PROVIDER=cosyvoice
-export TTS_MODEL=\"$A22_MODEL_ROOT/CosyVoice-300M-Instruct\"
-export TTS_REPO_PATH=\"$A22_MODEL_ROOT/CosyVoice\"
-export TTS_CODE_ROOT=\"$TTS_REPO_PATH\"
+export TTS_MODEL="$A22_MODEL_ROOT/CosyVoice-300M-Instruct"
+export TTS_REPO_PATH="$A22_MODEL_ROOT/CosyVoice"
+export TTS_CODE_ROOT="$TTS_REPO_PATH"
 export TTS_MODE=cosyvoice_300m_instruct
 export TTS_DEVICE=cuda:0
 export TTS_WARMUP_ENABLED=false
@@ -482,15 +485,16 @@ export SER_WARMUP_ENABLED=false
 export ASR_PROVIDER=qwen3_asr
 export ASR_DEVICE=cpu
 
-export TMP_DIR=\"$A22_TMP_ROOT/speech_tts\"
-mkdir -p \"$TMP_DIR\"
+export TMP_DIR="$A22_TMP_ROOT/speech_tts"
+mkdir -p "$TMP_DIR"
 
-export PYTHONPATH=\"$A22_CODE/shared:$A22_CODE/remote/speech-service:$TTS_REPO_PATH:${PYTHONPATH:-}\"
+export PYTHONPATH="$A22_CODE/shared:$A22_CODE/remote/speech-service:$TTS_REPO_PATH:$TTS_REPO_PATH/third_party/Matcha-TTS:${PYTHONPATH:-}"
 export ROBOT_LOG_LEVEL=INFO
 export ROBOT_DEBUG_TRACE=true
 
+python -c "import routes.asr, routes.tts; print('speech-service route imports ok')"
+
 python -m uvicorn app:app --host 127.0.0.1 --port 19200
-'"
 ```
 
 检查：
@@ -510,14 +514,13 @@ SPEECH_ENABLE_TTS=true
 
 ---
 
-### 5.4 启动 orchestrator：端口 19000
+### 5.4 终端 4：启动 orchestrator，端口 19000
 
 ```bash
-tmux new-session -d -s orchestrator "bash -lc '
 set -euo pipefail
 source /root/autodl-tmp/a22/code/fyfzsylxsRobot/scripts/env_robot.sh
-source \"$A22_ENV_ROOT/orchestrator/bin/activate\"
-cd \"$A22_CODE\"
+source "$A22_ENV_ROOT/orchestrator/bin/activate"
+cd "$A22_CODE"
 
 export SPEECH_SERVICE_BASE=http://127.0.0.1:19100
 export TTS_SERVICE_BASE=http://127.0.0.1:19200
@@ -533,13 +536,12 @@ export ROBOT_CHAT_USE_MOCK_TTS=false
 
 export ROBOT_LOG_LEVEL=INFO
 export ROBOT_DEBUG_TRACE=true
-export PYTHONPATH=\"$A22_CODE/shared:$A22_CODE/remote/orchestrator:${PYTHONPATH:-}\"
+export PYTHONPATH="$A22_CODE/shared:$A22_CODE/remote/orchestrator:${PYTHONPATH:-}"
 
-python -m uvicorn app:app \\
-  --app-dir remote/orchestrator \\
-  --host 127.0.0.1 \\
+python -m uvicorn app:app \
+  --app-dir remote/orchestrator \
+  --host 127.0.0.1 \
   --port 19000
-'"
 ```
 
 检查：
@@ -561,20 +563,15 @@ curl http://127.0.0.1:19000/health
 
 查看日志：
 
-```bash
-tmux attach -t qwen
-tmux attach -t asr
-tmux attach -t tts
-tmux attach -t orchestrator
-```
+四个服务都以前台方式运行，日志会直接显示在对应终端窗口中。
 
 杀掉服务：
 
 ```bash
-tmux kill-session -t qwen
-tmux kill-session -t asr
-tmux kill-session -t tts
-tmux kill-session -t orchestrator
+pkill -f "vllm.entrypoints.openai.api_server.*--port 8000" || true
+pkill -f "uvicorn app:app.*--port 19100" || true
+pkill -f "uvicorn app:app.*--port 19200" || true
+pkill -f "uvicorn app:app.*--port 19000" || true
 ```
 
 ---
@@ -655,9 +652,9 @@ curl -I http://127.0.0.1:19000/v1/robot/media/tts/demo-session-001/turn-0002.wav
 
 如果返回 `404`，重点检查：
 
-```bash
-tmux attach -t tts
-tmux attach -t orchestrator
+```text
+TTS service 终端日志
+orchestrator 终端日志
 ```
 
 ---
@@ -853,10 +850,10 @@ SPEECH_ENABLE_TTS=true
 curl http://127.0.0.1:8000/v1/models
 ```
 
-若不通，检查 tmux：
+若不通，检查 Qwen LLM server 对应终端日志：
 
-```bash
-tmux attach -t qwen
+```text
+终端 1：Qwen LLM server
 ```
 
 ### 11.4 ASR 不通
