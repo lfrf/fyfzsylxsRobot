@@ -423,31 +423,30 @@ curl http://127.0.0.1:8000/v1/models
 ### 5.2 启动 ASR service：端口 19100
 
 ```bash
-tmux new-session -d -s asr "bash -lc '
-set -euo pipefail
-source /root/autodl-tmp/a22/code/fyfzsylxsRobot/scripts/env_robot.sh
-source \"$A22_ENV_ROOT/speech-service/bin/activate\"
-cd \"$A22_CODE/remote/speech-service\"
+cd /root/autodl-tmp/a22/code/fyfzsylxsRobot
+
+pkill -f "uvicorn app:app --host 127.0.0.1 --port 19100" || true
+
+source /root/autodl-tmp/a22/env_robot.sh
+source "$A22_ENV_ROOT/speech-service/bin/activate"
+
+cd "$A22_CODE/remote/speech-service"
 
 export ASR_PROVIDER=qwen3_asr
-export ASR_MODEL=\"$A22_MODEL_ROOT/Qwen3-ASR-1.7B\"
+export ASR_MODEL="$A22_MODEL_ROOT/Qwen3-ASR-1.7B"
 export ASR_DEVICE=cuda:0
 export ASR_WARMUP_ENABLED=true
 
-# ASR 服务里不启用真实 TTS，避免 ASR env 缺 CosyVoice 依赖
 export TTS_PROVIDER=mock
 export TTS_WARMUP_ENABLED=false
 export TTS_DEVICE=cpu
 
-export TMP_DIR=\"$A22_TMP_ROOT/speech_asr\"
-mkdir -p \"$TMP_DIR\"
+export TMP_DIR="$A22_TMP_ROOT/speech_asr"
+mkdir -p "$TMP_DIR"
 
-export PYTHONPATH=\"$A22_CODE/shared:$A22_CODE/remote/speech-service:${PYTHONPATH:-}\"
-export ROBOT_LOG_LEVEL=INFO
-export ROBOT_DEBUG_TRACE=true
+export PYTHONPATH="$A22_CODE/shared:$A22_CODE/remote/speech-service:$TTS_CODE_ROOT"
 
-python -m uvicorn app:app --host 127.0.0.1 --port 19100
-'"
+python -m uvicorn app:app --host 127.0.0.1 --port 19100 --log-level debug
 ```
 
 检查：
