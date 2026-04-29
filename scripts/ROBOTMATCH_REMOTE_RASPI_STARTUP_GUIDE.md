@@ -427,7 +427,7 @@ cd /root/autodl-tmp/a22/code/fyfzsylxsRobot
 pkill -f "uvicorn app:app.*--port 19100" || true
 
 set -euo pipefail
-source /root/autodl-tmp/a22/env_robot.sh
+source /root/autodl-tmp/a22/code/fyfzsylxsRobot/scripts/env_robot.sh
 source "$A22_ENV_ROOT/speech-service/bin/activate"
 
 cd "$A22_CODE/remote/speech-service"
