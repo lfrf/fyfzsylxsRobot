@@ -13,6 +13,8 @@ from clients.llm_client import LLMClient, llm_client
 from clients.rag_client import RAGClient, rag_client
 from clients.tts_client import TTSClient, tts_client
 from logging_utils import log_context, log_event
+from services.mode_chains.base import ModeTurnContext
+from services.mode_chains.router import ModeChainRouter, mode_chain_router
 from services.mode_manager import ModeManager, mode_manager
 from services.mode_policy import get_mode_service
 from services.rag_router import RagRouter, rag_router
@@ -32,6 +34,7 @@ class RobotChatService:
         rag_client_instance: RAGClient | None = None,
         actions: RobotActionService | None = None,
         response_policy: ResponsePolicyService | None = None,
+        mode_chain_router_instance: ModeChainRouter | None = None,
     ) -> None:
         self.modes = modes or mode_manager
         self.rag = rag or rag_router
@@ -41,6 +44,7 @@ class RobotChatService:
         self.rag_client = rag_client_instance or rag_client
         self.actions = actions or robot_action_service
         self.response_policy = response_policy or response_policy_service
+        self.mode_chain_router = mode_chain_router_instance or mode_chain_router
 
     def handle_chat_turn(self, request: RobotChatRequest) -> RobotChatResponse:
         log_session_id = self._request_log_session_id(request)
@@ -163,21 +167,56 @@ class RobotChatService:
         rag_context_chars = int(getattr(self.rag_client, "last_context_chars", len(rag_context or "")) or 0)
         rag_used_default_docs = bool(getattr(self.rag_client, "last_used_default_docs", False))
         emotion = self._emotion_stub(asr_text)
-        llm_result = self.llm.generate_reply(
+
+        # Try ModeChainRouter for care/accompany/learning
+        mode_chain = self.mode_chain_router.get_chain(current_mode)
+        chain_context = ModeTurnContext(
             session_id=request.session_id,
             turn_id=request.turn_id,
+            mode_id=current_mode,
             asr_text=asr_text,
             mode_policy=policy,
             rag_route=rag_route,
             rag_context=rag_context,
+            emotion_label=emotion.label,
         )
-        reply_text = llm_result.reply_text
-        response_policy_result = self.response_policy.apply(
-            mode_id=policy.mode_id,
-            reply_text=reply_text,
-            user_text=asr_text,
+        chain_result = mode_chain.handle_turn(
+            context=chain_context,
+            llm_client=self.llm,
+            response_policy_service=self.response_policy,
         )
-        reply_text = response_policy_result.reply_text
+
+        # Use chain result if handled, otherwise fallback to generic LLM flow
+        if chain_result.handled:
+            reply_text = chain_result.reply_text
+            llm_result = chain_result.llm_result
+            response_policy_changed = chain_result.debug.get("response_policy_changed", False)
+            response_policy_rules = chain_result.debug.get("response_policy_rules", [])
+            response_policy_original_chars = chain_result.debug.get("response_policy_original_chars", 0)
+            response_policy_final_chars = chain_result.debug.get("response_policy_final_chars", 0)
+            mode_chain_used = True
+        else:
+            # Fallback: use generic LLM + response_policy flow
+            llm_result = self.llm.generate_reply(
+                session_id=request.session_id,
+                turn_id=request.turn_id,
+                asr_text=asr_text,
+                mode_policy=policy,
+                rag_route=rag_route,
+                rag_context=rag_context,
+            )
+            reply_text = llm_result.reply_text
+            response_policy_result = self.response_policy.apply(
+                mode_id=policy.mode_id,
+                reply_text=reply_text,
+                user_text=asr_text,
+            )
+            reply_text = response_policy_result.reply_text
+            response_policy_changed = response_policy_result.changed
+            response_policy_rules = response_policy_result.rules_applied
+            response_policy_original_chars = response_policy_result.original_chars
+            response_policy_final_chars = response_policy_result.final_chars
+            mode_chain_used = False
         robot_action = self.actions.for_chat(policy, emotion)
         tts_client_result = self.tts.synthesize(
             text=reply_text,
@@ -221,7 +260,13 @@ class RobotChatService:
                 current_mode=current_mode,
                 display_name=policy.display_name,
                 active_rag_namespace=rag_route.namespace,
-                response_policy_result=response_policy_result,
+                mode_chain_used=mode_chain_used,
+                mode_chain_id=current_mode,
+                mode_chain_result=chain_result,
+                response_policy_changed=response_policy_changed,
+                response_policy_rules=response_policy_rules,
+                response_policy_original_chars=response_policy_original_chars,
+                response_policy_final_chars=response_policy_final_chars,
             ),
         )
         self._log_response_ready(
@@ -263,7 +308,13 @@ class RobotChatService:
         display_name: str | None = None,
         active_rag_namespace: str | None = None,
         llm_skipped: str | None = None,
-        response_policy_result=None,
+        mode_chain_used: bool = False,
+        mode_chain_id: str | None = None,
+        mode_chain_result=None,
+        response_policy_changed: bool = False,
+        response_policy_rules: list[str] | None = None,
+        response_policy_original_chars: int = 0,
+        response_policy_final_chars: int = 0,
     ) -> dict:
         llm_source = llm_skipped or (llm_result.source if llm_result else None)
         llm_latency = None if llm_result is None else llm_result.latency_ms
@@ -308,11 +359,17 @@ class RobotChatService:
             "rag_used_default_docs": rag_used_default_docs,
             "llm_reasoning_hint": None if llm_result is None else llm_result.reasoning_hint,
             "tts_detail": tts_result.detail,
+            "mode_chain": {
+                "used": mode_chain_used,
+                "mode_chain_id": mode_chain_id,
+                "handled": mode_chain_result.handled if mode_chain_result else False,
+                "debug": mode_chain_result.debug if mode_chain_result else {},
+            },
             "response_policy": {
-                "changed": response_policy_result.changed if response_policy_result else False,
-                "original_chars": response_policy_result.original_chars if response_policy_result else 0,
-                "final_chars": response_policy_result.final_chars if response_policy_result else 0,
-                "rules_applied": response_policy_result.rules_applied if response_policy_result else [],
+                "changed": response_policy_changed,
+                "original_chars": response_policy_original_chars,
+                "final_chars": response_policy_final_chars,
+                "rules_applied": response_policy_rules or [],
             },
         }
 
