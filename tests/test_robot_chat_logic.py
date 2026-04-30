@@ -174,3 +174,144 @@ def test_remote_client_instantiates_and_builds_json_base64_payload() -> None:
     assert payload["input"]["type"] == "audio_base64"
     assert "files" not in payload
     json.dumps(payload, ensure_ascii=False)
+
+
+# ===== P1 ModeChain and ResponsePolicy Tests =====
+
+
+def test_care_normal_chat_uses_mode_chain() -> None:
+    """Test that care mode uses ModeChainRouter."""
+    service = _service()
+    response = service.handle_chat_turn(_request("session-care-chain", "我有点累", mode="care"))
+
+    assert response.mode.mode_id == "care"
+    assert response.debug["mode_chain"]["used"] is True
+    assert response.debug["mode_chain"]["handled"] is True
+    assert response.debug["mode_chain"]["mode_chain_id"] == "care"
+    assert response.debug["response_policy"]["changed"] is not None
+
+
+def test_accompany_normal_chat_uses_mode_chain() -> None:
+    """Test that accompany mode uses ModeChainRouter."""
+    service = _service()
+    response = service.handle_chat_turn(_request("session-accompany-chain", "陪我聊聊", mode="accompany"))
+
+    assert response.mode.mode_id == "accompany"
+    assert response.debug["mode_chain"]["used"] is True
+    assert response.debug["mode_chain"]["handled"] is True
+    assert response.debug["mode_chain"]["mode_chain_id"] == "accompany"
+
+
+def test_learning_normal_chat_uses_mode_chain() -> None:
+    """Test that learning mode uses ModeChainRouter."""
+    service = _service()
+    response = service.handle_chat_turn(_request("session-learning-chain", "帮我学习", mode="learning"))
+
+    assert response.mode.mode_id == "learning"
+    assert response.debug["mode_chain"]["used"] is True
+    assert response.debug["mode_chain"]["handled"] is True
+    assert response.debug["mode_chain"]["mode_chain_id"] == "learning"
+
+
+def test_response_policy_applied_in_fallback_flow() -> None:
+    """Test ResponsePolicyService is applied when chain is not handled."""
+    service = _service()
+
+    # Request with care mode - chain handles it
+    response = service.handle_chat_turn(_request("session-policy", "我需要帮助", mode="care"))
+
+    # Check that response_policy debug info exists
+    assert "response_policy" in response.debug
+    assert isinstance(response.debug["response_policy"]["changed"], bool)
+    assert isinstance(response.debug["response_policy"]["rules_applied"], list)
+    assert response.debug["response_policy"]["original_chars"] >= 0
+    assert response.debug["response_policy"]["final_chars"] >= 0
+
+
+def test_game_exit_resets_session_mode() -> None:
+    """Test that exiting game properly syncs session mode to care (default)."""
+    from services.games.game_state_service import game_state_service
+    from services.mode_manager import mode_manager
+
+    service = _service()
+    session_id = "session-game-exit"
+
+    # Start game mode
+    mode_manager.set_session_mode(session_id, "game")
+    game_state_service.start_choosing(session_id)
+
+    # User exits game
+    response = service.handle_chat_turn(_request(session_id, "不玩了", mode="game"))
+
+    # Verify response indicates mode switch to care
+    assert response.mode.mode_id == "care"
+    assert response.mode_changed is True
+    assert response.mode_switch.switched is True
+    assert response.mode_switch.to_mode == "care"
+
+    # Verify session mode is actually changed to care
+    actual_mode = mode_manager.get_session_mode(session_id, "care")
+    assert actual_mode == "care"
+
+    # Verify game state is reset
+    assert not game_state_service.is_active(session_id)
+
+
+def test_chain_reply_text_none_fallback() -> None:
+    """Test that None reply_text from chain is handled gracefully."""
+    service = _service()
+    response = service.handle_chat_turn(_request("session-empty-reply", "你好", mode="care"))
+
+    # Should never have None or empty reply_text
+    assert response.reply_text is not None
+    assert len(response.reply_text) > 0
+    assert response.tts is not None
+
+
+def test_mode_update_syncs_rag_route() -> None:
+    """Test that mode_update from chain syncs RAG route correctly."""
+    service = _service()
+    response = service.handle_chat_turn(_request("session-rag-sync", "你好", mode="game"))
+
+    # The response should have rag_namespace matching the current mode
+    assert response.active_rag_namespace == response.debug["mode"]["active_rag_namespace"]
+
+
+def test_debug_fields_complete() -> None:
+    """Test that all required debug fields are present."""
+    service = _service()
+    response = service.handle_chat_turn(_request("session-debug", "你好", mode="care"))
+
+    debug = response.debug
+
+    # Verify structure
+    assert "trace_id" in debug
+    assert "source" in debug
+    assert "asr_source" in debug
+    assert "llm_source" in debug
+    assert "tts_source" in debug
+    assert "sources" in debug
+    assert "latency_ms" in debug
+    assert "service_urls" in debug
+    assert "fallback" in debug
+    assert "mode" in debug
+    assert "rag_context_used" in debug
+    assert "rag_matched_files" in debug
+    assert "rag_context_chars" in debug
+    assert "rag_used_default_docs" in debug
+    assert "tts_detail" in debug
+    assert "mode_chain" in debug
+    assert "response_policy" in debug
+
+    # Verify mode_chain structure
+    assert "used" in debug["mode_chain"]
+    assert "mode_chain_id" in debug["mode_chain"]
+    assert "handled" in debug["mode_chain"]
+    assert "debug" in debug["mode_chain"]
+
+    # Verify response_policy structure
+    assert "changed" in debug["response_policy"]
+    assert "original_chars" in debug["response_policy"]
+    assert "final_chars" in debug["response_policy"]
+    assert "rules_applied" in debug["response_policy"]
+

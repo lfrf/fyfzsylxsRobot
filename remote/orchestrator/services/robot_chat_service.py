@@ -77,19 +77,21 @@ class RobotChatService:
         current_mode = self.modes.get_session_mode(request.session_id, request.mode)
 
         # ===== GAME MODE LOGIC (highest priority for exits) =====
-        # Check for game exit intent (highest priority)
+        # Check for game exit intent (highest priority) - return to care mode
         if game_state_service.detect_exit_intent(asr_text):
             if game_state_service.is_active(request.session_id):
                 game_state_service.reset(request.session_id)
-                reply_text = "好的，那我们先不玩了。已回到陪伴模式，我们可以继续聊天。"
+                # Sync session mode to care (default after game exit)
+                self.modes.set_session_mode(request.session_id, "care")
+                reply_text = "好的，那我们先不玩了。已回到关怀模式，我们可以继续聊天。"
                 emotion = EmotionResult(label="neutral", confidence=1.0)
-                policy = get_mode_service("accompany").get_policy()
+                policy = get_mode_service("care").get_policy()
                 robot_action = self.actions.for_chat(policy, emotion)
                 tts_client_result = self.tts.synthesize(
                     text=reply_text,
                     session_id=request.session_id,
                     turn_id=request.turn_id,
-                    mode="accompany",
+                    mode="care",
                     speech_style=policy.speech_style,
                 )
                 response = RobotChatResponse(
@@ -98,12 +100,14 @@ class RobotChatService:
                     turn_id=request.turn_id,
                     mode=policy.to_mode_info(),
                     mode_switch=ModeSwitchResult(
-                        switched=False,
+                        switched=True,
                         from_mode=current_mode,
-                        to_mode=current_mode,
+                        to_mode="care",
+                        reason="game exit detected",
+                        confirmation_text=reply_text,
                     ),
-                    mode_changed=False,
-                    active_rag_namespace="accompany",
+                    mode_changed=True,
+                    active_rag_namespace="care",
                     asr_text=asr_text,
                     reply_text=reply_text,
                     emotion=emotion,
@@ -124,9 +128,9 @@ class RobotChatService:
                         rag_context_chars=0,
                         rag_used_default_docs=False,
                         requested_mode=request.mode,
-                        current_mode="accompany",
-                        display_name="陪伴模式",
-                        active_rag_namespace="accompany",
+                        current_mode="care",
+                        display_name="关怀模式",
+                        active_rag_namespace="care",
                         llm_skipped="game_exit",
                     ),
                 )

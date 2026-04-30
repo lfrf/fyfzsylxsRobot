@@ -133,9 +133,9 @@ class GameStateService:
             self.reset(session_id)
             return GameHandleResult(
                 handled=True,
-                reply_text="好的，那我们先不玩了。已回到陪伴模式，我们可以继续聊天。",
+                reply_text="好的，那我们先不玩了。已回到关怀模式，我们可以继续聊天。",
                 state=state,
-                mode_update="accompany",
+                mode_update="care",
                 debug={
                     "game_state_service": "exit_detected",
                     "intent": GameIntent.EXIT_GAME,
@@ -177,13 +177,13 @@ class GameStateService:
                 state.unknown_count += 1
 
                 if state.unknown_count > 2:
-                    # Auto exit after 2+ unknown inputs
+                    # Auto exit after 2+ unknown inputs - return to care mode
                     self.reset(session_id)
                     return GameHandleResult(
                         handled=True,
-                        reply_text="我好像没听清你的选择。那我们先结束游戏吧，回到陪伴模式。有什么我可以帮你的吗？",
+                        reply_text="我好像没听清你的选择。那我们先结束游戏吧，回到关怀模式。有什么我可以帮你的吗？",
                         state=state,
-                        mode_update="accompany",
+                        mode_update="care",
                         debug={
                             "game_state_service": "auto_exit",
                             "reason": "unknown_count_exceeded",

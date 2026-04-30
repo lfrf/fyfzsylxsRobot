@@ -107,8 +107,8 @@ def test_handle_turn_exit_intent(game_service: GameStateService) -> None:
 
     result = game_service.handle_turn(session_id, "不玩了")
     assert result.handled
-    assert result.mode_update == "accompany"
-    assert "不玩了" in result.reply_text or "回到陪伴模式" in result.reply_text
+    assert result.mode_update == "care"
+    assert "不玩了" in result.reply_text or "回到关怀模式" in result.reply_text
 
 
 def test_handle_turn_riddle_selection(game_service: GameStateService) -> None:
@@ -156,10 +156,10 @@ def test_handle_turn_auto_exit_after_unknown(game_service: GameStateService) -> 
     assert result2.handled
     assert "没听清" in result2.reply_text or "听不清" in result2.reply_text
 
-    # Third unknown input - should auto exit
+    # Third unknown input - should auto exit to care
     result3 = game_service.handle_turn(session_id, "其他内容")
     assert result3.handled
-    assert result3.mode_update == "accompany"
+    assert result3.mode_update == "care"
 
 
 def test_handle_turn_not_in_game(game_service: GameStateService) -> None:

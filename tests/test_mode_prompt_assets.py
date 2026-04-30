@@ -95,7 +95,7 @@ def test_game_mode_does_not_require_few_shots() -> None:
     client = LLMClient(use_mock=True)
     prompt = client._build_system_prompt(policy, RagRoute(namespace=policy.rag_namespace), None)
     # Prompt should still be valid even without few_shots/output_constraints
-    assert "你现在处于"游戏模式"" in prompt
+    assert "你现在处于" in prompt and "游戏模式" in prompt
 
 
 def test_llm_prompt_structure_order() -> None:
@@ -106,7 +106,7 @@ def test_llm_prompt_structure_order() -> None:
     prompt = client._build_system_prompt(policy, RagRoute(namespace=policy.rag_namespace), None)
 
     # Verify order: instruction comes before few_shots, few_shots before output_constraints
-    instruction_pos = prompt.find("你现在处于"关怀模式"")
+    instruction_pos = prompt.find("你现在处于")
     few_shots_pos = prompt.find("## 示例")
     output_constraints_pos = prompt.find("## 输出约束")
     tts_constraints_pos = prompt.find("【语音输出约束】")

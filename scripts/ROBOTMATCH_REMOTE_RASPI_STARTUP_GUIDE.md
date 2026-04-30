@@ -485,6 +485,9 @@ export TTS_CODE_ROOT="$A22_MODEL_ROOT/CosyVoice"
 export TTS_MODE=cosyvoice_300m_instruct
 export TTS_DEVICE=cuda:0
 
+# 关键：给 inference_instruct 提供必需的 spk_id
+export TTS_SPEAKER_ID=中文女
+
 # 关键：真实诊断模式
 export TTS_WARMUP_ENABLED=true
 export TTS_ALLOW_MOCK_FALLBACK=false
