@@ -20,6 +20,7 @@ from services.mode_policy import get_mode_service
 from services.rag_router import RagRouter, rag_router
 from services.response_policy_service import ResponsePolicyService, response_policy_service
 from services.robot_action_service import RobotActionService, robot_action_service
+from services.games.game_state_service import game_state_service
 
 
 class RobotChatService:
@@ -74,9 +75,79 @@ class RobotChatService:
         asr_result = self.asr.transcribe(request)
         asr_text = asr_result.text
         current_mode = self.modes.get_session_mode(request.session_id, request.mode)
-        switch = self.modes.detect_switch(asr_text)
 
+        # ===== GAME MODE LOGIC (highest priority for exits) =====
+        # Check for game exit intent (highest priority)
+        if game_state_service.detect_exit_intent(asr_text):
+            if game_state_service.is_active(request.session_id):
+                game_state_service.reset(request.session_id)
+                reply_text = "好的，那我们先不玩了。已回到陪伴模式，我们可以继续聊天。"
+                emotion = EmotionResult(label="neutral", confidence=1.0)
+                policy = get_mode_service("accompany").get_policy()
+                robot_action = self.actions.for_chat(policy, emotion)
+                tts_client_result = self.tts.synthesize(
+                    text=reply_text,
+                    session_id=request.session_id,
+                    turn_id=request.turn_id,
+                    mode="accompany",
+                    speech_style=policy.speech_style,
+                )
+                response = RobotChatResponse(
+                    success=True,
+                    session_id=request.session_id,
+                    turn_id=request.turn_id,
+                    mode=policy.to_mode_info(),
+                    mode_switch=ModeSwitchResult(
+                        switched=False,
+                        from_mode=current_mode,
+                        to_mode=current_mode,
+                    ),
+                    mode_changed=False,
+                    active_rag_namespace="accompany",
+                    asr_text=asr_text,
+                    reply_text=reply_text,
+                    emotion=emotion,
+                    tts=tts_client_result.tts,
+                    robot_action=robot_action,
+                    debug=self._build_debug(
+                        trace_id=trace_id,
+                        total_started=total_started,
+                        asr_result=asr_result,
+                        llm_result=None,
+                        tts_result=tts_client_result,
+                        speech_service_url=getattr(self.asr, "base_url", None),
+                        tts_service_url=getattr(self.tts, "base_url", None),
+                        llm_api_base=getattr(self.llm, "api_base", None),
+                        rag_route_source="game_exit",
+                        rag_context_used=False,
+                        rag_matched_files=[],
+                        rag_context_chars=0,
+                        rag_used_default_docs=False,
+                        requested_mode=request.mode,
+                        current_mode="accompany",
+                        display_name="陪伴模式",
+                        active_rag_namespace="accompany",
+                        llm_skipped="game_exit",
+                    ),
+                )
+                self._log_response_ready(
+                    response,
+                    trace_id=trace_id,
+                    asr_source=asr_result.source,
+                    llm_source="skipped:game_exit",
+                    tts_source=tts_client_result.source,
+                    rag_context_used=False,
+                    rag_matched_files=[],
+                )
+                return response
+
+        # Check for explicit mode switch
+        switch = self.modes.detect_switch(asr_text)
         if switch.detected and switch.target_mode:
+            # If switching away from game, reset game state
+            if game_state_service.is_active(request.session_id):
+                game_state_service.reset(request.session_id)
+
             target_mode = self.modes.set_session_mode(request.session_id, switch.target_mode)
             policy = get_mode_service(target_mode).get_policy()
             rag_route = self.rag.route_for_mode(policy)
@@ -149,6 +220,72 @@ class RobotChatService:
             )
             return response
 
+        # Check for game start intent
+        if game_state_service.detect_start_intent(asr_text):
+            target_mode = self.modes.set_session_mode(request.session_id, "game")
+            game_state_service.start_choosing(request.session_id)
+            reply_text = "好呀，我们来玩什么游戏呢？A 猜谜语，B 词语接龙。"
+            emotion = EmotionResult(label="happy", confidence=0.8)
+            policy = get_mode_service("game").get_policy()
+            robot_action = self.actions.for_chat(policy, emotion)
+            tts_client_result = self.tts.synthesize(
+                text=reply_text,
+                session_id=request.session_id,
+                turn_id=request.turn_id,
+                mode="game",
+                speech_style=policy.speech_style,
+            )
+            response = RobotChatResponse(
+                success=True,
+                session_id=request.session_id,
+                turn_id=request.turn_id,
+                mode=policy.to_mode_info(),
+                mode_switch=ModeSwitchResult(
+                    switched=False,
+                    from_mode=current_mode,
+                    to_mode="game",
+                ),
+                mode_changed=False,
+                active_rag_namespace="game",
+                asr_text=asr_text,
+                reply_text=reply_text,
+                emotion=emotion,
+                tts=tts_client_result.tts,
+                robot_action=robot_action,
+                debug=self._build_debug(
+                    trace_id=trace_id,
+                    total_started=total_started,
+                    asr_result=asr_result,
+                    llm_result=None,
+                    tts_result=tts_client_result,
+                    speech_service_url=getattr(self.asr, "base_url", None),
+                    tts_service_url=getattr(self.tts, "base_url", None),
+                    llm_api_base=getattr(self.llm, "api_base", None),
+                    rag_route_source="game_start",
+                    rag_context_used=False,
+                    rag_matched_files=[],
+                    rag_context_chars=0,
+                    rag_used_default_docs=False,
+                    requested_mode=request.mode,
+                    current_mode="game",
+                    display_name="游戏模式",
+                    active_rag_namespace="game",
+                    llm_skipped="game_start",
+                ),
+            )
+            self._log_response_ready(
+                response,
+                trace_id=trace_id,
+                asr_source=asr_result.source,
+                llm_source="skipped:game_start",
+                tts_source=tts_client_result.source,
+                rag_context_used=False,
+                rag_matched_files=[],
+            )
+            return response
+
+        # ===== END GAME MODE LOGIC =====
+
         policy = get_mode_service(current_mode).get_policy()
         rag_route = self.rag.route_for_mode(policy)
         log_event(
@@ -168,7 +305,7 @@ class RobotChatService:
         rag_used_default_docs = bool(getattr(self.rag_client, "last_used_default_docs", False))
         emotion = self._emotion_stub(asr_text)
 
-        # Try ModeChainRouter for care/accompany/learning
+        # Try ModeChainRouter for care/accompany/learning/game
         mode_chain = self.mode_chain_router.get_chain(current_mode)
         chain_context = ModeTurnContext(
             session_id=request.session_id,
@@ -195,6 +332,23 @@ class RobotChatService:
             response_policy_original_chars = chain_result.debug.get("response_policy_original_chars", 0)
             response_policy_final_chars = chain_result.debug.get("response_policy_final_chars", 0)
             mode_chain_used = True
+
+            # Handle mode update from game chain
+            mode_update = chain_result.debug.get("mode_update")
+            if mode_update and mode_update != current_mode:
+                self.modes.set_session_mode(request.session_id, mode_update)
+                current_mode = mode_update
+                policy = get_mode_service(current_mode).get_policy()
+
+            # Use robot_action_hint from chain if provided
+            if chain_result.robot_action_hint:
+                robot_action = self.actions.create_custom_action(
+                    expression=chain_result.robot_action_hint.get("expression", "neutral"),
+                    motion=chain_result.robot_action_hint.get("motion", "idle"),
+                    speech_style=chain_result.robot_action_hint.get("speech_style", policy.speech_style),
+                )
+            else:
+                robot_action = self.actions.for_chat(policy, emotion)
         else:
             # Fallback: use generic LLM + response_policy flow
             llm_result = self.llm.generate_reply(
@@ -217,7 +371,8 @@ class RobotChatService:
             response_policy_original_chars = response_policy_result.original_chars
             response_policy_final_chars = response_policy_result.final_chars
             mode_chain_used = False
-        robot_action = self.actions.for_chat(policy, emotion)
+            robot_action = self.actions.for_chat(policy, emotion)
+
         tts_client_result = self.tts.synthesize(
             text=reply_text,
             session_id=request.session_id,

@@ -28,6 +28,22 @@ class RobotActionService:
         self._log_action(policy, emotion.label, action)
         return action
 
+    def create_custom_action(
+        self,
+        expression: str = "neutral",
+        motion: str = "center",
+        speech_style: str = "default",
+        priority: str = "normal",
+    ) -> RobotAction:
+        """Create a custom robot action with specified parameters."""
+        action = RobotAction(
+            expression=expression,
+            motion=motion,
+            speech_style=speech_style,
+            priority=priority,
+        )
+        return action
+
     def _emotion_style(self, policy: ModePolicy, emotion_label: str) -> tuple[str, str]:
         if emotion_label in {"tired", "sad", "anxious"}:
             return "comfort", "slow_nod"
