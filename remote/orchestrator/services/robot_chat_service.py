@@ -16,6 +16,7 @@ from logging_utils import log_context, log_event
 from services.mode_manager import ModeManager, mode_manager
 from services.mode_policy import get_mode_service
 from services.rag_router import RagRouter, rag_router
+from services.response_policy_service import ResponsePolicyService, response_policy_service
 from services.robot_action_service import RobotActionService, robot_action_service
 
 
@@ -30,6 +31,7 @@ class RobotChatService:
         tts: TTSClient | None = None,
         rag_client_instance: RAGClient | None = None,
         actions: RobotActionService | None = None,
+        response_policy: ResponsePolicyService | None = None,
     ) -> None:
         self.modes = modes or mode_manager
         self.rag = rag or rag_router
@@ -38,6 +40,7 @@ class RobotChatService:
         self.tts = tts or tts_client
         self.rag_client = rag_client_instance or rag_client
         self.actions = actions or robot_action_service
+        self.response_policy = response_policy or response_policy_service
 
     def handle_chat_turn(self, request: RobotChatRequest) -> RobotChatResponse:
         log_session_id = self._request_log_session_id(request)
@@ -169,6 +172,12 @@ class RobotChatService:
             rag_context=rag_context,
         )
         reply_text = llm_result.reply_text
+        response_policy_result = self.response_policy.apply(
+            mode_id=policy.mode_id,
+            reply_text=reply_text,
+            user_text=asr_text,
+        )
+        reply_text = response_policy_result.reply_text
         robot_action = self.actions.for_chat(policy, emotion)
         tts_client_result = self.tts.synthesize(
             text=reply_text,
@@ -212,6 +221,7 @@ class RobotChatService:
                 current_mode=current_mode,
                 display_name=policy.display_name,
                 active_rag_namespace=rag_route.namespace,
+                response_policy_result=response_policy_result,
             ),
         )
         self._log_response_ready(
@@ -253,6 +263,7 @@ class RobotChatService:
         display_name: str | None = None,
         active_rag_namespace: str | None = None,
         llm_skipped: str | None = None,
+        response_policy_result=None,
     ) -> dict:
         llm_source = llm_skipped or (llm_result.source if llm_result else None)
         llm_latency = None if llm_result is None else llm_result.latency_ms
@@ -297,6 +308,12 @@ class RobotChatService:
             "rag_used_default_docs": rag_used_default_docs,
             "llm_reasoning_hint": None if llm_result is None else llm_result.reasoning_hint,
             "tts_detail": tts_result.detail,
+            "response_policy": {
+                "changed": response_policy_result.changed if response_policy_result else False,
+                "original_chars": response_policy_result.original_chars if response_policy_result else 0,
+                "final_chars": response_policy_result.final_chars if response_policy_result else 0,
+                "rules_applied": response_policy_result.rules_applied if response_policy_result else [],
+            },
         }
 
     def _log_response_ready(

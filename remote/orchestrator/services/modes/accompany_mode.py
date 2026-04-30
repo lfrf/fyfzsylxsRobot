@@ -15,6 +15,8 @@ class AccompanyModeService(BaseModeService):
     switch_expression = "neutral"
     switch_motion = "center"
     instruction_filename = "accompany.md"
+    few_shot_filename = "accompany.md"
+    output_constraint_filename = "accompany.md"
     fallback_instruction = "你处于陪伴模式。像朋友一样自然、温暖地聊天，回复短一点，适合语音播放。"
     switch_commands = (
         "切换为陪伴模式",

@@ -15,6 +15,8 @@ class CareModeService(BaseModeService):
     switch_expression = "comfort"
     switch_motion = "slow_nod"
     instruction_filename = "care.md"
+    few_shot_filename = "care.md"
+    output_constraint_filename = "care.md"
     fallback_instruction = "你处于关怀模式。回复要短、温和、慢一点，先共情，再给轻量建议。"
     switch_commands = (
         "切换为关怀模式",

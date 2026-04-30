@@ -20,6 +20,10 @@ class ModePolicy:
     switch_motion: str
     instruction_path: str
     system_instruction: str
+    few_shot_path: str = ""
+    few_shots: str = ""
+    output_constraint_path: str = ""
+    output_constraints: str = ""
 
     def to_mode_info(self) -> ModeInfo:
         return ModeInfo(

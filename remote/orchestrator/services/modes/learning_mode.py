@@ -15,6 +15,8 @@ class LearningModeService(BaseModeService):
     switch_expression = "listening"
     switch_motion = "center"
     instruction_filename = "learning.md"
+    few_shot_filename = "learning.md"
+    output_constraint_filename = "learning.md"
     fallback_instruction = "你处于学习模式。帮助用户拆解学习任务，解释概念，回复清晰、有条理、不要太长。"
     switch_commands = (
         "切换为学习模式",

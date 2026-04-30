@@ -128,30 +128,36 @@ class LLMClient:
         parts = [
             settings.system_prompt,
             mode_policy.system_instruction,
-            (
-                "【语音输出约束】\n"
-                "1. 你的回复会被直接 TTS 播放。\n"
-                "2. 不要使用 Markdown。\n"
-                "3. 不要使用表格。\n"
-                "4. 不要使用长列表。\n"
-                "5. 不要输出括号里的舞台说明。\n"
-                "6. 不要说“作为一个 AI”。\n"
-                "7. care/accompany/game 模式通常不超过 120 个汉字。\n"
-                "8. learning 模式可以稍长，但也要分层清楚、适合语音播放。\n"
-                "9. 每次回复尽量只完成一个主要意图。\n"
-                "10. 除非用户要求详细解释，否则不要长篇展开。"
-            ),
-            f"Current robot mode: {mode_policy.mode_id}.",
-            f"Display mode name: {mode_policy.display_name}.",
-            f"Speech style: {mode_policy.speech_style}.",
-            f"Active RAG namespace: {rag_route.namespace}.",
-            "Your answer will be spoken by a desktop robot, so keep it natural and not too long.",
-            "Answer in concise spoken Chinese unless the user asks otherwise.",
-            "Do not mention avatar, video rendering, lip-sync, or digital human output.",
         ]
+        if mode_policy.few_shots:
+            parts.append(f”## 示例\n{mode_policy.few_shots}”)
+        if mode_policy.output_constraints:
+            parts.append(f”## 输出约束\n{mode_policy.output_constraints}”)
+        parts.extend([
+            (
+                “【语音输出约束】\n”
+                “1. 你的回复会被直接 TTS 播放。\n”
+                “2. 不要使用 Markdown。\n”
+                “3. 不要使用表格。\n”
+                “4. 不要使用长列表。\n”
+                “5. 不要输出括号里的舞台说明。\n”
+                “6. 不要说”作为一个 AI”。\n”
+                “7. care/accompany/game 模式通常不超过 120 个汉字。\n”
+                “8. learning 模式可以稍长，但也要分层清楚、适合语音播放。\n”
+                “9. 每次回复尽量只完成一个主要意图。\n”
+                “10. 除非用户要求详细解释，否则不要长篇展开。”
+            ),
+            f”Current robot mode: {mode_policy.mode_id}.”,
+            f”Display mode name: {mode_policy.display_name}.”,
+            f”Speech style: {mode_policy.speech_style}.”,
+            f”Active RAG namespace: {rag_route.namespace}.”,
+            “Your answer will be spoken by a desktop robot, so keep it natural and not too long.”,
+            “Answer in concise spoken Chinese unless the user asks otherwise.”,
+            “Do not mention avatar, video rendering, lip-sync, or digital human output.”,
+        ])
         if rag_context:
-            parts.append(f"Optional retrieved context:\n{rag_context}")
-        return "\n".join(parts)
+            parts.append(f”Optional retrieved context:\n{rag_context}”)
+        return “\n”.join(parts)
 
     def _mock_result(
         self,
@@ -199,9 +205,15 @@ class LLMClient:
         prompt_sections = [
             "settings_system_prompt",
             "mode_instruction",
+        ]
+        if mode_policy.few_shots:
+            prompt_sections.append("mode_few_shots")
+        if mode_policy.output_constraints:
+            prompt_sections.append("mode_output_constraints")
+        prompt_sections.extend([
             "tts_output_constraints",
             "mode_metadata",
-        ]
+        ])
         if rag_context:
             prompt_sections.append("rag_context")
         log_event(
@@ -209,6 +221,8 @@ class LLMClient:
             mode=mode_policy.mode_id,
             display_name=mode_policy.display_name,
             instruction_chars=len(mode_policy.system_instruction or ""),
+            few_shots_chars=len(mode_policy.few_shots or ""),
+            output_constraints_chars=len(mode_policy.output_constraints or ""),
             rag_context_used=bool(rag_context),
             rag_context_chars=len(rag_context or ""),
             speech_style=mode_policy.speech_style,
