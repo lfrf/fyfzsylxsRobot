@@ -130,23 +130,21 @@ class LLMClient:
             mode_policy.system_instruction,
         ]
         if mode_policy.few_shots:
-            parts.append(f"## 示例\n{mode_policy.few_shots}")
+            parts.append(f"## Example\n{mode_policy.few_shots}")
         if mode_policy.output_constraints:
-            parts.append(f"## 输出约束\n{mode_policy.output_constraints}")
+            parts.append(f"## Output Constraints\n{mode_policy.output_constraints}")
         parts.extend([
-            (
-                "【语音输出约束】\n"
-                "1. 你的回复会被直接 TTS 播放。\n"
-                "2. 不要使用 Markdown。\n"
-                "3. 不要使用表格。\n"
-                "4. 不要使用长列表。\n"
-                "5. 不要输出括号里的舞台说明。\n"
-                "6. 不要说"作为一个 AI"。\n"
-                "7. care/accompany/game 模式通常不超过 120 个汉字。\n"
-                "8. learning 模式可以稍长，但也要分层清楚、适合语音播放。\n"
-                "9. 每次回复尽量只完成一个主要意图。\n"
-                "10. 除非用户要求详细解释，否则不要长篇展开。"
-            ),
+            "TTS Output Constraints:\n"
+            "1. Your reply will be played directly by TTS.\n"
+            "2. Do not use Markdown.\n"
+            "3. Do not use tables.\n"
+            "4. Do not use long lists.\n"
+            "5. Do not output stage directions in brackets.\n"
+            "6. Do not say 'As an AI'.\n"
+            "7. care/accompany/game modes usually not exceeding 120 characters.\n"
+            "8. learning mode can be longer, but must be layered clearly and suitable for speech.\n"
+            "9. Try to complete only one main intention per reply.\n"
+            "10. Unless the user asks for detailed explanation, do not expand at length.",
             f"Current robot mode: {mode_policy.mode_id}.",
             f"Display mode name: {mode_policy.display_name}.",
             f"Speech style: {mode_policy.speech_style}.",
@@ -178,7 +176,7 @@ class LLMClient:
                 service_url=service_url,
             )
         return LLMResult(
-            reply_text=f"{mode_policy.normal_reply} 你刚才说的是：{asr_text}",
+            reply_text=f"{mode_policy.normal_reply} You just said: {asr_text}",
             source="mock",
             reasoning_hint="echo-with-mode-policy",
             latency_ms=latency_ms,
