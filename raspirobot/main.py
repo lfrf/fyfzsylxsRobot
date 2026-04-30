@@ -22,6 +22,7 @@ from raspirobot.remote import MockRemoteClient, RemoteClient, RemoteClientProtoc
 from raspirobot.session import SessionManager, TurnLogger
 from raspirobot.utils import ensure_dir
 from raspirobot.vision import MockVisionContextProvider
+from shared.logging_utils import get_log_file_path, get_log_session_id, log_event, start_log_session
 
 
 def build_vad(settings: Settings) -> EnergyVAD:
@@ -104,6 +105,7 @@ def build_runtime(
 
 def run_file_once(wav_path: str, *, use_mock_remote: bool = True, mock_playback: bool = True) -> None:
     settings = load_settings()
+    start_raspi_runtime_log("file_once", settings)
     runtime = build_runtime(
         input_provider=FileAudioInputProvider(wav_path=wav_path, frame_ms=settings.audio_frame_ms),
         remote_client=MockRemoteClient() if use_mock_remote else RemoteClient(),
@@ -124,8 +126,32 @@ def run_file_once(wav_path: str, *, use_mock_remote: bool = True, mock_playback:
 
 def run_live_loop() -> None:
     settings = load_settings()
+    start_raspi_runtime_log("live_audio_loop", settings)
     runtime = build_runtime(input_provider=build_live_input_provider(settings), settings=settings)
     runtime.run_forever()
+
+
+def start_raspi_runtime_log(runtime_name: str, settings: Settings) -> str:
+    log_session_id = start_log_session()
+    log_event(
+        "raspi_runtime_log_session_started",
+        component="raspirobot",
+        runtime=runtime_name,
+        log_session_id=log_session_id,
+        log_timezone="Asia/Shanghai",
+        log_file_path=get_log_file_path(),
+        robot_session_id=settings.session_id,
+        remote_base_url=settings.remote_base_url,
+        chat_endpoint=settings.chat_endpoint,
+        audio_capture_provider=settings.audio_capture_provider,
+        audio_output_provider=settings.audio_output_provider,
+        audio_capture_device=settings.audio_capture_device,
+        audio_playback_device=settings.audio_playback_device,
+        sample_rate=settings.audio_sample_rate,
+        channels=settings.audio_channels,
+        default_mode=settings.default_mode,
+    )
+    return get_log_session_id()
 
 
 def main() -> None:

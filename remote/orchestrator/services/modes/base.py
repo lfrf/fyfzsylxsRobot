@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from logging_utils import log_event
 from services.mode_types import ModePolicy
 
 
@@ -27,8 +28,25 @@ class BaseModeService:
     def load_instruction(self) -> str:
         path = self.instruction_path
         if path.exists():
-            return path.read_text(encoding="utf-8").strip()
-        return self.fallback_instruction.strip()
+            instruction = path.read_text(encoding="utf-8").strip()
+            log_event(
+                "mode_instruction_loaded",
+                mode_id=self.mode_id,
+                instruction_path=str(path),
+                instruction_chars=len(instruction),
+                fallback_used=False,
+            )
+            return instruction
+        instruction = self.fallback_instruction.strip()
+        log_event(
+            "mode_instruction_loaded",
+            mode_id=self.mode_id,
+            instruction_path=str(path),
+            instruction_chars=len(instruction),
+            fallback_used=True,
+            reason="instruction_file_missing",
+        )
+        return instruction
 
     def get_policy(self) -> ModePolicy:
         return ModePolicy(

@@ -1,27 +1,32 @@
 from contracts.schemas import EmotionResult, RobotAction
 
+from logging_utils import log_event
 from services.mode_policy import ModePolicy, get_mode_policy
 
 
 class RobotActionService:
     def for_mode_switch(self, mode: str | ModePolicy) -> RobotAction:
         policy = mode if isinstance(mode, ModePolicy) else get_mode_policy(mode)
-        return RobotAction(
+        action = RobotAction(
             expression=policy.switch_expression,
             motion=policy.switch_motion,
             speech_style=policy.speech_style,
             priority="normal",
         )
+        self._log_action(policy, "mode_switch", action)
+        return action
 
     def for_chat(self, mode: str | ModePolicy, emotion: EmotionResult) -> RobotAction:
         policy = mode if isinstance(mode, ModePolicy) else get_mode_policy(mode)
         expression, motion = self._emotion_style(policy, emotion.label)
-        return RobotAction(
+        action = RobotAction(
             expression=expression,
             motion=motion,
             speech_style=policy.speech_style,
             priority="normal",
         )
+        self._log_action(policy, emotion.label, action)
+        return action
 
     def _emotion_style(self, policy: ModePolicy, emotion_label: str) -> tuple[str, str]:
         if emotion_label in {"tired", "sad", "anxious"}:
@@ -37,6 +42,16 @@ class RobotActionService:
         if policy.mode_id == "game":
             return "happy", "happy_nod"
         return "neutral", "center"
+
+    def _log_action(self, policy: ModePolicy, emotion_label: str, action: RobotAction) -> None:
+        log_event(
+            "robot_action_selected",
+            mode=policy.mode_id,
+            emotion_label=emotion_label,
+            expression=action.expression,
+            motion=action.motion,
+            speech_style=action.speech_style,
+        )
 
 
 robot_action_service = RobotActionService()

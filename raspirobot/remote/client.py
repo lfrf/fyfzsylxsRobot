@@ -18,7 +18,7 @@ from shared.schemas import (
 )
 
 from raspirobot.config import load_settings
-from shared.logging_utils import log_event
+from shared.logging_utils import get_log_session_id, log_event
 
 
 class RemoteClientProtocol(Protocol):
@@ -62,12 +62,14 @@ class RemoteClient:
     def chat_turn(self, request: RobotChatRequest) -> RobotChatResponse:
         payload = self.build_payload(request)
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        log_session_id = _request_log_session_id(request)
         http_request = Request(
             self.url,
             data=body,
             headers={
                 "Content-Type": "application/json",
                 "Accept": "application/json",
+                "X-Robot-Log-Session-Id": log_session_id,
             },
             method="POST",
         )
@@ -77,6 +79,7 @@ class RemoteClient:
             url=self.url,
             session_id=request.session_id,
             turn_id=request.turn_id,
+            remote_log_session_id=log_session_id,
             timeout_seconds=self.timeout_seconds,
             audio_base64_len=len(request.input.audio_base64 or ""),
         )
@@ -92,6 +95,7 @@ class RemoteClient:
                 url=self.url,
                 session_id=request.session_id,
                 turn_id=request.turn_id,
+                remote_log_session_id=log_session_id,
                 status=exc.code,
                 latency_ms=round((perf_counter() - started) * 1000, 2),
                 error=detail[:300],
@@ -104,6 +108,7 @@ class RemoteClient:
                 url=self.url,
                 session_id=request.session_id,
                 turn_id=request.turn_id,
+                remote_log_session_id=log_session_id,
                 latency_ms=round((perf_counter() - started) * 1000, 2),
                 error=str(exc.reason),
                 level="error",
@@ -115,6 +120,7 @@ class RemoteClient:
                 url=self.url,
                 session_id=request.session_id,
                 turn_id=request.turn_id,
+                remote_log_session_id=log_session_id,
                 latency_ms=round((perf_counter() - started) * 1000, 2),
                 error="timeout",
                 level="error",
@@ -138,6 +144,7 @@ class RemoteClient:
             url=self.url,
             session_id=request.session_id,
             turn_id=request.turn_id,
+            remote_log_session_id=log_session_id,
             status=status,
             latency_ms=round((perf_counter() - started) * 1000, 2),
         )
@@ -231,6 +238,11 @@ def _normalize_mode(mode_id: str | None) -> str:
         "child": "game",
     }
     return aliases.get((mode_id or "").strip().lower(), "care")
+
+
+def _request_log_session_id(request: RobotChatRequest) -> str:
+    options = request.request_options if isinstance(request.request_options, dict) else {}
+    return str(options.get("log_session_id") or get_log_session_id())
 
 
 __all__ = [

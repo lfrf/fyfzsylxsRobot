@@ -6,7 +6,7 @@ from time import perf_counter
 import httpx
 
 from config import settings
-from logging_utils import log_event
+from logging_utils import get_active_log_session_id, log_event
 from services.mode_policy import ModePolicy
 from services.rag_router import RagRoute
 
@@ -58,6 +58,12 @@ class LLMClient:
             mock_enabled=self.use_mock or settings.llm_provider == "mock",
         )
         started = perf_counter()
+        system_prompt = self._build_system_prompt(mode_policy, rag_route, rag_context)
+        self._log_prompt_built(
+            mode_policy=mode_policy,
+            rag_context=rag_context,
+            system_prompt=system_prompt,
+        )
         if self.use_mock or not self.api_base or settings.llm_provider == "mock":
             result = self._mock_result(
                 asr_text=asr_text,
@@ -69,7 +75,6 @@ class LLMClient:
             self._log_result(result)
             return result
 
-        system_prompt = self._build_system_prompt(mode_policy, rag_route, rag_context)
         payload = {
             "model": self.model,
             "messages": [
@@ -82,6 +87,7 @@ class LLMClient:
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.api_key}",
+            "X-Robot-Log-Session-Id": get_active_log_session_id(),
         }
         try:
             with httpx.Client(timeout=self.timeout_seconds) as client:
@@ -181,6 +187,35 @@ class LLMClient:
             source=result.source,
             latency_ms=result.latency_ms,
             fallback=result.fallback,
+        )
+
+    def _log_prompt_built(
+        self,
+        *,
+        mode_policy: ModePolicy,
+        rag_context: str | None,
+        system_prompt: str,
+    ) -> None:
+        prompt_sections = [
+            "settings_system_prompt",
+            "mode_instruction",
+            "tts_output_constraints",
+            "mode_metadata",
+        ]
+        if rag_context:
+            prompt_sections.append("rag_context")
+        log_event(
+            "llm_prompt_built",
+            mode=mode_policy.mode_id,
+            display_name=mode_policy.display_name,
+            instruction_chars=len(mode_policy.system_instruction or ""),
+            rag_context_used=bool(rag_context),
+            rag_context_chars=len(rag_context or ""),
+            speech_style=mode_policy.speech_style,
+            prompt_chars=len(system_prompt),
+            prompt_sections=prompt_sections,
+            temperature=settings.llm_temperature,
+            max_tokens=settings.llm_max_tokens,
         )
 
 

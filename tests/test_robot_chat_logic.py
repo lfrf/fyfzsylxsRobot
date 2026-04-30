@@ -127,6 +127,11 @@ def test_care_normal_chat_uses_care_rag_context() -> None:
     assert response.mode.mode_id == "care"
     assert response.active_rag_namespace == "care"
     assert response.debug["rag_context_used"] is True
+    assert response.debug["rag_matched_files"]
+    assert response.debug["rag_context_chars"] > 0
+    assert response.debug["rag_used_default_docs"] is False
+    assert response.debug["mode"]["current_mode"] == "care"
+    assert response.debug["mode"]["active_rag_namespace"] == "care"
 
 
 def test_mode_switch_skips_llm() -> None:

@@ -48,6 +48,8 @@ def test_payload_builder_creates_valid_robot_chat_request(tmp_path: Path) -> Non
     assert request.input.channels == 2
     assert request.input.duration_ms and request.input.duration_ms > 0
     assert request.vision_context is not None
+    assert request.request_options["log_session_id"].startswith("cn-")
+    assert request.request_options["log_timezone"] == "Asia/Shanghai"
 
 
 def test_energy_vad_detects_speech_and_silence() -> None:

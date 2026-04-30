@@ -5,6 +5,8 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from logging_utils import log_event
+
 
 CARE_DEFAULT_DOCS = (
     "00_care_mode_principles.md",
@@ -53,29 +55,44 @@ class RAGClient:
             or orchestrator_root / "knowledge_base"
         )
         self.max_chars = max_chars
+        self.last_matched_files: list[str] = []
+        self.last_used_default_docs = False
+        self.last_context_chars = 0
 
     def retrieve_context(self, *, namespace: str, query: str) -> str | None:
+        raw_namespace = namespace
+        self._reset_last_result()
+        log_event(
+            "rag_retrieve_started",
+            namespace=raw_namespace,
+            query=query,
+            knowledge_base_root=str(self.knowledge_base_root),
+        )
         namespace = self._normalize_namespace(namespace)
         if not namespace:
-            return None
+            log_event("rag_namespace_missing", namespace=raw_namespace, namespace_dir="")
+            return self._finish_retrieve(namespace=raw_namespace, query=query, context=None)
 
         namespace_dir = self.knowledge_base_root / namespace
         if not self._is_safe_child(namespace_dir, self.knowledge_base_root):
-            return None
+            log_event("rag_namespace_missing", namespace=namespace, namespace_dir=str(namespace_dir))
+            return self._finish_retrieve(namespace=namespace, query=query, context=None)
         if not namespace_dir.exists() or not namespace_dir.is_dir():
-            return None
+            log_event("rag_namespace_missing", namespace=namespace, namespace_dir=str(namespace_dir))
+            return self._finish_retrieve(namespace=namespace, query=query, context=None)
 
         docs = sorted(namespace_dir.glob("*.md"))
         if not docs:
-            return None
+            return self._finish_retrieve(namespace=namespace, query=query, context=None)
 
         chunks = self._rank_docs(docs, query, namespace=namespace)
 
         if not chunks and namespace == "care":
             chunks = self._default_care_docs(namespace_dir)
+            self.last_used_default_docs = bool(chunks)
 
         if not chunks:
-            return None
+            return self._finish_retrieve(namespace=namespace, query=query, context=None)
 
         selected_text = []
         total = 0
@@ -88,7 +105,9 @@ class RAGClient:
             if total >= self.max_chars:
                 break
 
-        return "\n\n---\n\n".join(selected_text).strip() or None
+        self.last_matched_files = [Path(chunk.path).name for chunk in chunks[: len(selected_text)]]
+        context = "\n\n---\n\n".join(selected_text).strip() or None
+        return self._finish_retrieve(namespace=namespace, query=query, context=context)
 
     def _rank_docs(self, docs: list[Path], query: str, *, namespace: str) -> list[RetrievedChunk]:
         query_tokens = self._tokens(query)
@@ -179,6 +198,24 @@ class RAGClient:
             return True
         except ValueError:
             return False
+
+    def _reset_last_result(self) -> None:
+        self.last_matched_files = []
+        self.last_used_default_docs = False
+        self.last_context_chars = 0
+
+    def _finish_retrieve(self, *, namespace: str, query: str, context: str | None) -> str | None:
+        self.last_context_chars = len(context or "")
+        log_event(
+            "rag_retrieve_finished",
+            namespace=namespace,
+            query=query,
+            matched_files=self.last_matched_files,
+            context_chars=self.last_context_chars,
+            used_default_docs=self.last_used_default_docs,
+            max_chars=self.max_chars,
+        )
+        return context
 
 
 rag_client = RAGClient()

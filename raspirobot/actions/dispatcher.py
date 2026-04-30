@@ -5,6 +5,7 @@ from shared.schemas import RobotAction, TTSResult
 
 from raspirobot.audio import AudioOutputProvider, MockAudioPlayer
 from raspirobot.hardware import EyesDriver, HeadDriver, MockEyesDriver, MockHeadDriver
+from shared.logging_utils import log_event
 
 from .action_mapping import normalize_action
 
@@ -31,6 +32,13 @@ class DefaultRobotActionDispatcher:
 
     def dispatch(self, action: RobotAction, tts: TTSResult | None = None) -> None:
         normalized = normalize_action(action)
+        log_event(
+            "hardware_action_dispatch_started",
+            expression=normalized.expression,
+            motion=normalized.motion,
+            speech_style=normalized.speech_style,
+            head_target=normalized.head_target,
+        )
         self.eyes.set_expression(normalized.expression)
         if hasattr(self.head, "play_motion"):
             self.head.play_motion(normalized.motion)
@@ -50,3 +58,9 @@ class DefaultRobotActionDispatcher:
                 self.audio.play_audio_url(tts.audio_url, base_url=self.remote_base_url)
             else:
                 self.audio.play_url(tts.audio_url)
+        log_event(
+            "hardware_action_dispatch_done",
+            expression=normalized.expression,
+            motion=normalized.motion,
+            head_target=normalized.head_target,
+        )

@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 
+from shared.logging_utils import log_event
+
 
 class RobotRuntimeState(str, Enum):
     IDLE = "IDLE"
@@ -47,16 +49,19 @@ class RobotStateMachine:
     last_error: str | None = None
 
     def transition(self, event: RobotEvent, *, turn_id: str | None = None, error: str | None = None) -> RobotRuntimeState:
+        from_state = self.state
         self.busy_hint_requested = False
 
         if event == RobotEvent.SYSTEM_ERROR:
             self.last_error = error or "SYSTEM_ERROR"
             self.remote_request_in_progress = False
             self.state = RobotRuntimeState.ERROR_FALLBACK
+            self._log_transition(event, from_state, turn_id=turn_id, error=self.last_error)
             return self.state
 
         if event == RobotEvent.NEW_SPEECH_INPUT and self.state in BUSY_STATES:
             self.busy_hint_requested = True
+            self._log_transition(event, from_state, turn_id=turn_id, busy_hint_requested=True)
             return self.state
 
         if self.state == RobotRuntimeState.IDLE and event == RobotEvent.WAKE_WORD_DETECTED:
@@ -82,11 +87,40 @@ class RobotStateMachine:
             self.last_error = None
             self.state = RobotRuntimeState.LISTENING
 
+        self._log_transition(event, from_state, turn_id=turn_id, error=error)
         return self.state
 
     def apply_mode(self, mode_id: str | None) -> None:
         if mode_id:
+            old_mode = self.mode_id
             self.mode_id = mode_id
+            log_event(
+                "state_machine_mode_applied",
+                old_mode=old_mode,
+                new_mode=self.mode_id,
+            )
 
     def can_accept_speech(self) -> bool:
         return self.state == RobotRuntimeState.LISTENING
+
+    def _log_transition(
+        self,
+        event: RobotEvent,
+        from_state: RobotRuntimeState,
+        *,
+        turn_id: str | None = None,
+        error: str | None = None,
+        busy_hint_requested: bool | None = None,
+    ) -> None:
+        log_event(
+            "state_transition",
+            event=event.value,
+            from_state=from_state.value,
+            to_state=self.state.value,
+            turn_id=turn_id,
+            mode_id=self.mode_id,
+            active_turn_id=self.active_turn_id,
+            remote_request_in_progress=self.remote_request_in_progress,
+            busy_hint_requested=self.busy_hint_requested if busy_hint_requested is None else busy_hint_requested,
+            error=error,
+        )

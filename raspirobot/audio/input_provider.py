@@ -9,6 +9,8 @@ from pathlib import Path
 from time import time
 from typing import Iterable, Iterator, Protocol
 
+from shared.logging_utils import log_event
+
 
 @dataclass(frozen=True)
 class AudioFrame:
@@ -118,6 +120,15 @@ class LocalCommandAudioInputProvider:
         bytes_per_frame = int(self.sample_rate * self.channels * self.sample_width * self.frame_ms / 1000)
         bytes_per_frame = max(self.channels * self.sample_width, bytes_per_frame)
 
+        log_event(
+            "audio_capture_process_started",
+            provider="local_command",
+            command=" ".join(cmd),
+            capture_device=self.capture_device,
+            sample_rate=self.sample_rate,
+            channels=self.channels,
+            frame_ms=self.frame_ms,
+        )
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         assert process.stdout is not None
         try:
@@ -141,6 +152,11 @@ class LocalCommandAudioInputProvider:
                     process.wait(timeout=2)
                 except subprocess.TimeoutExpired:
                     process.kill()
+            log_event(
+                "audio_capture_process_stopped",
+                provider="local_command",
+                returncode=process.poll(),
+            )
 
 
 def make_sine_pcm(

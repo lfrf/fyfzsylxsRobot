@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from typing import Protocol
 
+from shared.logging_utils import log_event
+
 
 class HeadDriver(Protocol):
     def play_motion(self, motion: str) -> None:
@@ -30,7 +32,18 @@ class MockHeadDriver:
 
     def set_motion(self, motion: str) -> None:
         self.last_motion = motion or "none"
+        log_event(
+            "hardware_head_motion_set",
+            provider="mock",
+            motion=self.last_motion,
+        )
 
     def set_target(self, pan: float | None, tilt: float | None) -> None:
         self.last_pan = pan
         self.last_tilt = tilt
+        log_event(
+            "hardware_head_pose_set",
+            provider="mock",
+            pan=pan,
+            tilt=tilt,
+        )

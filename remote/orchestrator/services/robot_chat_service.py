@@ -12,7 +12,7 @@ from clients.asr_client import ASRClient, asr_client
 from clients.llm_client import LLMClient, llm_client
 from clients.rag_client import RAGClient, rag_client
 from clients.tts_client import TTSClient, tts_client
-from logging_utils import log_event
+from logging_utils import log_context, log_event
 from services.mode_manager import ModeManager, mode_manager
 from services.mode_policy import get_mode_service
 from services.rag_router import RagRouter, rag_router
@@ -40,6 +40,16 @@ class RobotChatService:
         self.actions = actions or robot_action_service
 
     def handle_chat_turn(self, request: RobotChatRequest) -> RobotChatResponse:
+        log_session_id = self._request_log_session_id(request)
+        with log_context(
+            log_session_id=log_session_id,
+            robot_session_id=request.session_id,
+            robot_turn_id=request.turn_id,
+            component="remote_orchestrator",
+        ):
+            return self._handle_chat_turn(request)
+
+    def _handle_chat_turn(self, request: RobotChatRequest) -> RobotChatResponse:
         trace_id = uuid4().hex
         total_started = perf_counter()
         log_event(
@@ -111,6 +121,13 @@ class RobotChatService:
                     llm_api_base=getattr(self.llm, "api_base", None),
                     rag_route_source=rag_route.source,
                     rag_context_used=False,
+                    rag_matched_files=[],
+                    rag_context_chars=0,
+                    rag_used_default_docs=False,
+                    requested_mode=request.mode,
+                    current_mode=target_mode,
+                    display_name=policy.display_name,
+                    active_rag_namespace=rag_route.namespace,
                     llm_skipped="mode_switch",
                 ),
             )
@@ -120,12 +137,28 @@ class RobotChatService:
                 asr_source=asr_result.source,
                 llm_source="skipped:mode_switch",
                 tts_source=tts_client_result.source,
+                rag_context_used=False,
+                rag_matched_files=[],
             )
             return response
 
         policy = get_mode_service(current_mode).get_policy()
         rag_route = self.rag.route_for_mode(policy)
+        log_event(
+            "mode_resolved",
+            trace_id=trace_id,
+            session_id=request.session_id,
+            turn_id=request.turn_id,
+            requested_mode=request.mode,
+            current_mode=current_mode,
+            display_name=policy.display_name,
+            rag_namespace=rag_route.namespace,
+            speech_style=policy.speech_style,
+        )
         rag_context = self.rag_client.retrieve_context(namespace=rag_route.namespace, query=asr_text)
+        rag_matched_files = list(getattr(self.rag_client, "last_matched_files", []))
+        rag_context_chars = int(getattr(self.rag_client, "last_context_chars", len(rag_context or "")) or 0)
+        rag_used_default_docs = bool(getattr(self.rag_client, "last_used_default_docs", False))
         emotion = self._emotion_stub(asr_text)
         llm_result = self.llm.generate_reply(
             session_id=request.session_id,
@@ -172,6 +205,13 @@ class RobotChatService:
                 llm_api_base=getattr(self.llm, "api_base", None),
                 rag_route_source=rag_route.source,
                 rag_context_used=bool(rag_context),
+                rag_matched_files=rag_matched_files,
+                rag_context_chars=rag_context_chars,
+                rag_used_default_docs=rag_used_default_docs,
+                requested_mode=request.mode,
+                current_mode=current_mode,
+                display_name=policy.display_name,
+                active_rag_namespace=rag_route.namespace,
             ),
         )
         self._log_response_ready(
@@ -180,6 +220,8 @@ class RobotChatService:
             asr_source=asr_result.source,
             llm_source=llm_result.source,
             tts_source=tts_client_result.source,
+            rag_context_used=bool(rag_context),
+            rag_matched_files=rag_matched_files,
         )
         return response
 
@@ -203,6 +245,13 @@ class RobotChatService:
         llm_api_base: str | None,
         rag_route_source: str,
         rag_context_used: bool,
+        rag_matched_files: list[str] | None = None,
+        rag_context_chars: int = 0,
+        rag_used_default_docs: bool = False,
+        requested_mode: str | None = None,
+        current_mode: str | None = None,
+        display_name: str | None = None,
+        active_rag_namespace: str | None = None,
         llm_skipped: str | None = None,
     ) -> dict:
         llm_source = llm_skipped or (llm_result.source if llm_result else None)
@@ -236,7 +285,16 @@ class RobotChatService:
                 "llm": llm_fallback,
                 "tts": tts_result.fallback,
             },
+            "mode": {
+                "requested_mode": requested_mode,
+                "current_mode": current_mode,
+                "display_name": display_name,
+                "active_rag_namespace": active_rag_namespace,
+            },
             "rag_context_used": rag_context_used,
+            "rag_matched_files": rag_matched_files or [],
+            "rag_context_chars": rag_context_chars,
+            "rag_used_default_docs": rag_used_default_docs,
             "llm_reasoning_hint": None if llm_result is None else llm_result.reasoning_hint,
             "tts_detail": tts_result.detail,
         }
@@ -249,6 +307,8 @@ class RobotChatService:
         asr_source: str,
         llm_source: str,
         tts_source: str,
+        rag_context_used: bool,
+        rag_matched_files: list[str],
     ) -> None:
         log_event(
             "robot_chat_response_ready",
@@ -260,12 +320,20 @@ class RobotChatService:
             active_rag_namespace=response.active_rag_namespace,
             asr_text=response.asr_text,
             reply_text=response.reply_text,
+            reply_chars=len(response.reply_text or ""),
             tts_audio_url=response.tts.audio_url,
             robot_action_expression=response.robot_action.expression,
             robot_action_motion=response.robot_action.motion,
             robot_action_speech_style=response.robot_action.speech_style,
+            rag_context_used=rag_context_used,
+            rag_matched_files=rag_matched_files,
             sources={"asr": asr_source, "llm": llm_source, "tts": tts_source},
         )
+
+
+    def _request_log_session_id(self, request: RobotChatRequest) -> str:
+        options = request.request_options if isinstance(request.request_options, dict) else {}
+        return str(options.get("log_session_id") or request.session_id)
 
 
 robot_chat_service = RobotChatService()

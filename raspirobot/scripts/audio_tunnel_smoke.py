@@ -10,6 +10,7 @@ from raspirobot.remote import RemoteClient, RobotPayloadBuilder
 from raspirobot.session import SessionManager, TurnLogger
 from raspirobot.core import TurnManager
 from raspirobot.vision import MockVisionContextProvider
+from shared.logging_utils import get_log_file_path, log_event, start_log_session
 
 
 def main() -> None:
@@ -19,6 +20,18 @@ def main() -> None:
     args = parser.parse_args()
 
     settings = load_settings()
+    log_session_id = start_log_session()
+    log_event(
+        "raspi_runtime_log_session_started",
+        component="raspirobot",
+        runtime="audio_tunnel_smoke",
+        log_session_id=log_session_id,
+        log_timezone="Asia/Shanghai",
+        log_file_path=get_log_file_path(),
+        robot_session_id=settings.session_id,
+        remote_base_url=settings.remote_base_url,
+        chat_endpoint=settings.chat_endpoint,
+    )
     remote = RemoteClient()
     audio = (
         LocalCommandAudioOutputProvider(

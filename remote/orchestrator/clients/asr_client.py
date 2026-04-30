@@ -7,7 +7,7 @@ import httpx
 
 from config import settings
 from contracts.schemas import RobotChatRequest
-from logging_utils import log_event
+from logging_utils import get_active_log_session_id, log_event
 
 
 @dataclass(frozen=True)
@@ -78,7 +78,11 @@ class ASRClient:
         }
         try:
             with httpx.Client(timeout=self.timeout_seconds) as client:
-                response = client.post(service_url, json=payload)
+                response = client.post(
+                    service_url,
+                    json=payload,
+                    headers={"X-Robot-Log-Session-Id": get_active_log_session_id()},
+                )
                 response.raise_for_status()
             body = response.json()
         except Exception as exc:
