@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from logging_utils import log_event
-from games.game_state_service import game_state_service
+from services.games.game_state_service import game_state_service
 
 from .base import BaseModeChain, ModeChainResult, ModeTurnContext
 
