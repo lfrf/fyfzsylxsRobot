@@ -50,8 +50,14 @@ def test_detect_riddle_intent_variations(game_service: GameStateService) -> None
     """Test detection of riddle game selection."""
     assert game_service.detect_riddle_intent("a")
     assert game_service.detect_riddle_intent("A")
+    assert game_service.detect_riddle_intent("诶")
+    assert game_service.detect_riddle_intent("欸")
+    assert game_service.detect_riddle_intent("哎")
     assert game_service.detect_riddle_intent("选a")
+    assert game_service.detect_riddle_intent("选择A")
     assert game_service.detect_riddle_intent("猜谜语")
+    assert game_service.detect_riddle_intent("第一")
+    assert game_service.detect_riddle_intent("1")
     assert not game_service.detect_riddle_intent("b")
 
 
@@ -59,8 +65,12 @@ def test_detect_word_chain_intent_variations(game_service: GameStateService) -> 
     """Test detection of word chain game selection."""
     assert game_service.detect_word_chain_intent("b")
     assert game_service.detect_word_chain_intent("B")
+    assert game_service.detect_word_chain_intent("比")
     assert game_service.detect_word_chain_intent("选b")
+    assert game_service.detect_word_chain_intent("选择B")
     assert game_service.detect_word_chain_intent("词语接龙")
+    assert game_service.detect_word_chain_intent("第二")
+    assert game_service.detect_word_chain_intent("2")
     assert not game_service.detect_word_chain_intent("a")
 
 
@@ -160,6 +170,26 @@ def test_handle_turn_auto_exit_after_unknown(game_service: GameStateService) -> 
     result3 = game_service.handle_turn(session_id, "其他内容")
     assert result3.handled
     assert result3.mode_update == "care"
+
+
+def test_handle_turn_direct_riddle_selection_from_idle(game_service: GameStateService) -> None:
+    """Test direct A selection starts riddle even if game state is idle."""
+    result = game_service.handle_turn("test_session_direct_a", "A")
+
+    assert result.handled
+    assert result.state is not None
+    assert result.state.status == GameStatus.RIDDLE_WAITING_ANSWER
+    assert "第1题" in result.reply_text or "第一题" in result.reply_text
+
+
+def test_handle_turn_direct_word_chain_selection_from_idle(game_service: GameStateService) -> None:
+    """Test direct B selection starts word chain even if game state is idle."""
+    result = game_service.handle_turn("test_session_direct_b", "B")
+
+    assert result.handled
+    assert result.state is not None
+    assert result.state.status == GameStatus.WORD_CHAIN_WAITING_ANSWER
+    assert "天空" in result.reply_text
 
 
 def test_handle_turn_not_in_game(game_service: GameStateService) -> None:

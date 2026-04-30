@@ -110,12 +110,22 @@ def test_normal_message_after_switch_uses_stored_session_mode() -> None:
 def test_implicit_mode_phrases_do_not_switch() -> None:
     service = _service()
 
-    for index, text in enumerate(("我有点累", "帮我学习", "帮我复习", "玩个游戏", "陪我聊聊天"), start=1):
+    for index, text in enumerate(("我有点累", "帮我学习", "帮我复习", "陪我聊聊天"), start=1):
         response = service.handle_chat_turn(
             _request("session-implicit", text, mode="care", turn_id=f"turn-{index:04d}")
         )
         assert response.mode_changed is False
         assert response.mode.mode_id == "care"
+
+
+def test_game_start_phrase_enters_game_menu() -> None:
+    service = _service()
+
+    response = service.handle_chat_turn(_request("session-game-start", "我们来开始游戏吧", mode="care"))
+
+    assert response.mode.mode_id == "game"
+    assert response.active_rag_namespace == "game"
+    assert "A 猜谜语" in response.reply_text
 
 
 def test_care_normal_chat_uses_care_rag_context() -> None:
@@ -229,15 +239,14 @@ def test_response_policy_applied_in_fallback_flow() -> None:
 
 
 def test_game_exit_resets_session_mode() -> None:
-    """Test that exiting game properly syncs session mode to care (default)."""
+    """Test that exiting game properly syncs session mode to care."""
     from services.games.game_state_service import game_state_service
-    from services.mode_manager import mode_manager
 
     service = _service()
     session_id = "session-game-exit"
 
     # Start game mode
-    mode_manager.set_session_mode(session_id, "game")
+    service.modes.set_session_mode(session_id, "game")
     game_state_service.start_choosing(session_id)
 
     # User exits game
@@ -250,7 +259,7 @@ def test_game_exit_resets_session_mode() -> None:
     assert response.mode_switch.to_mode == "care"
 
     # Verify session mode is actually changed to care
-    actual_mode = mode_manager.get_session_mode(session_id, "care")
+    actual_mode = service.modes.get_session_mode(session_id, "care")
     assert actual_mode == "care"
 
     # Verify game state is reset
@@ -271,10 +280,65 @@ def test_chain_reply_text_none_fallback() -> None:
 def test_mode_update_syncs_rag_route() -> None:
     """Test that mode_update from chain syncs RAG route correctly."""
     service = _service()
-    response = service.handle_chat_turn(_request("session-rag-sync", "你好", mode="game"))
+    session_id = "session-rag-sync"
+    service.handle_chat_turn(_request(session_id, "开始游戏", mode="care", turn_id="turn-0001"))
+    response = service.handle_chat_turn(_request(session_id, "随便", mode="game", turn_id="turn-0002"))
+    service.handle_chat_turn(_request(session_id, "随便", mode="game", turn_id="turn-0003"))
+    response = service.handle_chat_turn(_request(session_id, "随便", mode="game", turn_id="turn-0004"))
 
     # The response should have rag_namespace matching the current mode
     assert response.active_rag_namespace == response.debug["mode"]["active_rag_namespace"]
+    assert response.mode.mode_id == response.debug["mode"]["current_mode"]
+
+
+def test_game_riddle_flow_skips_llm_without_crashing() -> None:
+    service = _service()
+    session_id = "session-game-riddle-flow"
+
+    start = service.handle_chat_turn(_request(session_id, "开始游戏", mode="care", turn_id="turn-0001"))
+    selected = service.handle_chat_turn(_request(session_id, "A", mode="game", turn_id="turn-0002"))
+    answered = service.handle_chat_turn(_request(session_id, "铅笔", mode="game", turn_id="turn-0003"))
+
+    assert start.mode.mode_id == "game"
+    assert selected.mode.mode_id == "game"
+    assert selected.debug["sources"]["llm"] == "skipped:game_chain"
+    assert selected.debug["mode_chain"]["handled"] is True
+    assert "题" in selected.reply_text
+    assert answered.mode.mode_id == "game"
+    assert answered.debug["sources"]["llm"] == "skipped:game_chain"
+    assert answered.reply_text
+
+
+def test_game_word_chain_flow_skips_llm_without_crashing() -> None:
+    service = _service()
+    session_id = "session-game-word-chain-flow"
+
+    start = service.handle_chat_turn(_request(session_id, "开始游戏", mode="care", turn_id="turn-0001"))
+    selected = service.handle_chat_turn(_request(session_id, "B", mode="game", turn_id="turn-0002"))
+    answered = service.handle_chat_turn(_request(session_id, "空调", mode="game", turn_id="turn-0003"))
+
+    assert start.mode.mode_id == "game"
+    assert selected.mode.mode_id == "game"
+    assert selected.debug["sources"]["llm"] == "skipped:game_chain"
+    assert "天空" in selected.reply_text
+    assert answered.mode.mode_id == "game"
+    assert answered.debug["sources"]["llm"] == "skipped:game_chain"
+    assert answered.reply_text
+
+
+def test_game_switch_to_learning_resets_game_state() -> None:
+    from services.games.game_state_service import game_state_service
+
+    service = _service()
+    session_id = "session-game-switch-learning"
+
+    service.handle_chat_turn(_request(session_id, "开始游戏", mode="care", turn_id="turn-0001"))
+    response = service.handle_chat_turn(_request(session_id, "切换为学习模式", mode="game", turn_id="turn-0002"))
+
+    assert response.mode.mode_id == "learning"
+    assert response.mode_changed is True
+    assert response.active_rag_namespace == "learning"
+    assert not game_state_service.is_active(session_id)
 
 
 def test_debug_fields_complete() -> None:
@@ -314,4 +378,3 @@ def test_debug_fields_complete() -> None:
     assert "original_chars" in debug["response_policy"]
     assert "final_chars" in debug["response_policy"]
     assert "rules_applied" in debug["response_policy"]
-

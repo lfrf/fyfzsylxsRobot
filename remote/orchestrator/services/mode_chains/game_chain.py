@@ -28,9 +28,13 @@ class GameModeChain(BaseModeChain):
             "chain": "game",
             "session_id": context.session_id,
             "turn_id": context.turn_id,
+            "mode_update": None,
         }
 
         try:
+            state_before = game_state_service.get_or_create_state(context.session_id)
+            debug_info.update(self._state_debug(state_before))
+
             # Use GameStateService to handle game logic
             game_result = game_state_service.handle_turn(
                 session_id=context.session_id,
@@ -39,6 +43,7 @@ class GameModeChain(BaseModeChain):
 
             if not game_result.handled:
                 debug_info["reason"] = "game_not_active"
+                debug_info.update(self._state_debug(game_result.state or state_before))
                 return ModeChainResult(
                     handled=False,
                     debug=debug_info,
@@ -50,6 +55,7 @@ class GameModeChain(BaseModeChain):
 
             debug_info["handled"] = True
             debug_info.update(game_result.debug)
+            debug_info.update(self._state_debug(game_result.state))
 
             # Set robot action hint for game
             robot_action_hint = game_result.robot_action_hint or {
@@ -90,3 +96,20 @@ class GameModeChain(BaseModeChain):
                 handled=False,
                 debug=debug_info,
             )
+
+    def _state_debug(self, state: Any | None) -> dict[str, Any]:
+        if state is None:
+            return {
+                "game_status": None,
+                "game_type": None,
+                "round_index": 0,
+                "score": 0,
+            }
+        game_status = getattr(state, "status", None)
+        game_type = getattr(state, "game_type", None)
+        return {
+            "game_status": getattr(game_status, "value", game_status),
+            "game_type": getattr(game_type, "value", game_type),
+            "round_index": getattr(state, "round_index", 0),
+            "score": getattr(state, "score", 0),
+        }

@@ -81,17 +81,18 @@ class RobotChatService:
         if game_state_service.detect_exit_intent(asr_text):
             if game_state_service.is_active(request.session_id):
                 game_state_service.reset(request.session_id)
-                # Sync session mode to care (default after game exit)
+                # Sync session mode to care after game exit.
                 self.modes.set_session_mode(request.session_id, "care")
                 reply_text = "好的，那我们先不玩了。已回到关怀模式，我们可以继续聊天。"
                 emotion = EmotionResult(label="neutral", confidence=1.0)
                 policy = get_mode_service("care").get_policy()
+                rag_route = self.rag.route_for_mode(policy)
                 robot_action = self.actions.for_chat(policy, emotion)
                 tts_client_result = self.tts.synthesize(
                     text=reply_text,
                     session_id=request.session_id,
                     turn_id=request.turn_id,
-                    mode="care",
+                    mode=policy.mode_id,
                     speech_style=policy.speech_style,
                 )
                 response = RobotChatResponse(
@@ -102,12 +103,12 @@ class RobotChatService:
                     mode_switch=ModeSwitchResult(
                         switched=True,
                         from_mode=current_mode,
-                        to_mode="care",
+                        to_mode=policy.mode_id,
                         reason="game exit detected",
                         confirmation_text=reply_text,
                     ),
                     mode_changed=True,
-                    active_rag_namespace="care",
+                    active_rag_namespace=rag_route.namespace,
                     asr_text=asr_text,
                     reply_text=reply_text,
                     emotion=emotion,
@@ -128,9 +129,9 @@ class RobotChatService:
                         rag_context_chars=0,
                         rag_used_default_docs=False,
                         requested_mode=request.mode,
-                        current_mode="care",
-                        display_name="关怀模式",
-                        active_rag_namespace="care",
+                        current_mode=policy.mode_id,
+                        display_name=policy.display_name,
+                        active_rag_namespace=rag_route.namespace,
                         llm_skipped="game_exit",
                     ),
                 )
@@ -149,10 +150,12 @@ class RobotChatService:
         switch = self.modes.detect_switch(asr_text)
         if switch.detected and switch.target_mode:
             # If switching away from game, reset game state
-            if game_state_service.is_active(request.session_id):
+            if switch.target_mode != "game" and game_state_service.is_active(request.session_id):
                 game_state_service.reset(request.session_id)
 
             target_mode = self.modes.set_session_mode(request.session_id, switch.target_mode)
+            if target_mode == "game":
+                game_state_service.start_choosing(request.session_id)
             policy = get_mode_service(target_mode).get_policy()
             rag_route = self.rag.route_for_mode(policy)
             log_event(
@@ -327,9 +330,16 @@ class RobotChatService:
             response_policy_service=self.response_policy,
         )
 
+        mode_before_chain_update = current_mode
+        mode_changed_by_chain = False
+
         # Use chain result if handled, otherwise fallback to generic LLM flow
         if chain_result.handled:
-            reply_text = chain_result.reply_text
+            reply_text = (
+                chain_result.reply_text
+                or getattr(policy, "normal_reply", None)
+                or "我听到了，我们继续。"
+            )
             llm_result = chain_result.llm_result
             response_policy_changed = chain_result.debug.get("response_policy_changed", False)
             response_policy_rules = chain_result.debug.get("response_policy_rules", [])
@@ -343,9 +353,11 @@ class RobotChatService:
                 self.modes.set_session_mode(request.session_id, mode_update)
                 current_mode = mode_update
                 policy = get_mode_service(current_mode).get_policy()
+                rag_route = self.rag.route_for_mode(policy)
+                mode_changed_by_chain = True
 
             # Use robot_action_hint from chain if provided
-            if chain_result.robot_action_hint:
+            if chain_result.robot_action_hint and not mode_changed_by_chain:
                 robot_action = self.actions.create_custom_action(
                     expression=chain_result.robot_action_hint.get("expression", "neutral"),
                     motion=chain_result.robot_action_hint.get("motion", "idle"),
@@ -377,6 +389,10 @@ class RobotChatService:
             mode_chain_used = False
             robot_action = self.actions.for_chat(policy, emotion)
 
+        llm_source = self._safe_llm_source(
+            llm_result,
+            "skipped:game_chain" if mode_chain_used and chain_result.llm_result is None else "mode_chain",
+        )
         tts_client_result = self.tts.synthesize(
             text=reply_text,
             session_id=request.session_id,
@@ -390,11 +406,13 @@ class RobotChatService:
             turn_id=request.turn_id,
             mode=policy.to_mode_info(),
             mode_switch=ModeSwitchResult(
-                switched=False,
-                from_mode=current_mode,
+                switched=mode_changed_by_chain,
+                from_mode=mode_before_chain_update,
                 to_mode=current_mode,
+                reason="mode chain update" if mode_changed_by_chain else None,
+                confirmation_text=reply_text if mode_changed_by_chain else None,
             ),
-            mode_changed=False,
+            mode_changed=mode_changed_by_chain,
             active_rag_namespace=rag_route.namespace,
             asr_text=asr_text,
             reply_text=reply_text,
@@ -420,19 +438,20 @@ class RobotChatService:
                 display_name=policy.display_name,
                 active_rag_namespace=rag_route.namespace,
                 mode_chain_used=mode_chain_used,
-                mode_chain_id=current_mode,
+                mode_chain_id=mode_chain.mode_id,
                 mode_chain_result=chain_result,
                 response_policy_changed=response_policy_changed,
                 response_policy_rules=response_policy_rules,
                 response_policy_original_chars=response_policy_original_chars,
                 response_policy_final_chars=response_policy_final_chars,
+                llm_skipped=llm_source if llm_result is None else None,
             ),
         )
         self._log_response_ready(
             response,
             trace_id=trace_id,
             asr_source=asr_result.source,
-            llm_source=llm_result.source,
+            llm_source=llm_source,
             tts_source=tts_client_result.source,
             rag_context_used=bool(rag_context),
             rag_matched_files=rag_matched_files,
@@ -445,6 +464,11 @@ class RobotChatService:
         if any(token in asr_text for token in ("开心", "高兴", "太好了")):
             return EmotionResult(label="happy", confidence=0.65, valence="positive", arousal="medium")
         return EmotionResult(label="neutral", confidence=0.5)
+
+    def _safe_llm_source(self, llm_result, fallback: str) -> str:
+        if llm_result is None:
+            return fallback
+        return getattr(llm_result, "source", None) or fallback
 
     def _build_debug(
         self,

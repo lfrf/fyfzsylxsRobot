@@ -110,7 +110,8 @@ def test_game_chain_exit_game(
     )
     result = game_chain.handle_turn(context, llm_client, response_policy)
     assert result.handled is True
-    assert result.debug.get("mode_update") == "accompany"
+    assert result.debug.get("mode_update") == "care"
+    assert result.debug.get("game_status") == "IDLE"
 
 
 def test_game_chain_debug_info(
@@ -133,6 +134,8 @@ def test_game_chain_debug_info(
     assert result.debug.get("chain") == "game"
     assert result.debug.get("session_id") == session_id
     assert result.debug.get("turn_id") == "turn_1"
+    assert result.debug.get("game_status") == "RIDDLE_WAITING_ANSWER"
+    assert result.debug.get("game_type") == "RIDDLE"
 
 
 def test_game_chain_riddle_selection(

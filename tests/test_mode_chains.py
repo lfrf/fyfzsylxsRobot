@@ -185,15 +185,15 @@ def test_learning_chain_handled_true(
 # ===== Game Chain Tests =====
 
 
-def test_game_chain_handled_false(
+def test_game_chain_starts_choose_game_flow(
     llm_client_mock: LLMClient,
     response_policy_service: ResponsePolicyService,
 ) -> None:
-    """Test game chain returns handled=False (fallback)."""
+    """Test game chain can start the choose-game flow without LLM."""
     chain = GameModeChain()
     policy = get_mode_policy("game")
     context = ModeTurnContext(
-        session_id="session1",
+        session_id="session_game_start_chain",
         turn_id="turn1",
         mode_id="game",
         asr_text="玩个游戏。",
@@ -201,8 +201,10 @@ def test_game_chain_handled_false(
         rag_route=RagRoute(namespace="game"),
     )
     result = chain.handle_turn(context, llm_client_mock, response_policy_service)
-    assert result.handled is False
-    assert "game_chain_reserved_for_future" in result.debug.get("reason", "")
+    assert result.handled is True
+    assert result.llm_result is None
+    assert "A 猜谜语" in result.reply_text
+    assert result.debug.get("game_status") == "CHOOSING_GAME"
 
 
 # ===== Integration Tests =====
@@ -230,16 +232,16 @@ def test_router_care_chain_full_flow(
     assert "疲惫" in context.asr_text  # Verify input was used
 
 
-def test_router_game_chain_fallback(
+def test_router_game_chain_handles_game_start(
     router: ModeChainRouter,
     llm_client_mock: LLMClient,
     response_policy_service: ResponsePolicyService,
 ) -> None:
-    """Test game mode chain falls back to generic LLM."""
+    """Test game mode chain handles game start directly."""
     chain = router.get_chain("game")
     policy = get_mode_policy("game")
     context = ModeTurnContext(
-        session_id="session1",
+        session_id="session_router_game_start",
         turn_id="turn1",
         mode_id="game",
         asr_text="玩个小游戏吧。",
@@ -247,9 +249,9 @@ def test_router_game_chain_fallback(
         rag_route=RagRoute(namespace="game"),
     )
     result = chain.handle_turn(context, llm_client_mock, response_policy_service)
-    # Game chain returns handled=False, so caller should fallback to generic LLM
-    assert result.handled is False
-    assert result.reply_text is None
+    assert result.handled is True
+    assert result.llm_result is None
+    assert result.reply_text is not None
 
 
 # ===== Context and Result Tests =====

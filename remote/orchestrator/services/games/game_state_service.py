@@ -15,6 +15,8 @@ class GameStateService:
     # Intent detection patterns
     START_PATTERNS = {
         "开始游戏",
+        "小游戏",
+        "玩个小游戏",
         "玩个游戏",
         "玩游戏",
         "来玩游戏",
@@ -42,10 +44,20 @@ class GameStateService:
 
     RIDDLE_PATTERNS = {
         "a",
+        "A",
+        "诶",
+        "欸",
+        "哎",
         "选a",
+        "选A",
         "选择a",
+        "选择A",
         "第一个",
+        "第一",
+        "一",
+        "1",
         "猜谜语",
+        "谜语",
         "玩猜谜语",
         "选猜谜语",
         "选择猜谜语",
@@ -53,9 +65,16 @@ class GameStateService:
 
     WORD_CHAIN_PATTERNS = {
         "b",
+        "B",
+        "比",
         "选b",
+        "选B",
         "选择b",
+        "选择B",
         "第二个",
+        "第二",
+        "二",
+        "2",
         "词语接龙",
         "接龙",
         "玩词语接龙",
@@ -64,6 +83,7 @@ class GameStateService:
     }
 
     SESSION_TIMEOUT = timedelta(minutes=30)
+    CHOOSE_GAME_REPLY = "好呀，我们来玩什么游戏呢？A 猜谜语，B 词语接龙。"
 
     def __init__(self) -> None:
         self._game_states: dict[str, GameState] = {}
@@ -87,14 +107,14 @@ class GameStateService:
         if not text:
             return False
         normalized = normalize_text(text)
-        return any(pattern in normalized for pattern in self.RIDDLE_PATTERNS)
+        return any(normalize_text(pattern) in normalized for pattern in self.RIDDLE_PATTERNS)
 
     def detect_word_chain_intent(self, text: str) -> bool:
         """Detect if user chooses word chain game."""
         if not text:
             return False
         normalized = normalize_text(text)
-        return any(pattern in normalized for pattern in self.WORD_CHAIN_PATTERNS)
+        return any(normalize_text(pattern) in normalized for pattern in self.WORD_CHAIN_PATTERNS)
 
     def get_or_create_state(self, session_id: str) -> GameState:
         """Get or create game state for session."""
@@ -114,6 +134,20 @@ class GameStateService:
         state.unknown_count = 0
         state.updated_at = datetime.now()
         return state
+
+    def start_choosing_result(self, session_id: str) -> GameHandleResult:
+        """Start game choosing phase and return the game menu."""
+        state = self.start_choosing(session_id)
+        return GameHandleResult(
+            handled=True,
+            reply_text=self.CHOOSE_GAME_REPLY,
+            state=state,
+            debug={
+                "game_state_service": "start_choosing",
+                "intent": GameIntent.START_GAME,
+                **self._state_debug(state),
+            },
+        )
 
     def reset(self, session_id: str) -> None:
         """Reset game state for session."""
@@ -139,11 +173,44 @@ class GameStateService:
                 debug={
                     "game_state_service": "exit_detected",
                     "intent": GameIntent.EXIT_GAME,
+                    "mode_update": "care",
+                    **self._state_debug(state),
                 },
             )
 
         # If not in game, cannot handle
         if state.status == GameStatus.IDLE:
+            if self.detect_start_intent(asr_text):
+                return self.start_choosing_result(session_id)
+
+            if self.detect_riddle_intent(asr_text):
+                state = self.start_choosing(session_id)
+                result = riddle_engine.start(state)
+                return GameHandleResult(
+                    handled=True,
+                    reply_text=result.reply_text,
+                    state=state,
+                    debug={
+                        "game_state_service": "riddle_selected_from_idle",
+                        "intent": GameIntent.SELECT_RIDDLE,
+                        **self._state_debug(state),
+                    },
+                )
+
+            if self.detect_word_chain_intent(asr_text):
+                state = self.start_choosing(session_id)
+                result = word_chain_engine.start(state)
+                return GameHandleResult(
+                    handled=True,
+                    reply_text=result.reply_text,
+                    state=state,
+                    debug={
+                        "game_state_service": "word_chain_selected_from_idle",
+                        "intent": GameIntent.SELECT_WORD_CHAIN,
+                        **self._state_debug(state),
+                    },
+                )
+
             return GameHandleResult(handled=False)
 
         # CHOOSING_GAME state
@@ -157,6 +224,7 @@ class GameStateService:
                     debug={
                         "game_state_service": "riddle_selected",
                         "intent": GameIntent.SELECT_RIDDLE,
+                        **self._state_debug(state),
                     },
                 )
 
@@ -169,6 +237,7 @@ class GameStateService:
                     debug={
                         "game_state_service": "word_chain_selected",
                         "intent": GameIntent.SELECT_WORD_CHAIN,
+                        **self._state_debug(state),
                     },
                 )
 
@@ -187,6 +256,8 @@ class GameStateService:
                         debug={
                             "game_state_service": "auto_exit",
                             "reason": "unknown_count_exceeded",
+                            "mode_update": "care",
+                            **self._state_debug(state),
                         },
                     )
 
@@ -197,6 +268,7 @@ class GameStateService:
                     debug={
                         "game_state_service": "unclear_choice",
                         "unknown_count": state.unknown_count,
+                        **self._state_debug(state),
                     },
                 )
 
@@ -210,6 +282,7 @@ class GameStateService:
                 debug={
                     "game_state_service": "riddle_answer",
                     **result.debug,
+                    **self._state_debug(state),
                 },
             )
 
@@ -223,10 +296,22 @@ class GameStateService:
                 debug={
                     "game_state_service": "word_chain_answer",
                     **result.debug,
+                    **self._state_debug(state),
                 },
             )
 
         return GameHandleResult(handled=False)
+
+    def _state_debug(self, state: GameState) -> dict[str, Any]:
+        """Return compact game state fields for debugging."""
+        return {
+            "game_status": state.status.value if hasattr(state.status, "value") else str(state.status),
+            "game_type": (
+                state.game_type.value if state.game_type and hasattr(state.game_type, "value") else state.game_type
+            ),
+            "round_index": state.round_index,
+            "score": state.score,
+        }
 
 
 # Global singleton instance
