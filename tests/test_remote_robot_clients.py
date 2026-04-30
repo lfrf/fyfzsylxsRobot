@@ -13,7 +13,7 @@ def _request(text_hint: str | None = "你好", *, session_id: str = "session-cli
     return RobotChatRequest(
         session_id=session_id,
         turn_id="turn-0001",
-        mode="elderly",
+        mode="care",
         input=RobotInput(
             audio_base64="UklGRiQAAABXQVZFZm10IBAAAAABAAEA",
             audio_format="wav",
@@ -39,7 +39,7 @@ def test_asr_client_mock_mode_without_hint_returns_placeholder() -> None:
 
 
 def test_llm_client_mock_mode_generates_reply() -> None:
-    policy = get_mode_policy("elderly")
+    policy = get_mode_policy("care")
     result = LLMClient(use_mock=True).generate_reply(
         session_id="session-llm",
         turn_id="turn-0001",
@@ -57,8 +57,8 @@ def test_tts_client_mock_mode_returns_audio_url() -> None:
         text="你好",
         session_id="session-tts",
         turn_id="turn-0001",
-        mode="elderly",
-        speech_style="elderly_gentle",
+        mode="care",
+        speech_style="care_gentle",
     )
 
     assert result.tts.type == "audio_url"
@@ -96,10 +96,10 @@ def test_robot_chat_mode_switch_skips_llm() -> None:
         tts=TTSClient(use_mock=True),
     )
 
-    response = service.handle_chat_turn(_request("切换为儿童模式"))
+    response = service.handle_chat_turn(_request("切换为游戏模式"))
 
     assert response.mode_changed is True
-    assert response.mode.mode_id == "child"
+    assert response.mode.mode_id == "game"
     assert response.debug["sources"]["llm"] == "mode_switch"
     assert response.debug["latency_ms"]["llm"] is None
 

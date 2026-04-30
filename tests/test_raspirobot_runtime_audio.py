@@ -34,7 +34,7 @@ def test_payload_builder_creates_valid_robot_chat_request(tmp_path: Path) -> Non
     wav_path = _speech_wav(tmp_path / "input.wav", channels=2)
     builder = RobotPayloadBuilder(
         session_id="session-runtime",
-        mode_id="elderly",
+        mode_id="care",
         vision_context_provider=MockVisionContextProvider(),
     )
 
@@ -96,7 +96,7 @@ def test_runtime_transitions_through_one_file_turn(tmp_path: Path) -> None:
     eyes = MockEyesDriver()
     head = MockHeadDriver()
     audio = MockAudioOutputProvider()
-    session = SessionManager(session_id="session-runtime", mode_id="elderly")
+    session = SessionManager(session_id="session-runtime", mode_id="care")
     turn_manager = TurnManager(
         payload_builder=RobotPayloadBuilder(
             session_id=session.session_id,
@@ -116,7 +116,7 @@ def test_runtime_transitions_through_one_file_turn(tmp_path: Path) -> None:
             output_dir=tmp_path / "utterances",
         ),
         turn_manager=turn_manager,
-        state_machine=RobotStateMachine(mode_id="elderly"),
+        state_machine=RobotStateMachine(mode_id="care"),
     )
 
     result = runtime.run_once()

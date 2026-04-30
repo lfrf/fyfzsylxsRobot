@@ -138,8 +138,8 @@ curl -X POST http://127.0.0.1:19100/tts/synthesize \
     "session_id": "demo-test",
     "turn_id": "turn-0001",
     "text": "你好，我是瓦力家伴。",
-    "mode": "elderly",
-    "speech_style": "elderly_gentle"
+    "mode": "care",
+    "speech_style": "care_gentle"
   }'
 ```
 

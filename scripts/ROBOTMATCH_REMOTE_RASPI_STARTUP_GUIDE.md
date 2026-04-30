@@ -589,14 +589,14 @@ curl -X POST http://127.0.0.1:19000/v1/robot/chat_turn \
   -d '{
     "session_id": "demo-session-001",
     "turn_id": "turn-0001",
-    "mode": "elderly",
+    "mode": "care",
     "input": {
       "type": "audio_base64",
       "audio_base64": "",
       "audio_format": "wav",
       "sample_rate": 16000,
       "channels": 1,
-      "text_hint": "切换为老年模式"
+      "text_hint": "切换为关怀模式"
     }
   }'
 ```
@@ -605,7 +605,7 @@ curl -X POST http://127.0.0.1:19000/v1/robot/chat_turn \
 
 ```text
 mode_changed=true
-active_rag_namespace=elderly_care
+active_rag_namespace=care
 tts.audio_url=/v1/robot/media/tts/...
 debug.sources.tts 不是 mock / fallback 时表示真实 TTS 已启用
 ```
@@ -618,7 +618,7 @@ curl -X POST http://127.0.0.1:19000/v1/robot/chat_turn \
   -d '{
     "session_id": "demo-session-001",
     "turn_id": "turn-0002",
-    "mode": "elderly",
+    "mode": "care",
     "input": {
       "type": "audio_base64",
       "audio_base64": "",

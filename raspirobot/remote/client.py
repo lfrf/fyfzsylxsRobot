@@ -150,6 +150,12 @@ class RemoteClient:
 class MockRemoteClient:
     def chat_turn(self, request: RobotChatRequest) -> RobotChatResponse:
         mode = build_mode_info(request.mode)
+        speech_style = {
+            "care": "care_gentle",
+            "accompany": "natural_warm",
+            "learning": "learning_focused",
+            "game": "game_playful",
+        }.get(mode.mode_id, "natural_warm")
         return RobotChatResponse(
             success=True,
             session_id=request.session_id,
@@ -169,7 +175,7 @@ class MockRemoteClient:
             robot_action=RobotAction(
                 expression="neutral",
                 motion="none",
-                speech_style=mode.prompt_policy,
+                speech_style=speech_style,
             ),
             debug={"source": "MockRemoteClient"},
         )
@@ -179,37 +185,52 @@ class MockRemoteClient:
 
 
 def build_mode_info(mode_id: str) -> ModeInfo:
+    mode_id = _normalize_mode(mode_id)
     presets = {
-        "elderly": ModeInfo(
-            mode_id="elderly",
-            display_name="老年模式",
-            prompt_policy="elderly_gentle",
-            rag_namespace="elderly_care",
+        "care": ModeInfo(
+            mode_id="care",
+            display_name="关怀模式",
+            prompt_policy="care_gentle",
+            rag_namespace="care",
             action_style="calm_supportive",
         ),
-        "child": ModeInfo(
-            mode_id="child",
-            display_name="儿童模式",
-            prompt_policy="child_playful",
-            rag_namespace="child_companion",
-            action_style="playful_warm",
-        ),
-        "student": ModeInfo(
-            mode_id="student",
-            display_name="学生模式",
-            prompt_policy="student_focused",
-            rag_namespace="student_learning",
-            action_style="focused_encouraging",
-        ),
-        "normal": ModeInfo(
-            mode_id="normal",
-            display_name="普通模式",
-            prompt_policy="normal",
+        "accompany": ModeInfo(
+            mode_id="accompany",
+            display_name="陪伴模式",
+            prompt_policy="accompany_warm",
             rag_namespace="general",
             action_style="neutral_warm",
         ),
+        "learning": ModeInfo(
+            mode_id="learning",
+            display_name="学习模式",
+            prompt_policy="learning_focused",
+            rag_namespace="learning",
+            action_style="focused_encouraging",
+        ),
+        "game": ModeInfo(
+            mode_id="game",
+            display_name="游戏模式",
+            prompt_policy="game_playful",
+            rag_namespace="game",
+            action_style="playful_warm",
+        ),
     }
-    return presets.get(mode_id, presets["elderly"])
+    return presets.get(mode_id, presets["care"])
+
+
+def _normalize_mode(mode_id: str | None) -> str:
+    aliases = {
+        "care": "care",
+        "elderly": "care",
+        "accompany": "accompany",
+        "normal": "accompany",
+        "learning": "learning",
+        "student": "learning",
+        "game": "game",
+        "child": "game",
+    }
+    return aliases.get((mode_id or "").strip().lower(), "care")
 
 
 __all__ = [

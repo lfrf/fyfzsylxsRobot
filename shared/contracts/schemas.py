@@ -224,7 +224,7 @@ class ErrorResponseSchema(BaseModel):
     detail: str
 
 
-SUPPORTED_ROBOT_MODES = {"elderly", "child", "student", "normal"}
+SUPPORTED_ROBOT_MODES = {"care", "accompany", "learning", "game"}
 
 
 class RobotFaceState(BaseModel):
@@ -257,7 +257,7 @@ class RobotState(BaseModel):
     current_expression: str = Field(default="neutral")
     head_pose: dict[str, float] | None = None
     hardware_ready: dict[str, bool] = Field(default_factory=dict)
-    mode_id: str = Field(default="elderly")
+    mode_id: str = Field(default="care")
 
 
 class TTSResult(BaseModel):
@@ -277,16 +277,16 @@ class EmotionResult(BaseModel):
 class RobotAction(BaseModel):
     expression: str = Field(default="neutral")
     motion: str = Field(default="none")
-    speech_style: str = Field(default="normal")
+    speech_style: str = Field(default="natural_warm")
     head_target: dict[str, float] | None = None
     priority: str = Field(default="normal")
 
 
 class ModeInfo(BaseModel):
-    mode_id: str = Field(default="elderly")
-    display_name: str = Field(default="老年模式")
-    prompt_policy: str = Field(default="elderly_gentle")
-    rag_namespace: str = Field(default="elderly_care")
+    mode_id: str = Field(default="care")
+    display_name: str = Field(default="关怀模式")
+    prompt_policy: str = Field(default="care_gentle")
+    rag_namespace: str = Field(default="care")
     action_style: str = Field(default="calm_supportive")
 
 
@@ -302,7 +302,7 @@ class RobotChatRequest(BaseModel):
     session_id: str = Field(..., min_length=1)
     turn_id: str = Field(..., min_length=1)
     timestamp: float | None = None
-    mode: str = Field(default="elderly")
+    mode: str = Field(default="care")
     input: RobotInput
     vision_context: VisionContext | None = None
     robot_state: RobotState | None = None

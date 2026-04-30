@@ -81,8 +81,8 @@ class TTSRequest(BaseModel):
     session_id: str = Field(..., min_length=1)
     turn_id: str = Field(..., min_length=1)
     text: str = Field(..., min_length=1)
-    mode: str = Field(default="elderly")
-    speech_style: str = Field(default="normal")
+    mode: str = Field(default="care")
+    speech_style: str = Field(default="natural_warm")
     provider: str | None = None
     speaker_id: str | None = None
     speed: float | None = Field(default=None, gt=0)

@@ -3,23 +3,23 @@
   "session_id": "demo-session-001",
   "turn_id": "turn-0001",
   "mode": {
-    "mode_id": "elderly",
-    "display_name": "老年模式",
-    "prompt_policy": "elderly_gentle",
-    "rag_namespace": "elderly_care",
+    "mode_id": "care",
+    "display_name": "关怀模式",
+    "prompt_policy": "care_gentle",
+    "rag_namespace": "care",
     "action_style": "calm_supportive"
   },
   "mode_switch": {
     "switched": true,
-    "from_mode": "normal",
-    "to_mode": "elderly",
-    "reason": "matched command: 切换为老年模式",
-    "confirmation_text": "好的，已切换为老年模式。我会说得慢一点、清楚一点，也会更温和地陪你。"
+    "from_mode": "accompany",
+    "to_mode": "care",
+    "reason": "matched command: 切换为关怀模式",
+    "confirmation_text": "好的，已切换为关怀模式。我会说得慢一点、温和一点，陪你慢慢聊。"
   },
   "mode_changed": true,
-  "active_rag_namespace": "elderly_care",
-  "asr_text": "切换为老年模式",
-  "reply_text": "好的，已切换为老年模式。我会说得慢一点、清楚一点，也会更温和地陪你。",
+  "active_rag_namespace": "care",
+  "asr_text": "切换为关怀模式",
+  "reply_text": "好的，已切换为关怀模式。我会说得慢一点、温和一点，陪你慢慢聊。",
   "emotion": {
     "label": "neutral",
     "confidence": 1.0
@@ -32,7 +32,7 @@
   "robot_action": {
     "expression": "comfort",
     "motion": "slow_nod",
-    "speech_style": "elderly_gentle",
+    "speech_style": "care_gentle",
     "priority": "normal"
   },
   "debug": {

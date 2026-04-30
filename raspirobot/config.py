@@ -34,7 +34,7 @@ def load_settings() -> Settings:
         remote_base_url=os.getenv("ROBOT_REMOTE_BASE_URL", "http://127.0.0.1:19000").rstrip("/"),
         chat_endpoint=os.getenv("ROBOT_CHAT_ENDPOINT", "/v1/robot/chat_turn"),
         session_id=os.getenv("ROBOT_SESSION_ID", "demo-session-001"),
-        default_mode=os.getenv("ROBOT_MODE_DEFAULT", os.getenv("ROBOT_DEFAULT_MODE", "elderly")),
+        default_mode=os.getenv("ROBOT_MODE_DEFAULT", os.getenv("ROBOT_DEFAULT_MODE", "care")),
         request_timeout_seconds=float(
             os.getenv("ROBOT_REMOTE_TIMEOUT_SECONDS", os.getenv("ROBOT_REQUEST_TIMEOUT_SECONDS", "40"))
         ),

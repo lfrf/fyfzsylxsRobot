@@ -1,36 +1,6 @@
 from dataclasses import dataclass
 
-from services.mode_policy import DEFAULT_MODE_ID, MODE_POLICIES, normalize_mode
-
-
-MODE_COMMANDS = {
-    "elderly": (
-        "切换为老年模式",
-        "进入老年模式",
-        "老人模式",
-        "老年模式",
-    ),
-    "child": (
-        "切换为儿童模式",
-        "进入儿童模式",
-        "孩子模式",
-        "儿童模式",
-    ),
-    "student": (
-        "切换为学生模式",
-        "进入学生模式",
-        "学习模式",
-        "学生模式",
-    ),
-    "normal": (
-        "切换为正常模式",
-        "切换为普通模式",
-        "进入正常模式",
-        "进入普通模式",
-        "正常模式",
-        "普通模式",
-    ),
-}
+from services.mode_policy import DEFAULT_MODE_ID, MODE_COMMANDS, MODE_POLICIES, normalize_mode
 
 
 @dataclass(frozen=True)
@@ -69,7 +39,7 @@ class ModeManager:
         for mode_id, commands in MODE_COMMANDS.items():
             for command in commands:
                 if command in normalized_text:
-                    return ModeSwitchDetection(target_mode=mode_id, matched_text=command)
+                    return ModeSwitchDetection(target_mode=normalize_mode(mode_id), matched_text=command)
         return ModeSwitchDetection()
 
     def reset(self) -> None:

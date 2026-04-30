@@ -6,7 +6,7 @@ from dataclasses import dataclass
 @dataclass
 class SessionManager:
     session_id: str
-    mode_id: str = "elderly"
+    mode_id: str = "care"
     _turn_counter: int = 0
 
     def next_turn_id(self) -> str:

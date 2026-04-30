@@ -1,7 +1,7 @@
 {
   "session_id": "demo-session-001",
   "turn_id": "turn-0001",
-  "mode": "elderly",
+  "mode": "care",
   "input": {
     "type": "audio_base64",
     "audio_base64": "UklGRiQAAABXQVZFZm10IBAAAAABAAEA",
@@ -9,7 +9,7 @@
     "sample_rate": 16000,
     "channels": 1,
     "duration_ms": 0,
-    "text_hint": "切换为老年模式"
+    "text_hint": "切换为关怀模式"
   },
   "vision_context": {
     "source": "mock",
@@ -30,6 +30,6 @@
       "oled": false,
       "servo": false
     },
-    "mode_id": "elderly"
+    "mode_id": "care"
   }
 }

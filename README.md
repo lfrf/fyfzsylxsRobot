@@ -118,14 +118,14 @@ Content-Type: application/json
 {
   "session_id": "demo-session-001",
   "turn_id": "turn-0001",
-  "mode": "elderly",
+  "mode": "care",
   "input": {
     "type": "audio_base64",
     "audio_base64": "UklGRiQAAABXQVZFZm10IBAAAAABAAEA",
     "audio_format": "wav",
     "sample_rate": 16000,
     "channels": 1,
-    "text_hint": "切换为老年模式"
+    "text_hint": "切换为关怀模式"
   }
 }
 ```
@@ -148,23 +148,36 @@ Content-Type: application/json
 
 ## 模式切换
 
-当前支持四种 session mode：
+当前支持四种产品模式。内部 `mode_id` 统一使用新 ID：
 
-| mode | rag_namespace | speech_style |
-| --- | --- | --- |
-| `elderly` | `elderly_care` | `elderly_gentle` |
-| `child` | `child_companion` | `child_playful` |
-| `student` | `student_learning` | `student_focused` |
-| `normal` | `general` | `normal` |
+| mode_id | 中文名 | rag_namespace | speech_style |
+| --- | --- | --- | --- |
+| `care` | 关怀模式 | `care` | `care_gentle` |
+| `accompany` | 陪伴模式 | `general` | `natural_warm` |
+| `learning` | 学习模式 | `learning` | `learning_focused` |
+| `game` | 游戏模式 | `game` | `game_playful` |
 
-支持的口语命令包括：
+当前第一版只支持显式切换命令：
 
 ```text
-切换为老年模式 / 进入老年模式 / 老人模式
-切换为儿童模式 / 进入儿童模式 / 孩子模式
-切换为学生模式 / 进入学生模式 / 学习模式
-切换为正常模式 / 普通模式
+关怀：切换为关怀模式 / 进入关怀模式
+陪伴：切换为陪伴模式 / 进入陪伴模式
+学习：切换为学习模式 / 进入学习模式
+游戏：切换为游戏模式 / 进入游戏模式
 ```
+
+隐性切换后续再做。比如“我有点累”“帮我复习”“玩个游戏”“陪我聊聊天”暂时不会自动切换模式。
+
+旧 ID 仅作为兼容 alias 接收，系统内部和响应都会返回新 ID：
+
+```text
+elderly -> care
+normal -> accompany
+student -> learning
+child -> game
+```
+
+`game` 模式当前只提供显式切换和游戏风格 LLM 回复；完整猜谜语 / 词语接龙状态机后续实现。
 
 检测到模式切换后，`remote/orchestrator` 会：
 
@@ -209,14 +222,14 @@ curl -X POST http://127.0.0.1:19000/v1/robot/chat_turn \
   -d '{
     "session_id": "demo-session-001",
     "turn_id": "turn-0001",
-    "mode": "elderly",
+    "mode": "care",
     "input": {
       "type": "audio_base64",
       "audio_base64": "UklGRiQAAABXQVZFZm10IBAAAAABAAEA",
       "audio_format": "wav",
       "sample_rate": 16000,
       "channels": 1,
-      "text_hint": "切换为儿童模式"
+      "text_hint": "切换为游戏模式"
     }
   }'
 ```
@@ -231,7 +244,7 @@ orchestrator 的真实链路环境变量示例：
 
 ```bash
 export SPEECH_SERVICE_BASE=http://127.0.0.1:19100
-export TTS_SERVICE_BASE=http://127.0.0.1:19100
+export TTS_SERVICE_BASE=http://127.0.0.1:19200
 export LLM_PROVIDER=qwen
 export LLM_API_BASE=http://127.0.0.1:8000/v1
 export LLM_MODEL=Qwen2.5-7B-Instruct
@@ -258,7 +271,7 @@ Pi 侧配置通过环境变量控制：
 export ROBOT_REMOTE_BASE_URL=http://127.0.0.1:29000
 export ROBOT_CHAT_ENDPOINT=/v1/robot/chat_turn
 export ROBOT_REMOTE_TIMEOUT_SECONDS=40
-export ROBOT_MODE_DEFAULT=elderly
+export ROBOT_MODE_DEFAULT=care
 export ROBOT_SESSION_ID=demo-session-001
 ```
 
@@ -393,7 +406,7 @@ export ROBOT_LOG_JSON=true
 日志不会打印完整 `audio_base64`，只会打印长度和音频元数据，例如：
 
 ```text
-event=payload_built session_id=demo-session-001 turn_id=turn-0001 mode=elderly sample_rate=16000 channels=2 audio_base64_len=123456
+event=payload_built session_id=demo-session-001 turn_id=turn-0001 mode=care sample_rate=16000 channels=2 audio_base64_len=123456
 ```
 
 Pi 侧关键日志：

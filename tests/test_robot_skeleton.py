@@ -23,7 +23,7 @@ def test_robot_skeleton_smoke() -> None:
     request = RobotChatRequest(
         session_id="demo-session-001",
         turn_id="turn-0001",
-        mode="elderly",
+        mode="care",
         input=robot_input,
         vision_context=vision.get_context(),
         robot_state=RobotState(state=state_machine.state.value),
@@ -31,7 +31,7 @@ def test_robot_skeleton_smoke() -> None:
 
     response = MockRemoteClient().chat_turn(request)
     assert response.success is True
-    assert response.mode.mode_id == "elderly"
+    assert response.mode.mode_id == "care"
 
     eyes = MockEyesDriver()
     head = MockHeadDriver()

@@ -30,7 +30,7 @@ This service uses Python 3.11 syntax.
 cd remote/orchestrator
 source .venv/bin/activate
 export SPEECH_SERVICE_BASE=http://127.0.0.1:19100
-export TTS_SERVICE_BASE=http://127.0.0.1:19100
+export TTS_SERVICE_BASE=http://127.0.0.1:19200
 export LLM_PROVIDER=qwen
 export LLM_API_BASE=http://127.0.0.1:8000/v1
 export LLM_MODEL=Qwen2.5-7B-Instruct
@@ -57,14 +57,14 @@ curl -X POST http://127.0.0.1:19000/v1/robot/chat_turn \
   -d '{
     "session_id": "demo-session-001",
     "turn_id": "turn-0001",
-    "mode": "elderly",
+    "mode": "care",
     "input": {
       "type": "audio_base64",
       "audio_base64": "UklGRiQAAABXQVZFZm10IBAAAAABAAEA",
       "audio_format": "wav",
       "sample_rate": 16000,
       "channels": 1,
-      "text_hint": "切换为儿童模式"
+      "text_hint": "切换为游戏模式"
     }
   }'
 ```

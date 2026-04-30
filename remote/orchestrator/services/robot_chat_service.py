@@ -14,7 +14,7 @@ from clients.rag_client import RAGClient, rag_client
 from clients.tts_client import TTSClient, tts_client
 from logging_utils import log_event
 from services.mode_manager import ModeManager, mode_manager
-from services.mode_policy import get_mode_policy
+from services.mode_policy import get_mode_service
 from services.rag_router import RagRouter, rag_router
 from services.robot_action_service import RobotActionService, robot_action_service
 
@@ -61,7 +61,7 @@ class RobotChatService:
 
         if switch.detected and switch.target_mode:
             target_mode = self.modes.set_session_mode(request.session_id, switch.target_mode)
-            policy = get_mode_policy(target_mode)
+            policy = get_mode_service(target_mode).get_policy()
             rag_route = self.rag.route_for_mode(policy)
             log_event(
                 "mode_switch_detected",
@@ -123,7 +123,7 @@ class RobotChatService:
             )
             return response
 
-        policy = get_mode_policy(current_mode)
+        policy = get_mode_service(current_mode).get_policy()
         rag_route = self.rag.route_for_mode(policy)
         rag_context = self.rag_client.retrieve_context(namespace=rag_route.namespace, query=asr_text)
         emotion = self._emotion_stub(asr_text)

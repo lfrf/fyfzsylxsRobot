@@ -31,7 +31,7 @@ Required request shape:
 | --- | --- | --- | --- |
 | `session_id` | string | yes | Stable robot session id. |
 | `turn_id` | string | yes | Turn id such as `turn-0001`. |
-| `mode` | string | yes | Current session mode hint: `elderly`, `child`, `student`, or `normal`. |
+| `mode` | string | yes | Current session mode hint: `care`, `accompany`, `learning`, or `game`. Legacy aliases are normalized server-side. |
 | `input` | object | yes | `RobotInput`, including `audio_base64`. |
 | `vision_context` | object | no | Mock or future real face/vision context. |
 | `robot_state` | object | no | Local state and hardware readiness. |
@@ -87,7 +87,7 @@ Robot action result:
 {
   "expression": "comfort",
   "motion": "slow_nod",
-  "speech_style": "elderly_gentle"
+  "speech_style": "care_gentle"
 }
 ```
 
@@ -112,18 +112,26 @@ Mode switching is session-based.
 Supported commands include:
 
 ```text
-切换为老年模式 / 进入老年模式 / 老人模式
-切换为儿童模式 / 进入儿童模式 / 孩子模式
-切换为学生模式 / 进入学生模式 / 学习模式
-切换为正常模式 / 普通模式
+切换为关怀模式 / 进入关怀模式
+切换为陪伴模式 / 进入陪伴模式
+切换为学习模式 / 进入学习模式
+切换为游戏模式 / 进入游戏模式
 ```
 
 Mode mapping:
 
 | Mode | RAG namespace | Speech style |
 | --- | --- | --- |
-| `elderly` | `elderly_care` | `elderly_gentle` |
-| `child` | `child_companion` | `child_playful` |
-| `student` | `student_learning` | `student_focused` |
-| `normal` | `general` | `normal` |
+| `care` | `care` | `care_gentle` |
+| `accompany` | `general` | `natural_warm` |
+| `learning` | `learning` | `learning_focused` |
+| `game` | `game` | `game_playful` |
 
+Legacy aliases are accepted for compatibility but never returned as active mode IDs:
+
+```text
+elderly -> care
+normal -> accompany
+student -> learning
+child -> game
+```

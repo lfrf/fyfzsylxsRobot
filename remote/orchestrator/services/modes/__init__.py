@@ -1,5 +1,4 @@
-from services.mode_types import ModePolicy, ModeService
-from services.modes.registry import (
+from .registry import (
     DEFAULT_MODE_ID,
     MODE_COMMANDS,
     MODE_POLICIES,
@@ -14,8 +13,6 @@ __all__ = [
     "MODE_COMMANDS",
     "MODE_POLICIES",
     "MODE_SERVICES",
-    "ModePolicy",
-    "ModeService",
     "get_mode_policy",
     "get_mode_service",
     "normalize_mode",

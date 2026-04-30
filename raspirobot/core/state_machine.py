@@ -40,7 +40,7 @@ BUSY_STATES = {
 @dataclass
 class RobotStateMachine:
     state: RobotRuntimeState = RobotRuntimeState.IDLE
-    mode_id: str = "elderly"
+    mode_id: str = "care"
     active_turn_id: str | None = None
     remote_request_in_progress: bool = False
     busy_hint_requested: bool = False

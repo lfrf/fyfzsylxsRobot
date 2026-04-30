@@ -121,9 +121,12 @@ class LLMClient:
     def _build_system_prompt(self, mode_policy: ModePolicy, rag_route: RagRoute, rag_context: str | None) -> str:
         parts = [
             settings.system_prompt,
+            mode_policy.system_instruction,
             f"Current robot mode: {mode_policy.mode_id}.",
+            f"Display mode name: {mode_policy.display_name}.",
             f"Speech style: {mode_policy.speech_style}.",
             f"Active RAG namespace: {rag_route.namespace}.",
+            "Your answer will be spoken by a desktop robot, so keep it natural and not too long.",
             "Answer in concise spoken Chinese unless the user asks otherwise.",
             "Do not mention avatar, video rendering, lip-sync, or digital human output.",
         ]

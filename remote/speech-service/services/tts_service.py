@@ -127,11 +127,11 @@ class TTSService:
         raise RuntimeError("CosyVoice instruct mode is unavailable for the loaded model.")
 
     def _style_to_instruction(self, speech_style: str) -> str:
-        if speech_style == "elderly_gentle":
+        if speech_style == "care_gentle":
             return "用温和、清楚、稍慢的语气说话。"
-        if speech_style == "child_playful":
-            return "用轻松、有趣、适合儿童的语气说话。"
-        if speech_style == "student_focused":
+        if speech_style == "game_playful":
+            return "用轻松、有趣、有互动感的语气说话。"
+        if speech_style == "learning_focused":
             return "用清晰、有条理、鼓励学习的语气说话。"
         return "用自然、温暖的语气说话。"
 

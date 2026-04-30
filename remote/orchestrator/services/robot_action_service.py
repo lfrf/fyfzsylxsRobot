@@ -28,12 +28,14 @@ class RobotActionService:
             return "comfort", "slow_nod"
         if emotion_label == "happy":
             return "happy", "happy_nod"
-        if policy.mode_id == "student":
-            return "listening", "center"
-        if policy.mode_id == "child":
-            return "happy", "happy_nod"
-        if policy.mode_id == "elderly":
+        if policy.mode_id == "care":
             return "comfort", "slow_nod"
+        if policy.mode_id == "accompany":
+            return "neutral", "center"
+        if policy.mode_id == "learning":
+            return "listening", "center"
+        if policy.mode_id == "game":
+            return "happy", "happy_nod"
         return "neutral", "center"
 
 

@@ -2,11 +2,14 @@ import json
 
 from contracts.schemas import RobotChatRequest, RobotInput
 from raspirobot.remote_client import RemoteClient
+from clients.asr_client import ASRClient
+from clients.llm_client import LLMClient
+from clients.tts_client import TTSClient
 from services.mode_manager import ModeManager
 from services.robot_chat_service import RobotChatService
 
 
-def _request(session_id: str, text_hint: str, *, mode: str = "elderly", turn_id: str = "turn-0001") -> RobotChatRequest:
+def _request(session_id: str, text_hint: str, *, mode: str = "care", turn_id: str = "turn-0001") -> RobotChatRequest:
     return RobotChatRequest(
         session_id=session_id,
         turn_id=turn_id,
@@ -28,59 +31,106 @@ def _payload(model):
     return model.dict()
 
 
-def test_mode_switch_to_elderly_returns_namespace_and_action() -> None:
-    service = RobotChatService(modes=ModeManager())
+class RaisingLLMClient:
+    api_base = "mock://llm"
 
-    response = service.handle_chat_turn(_request("session-elderly", "切换为老年模式", mode="normal"))
+    def generate_reply(self, **kwargs):
+        raise AssertionError("LLM should be skipped for explicit mode switches")
+
+
+def _service(*, llm=None) -> RobotChatService:
+    return RobotChatService(
+        modes=ModeManager(),
+        asr=ASRClient(use_mock=True),
+        llm=llm or LLMClient(use_mock=True),
+        tts=TTSClient(use_mock=True),
+    )
+
+
+def test_mode_switch_to_care_returns_namespace_and_action() -> None:
+    service = _service()
+
+    response = service.handle_chat_turn(_request("session-care", "切换为关怀模式", mode="accompany"))
 
     assert response.mode_changed is True
     assert response.mode_switch.switched is True
-    assert response.mode.mode_id == "elderly"
-    assert response.active_rag_namespace == "elderly_care"
-    assert response.robot_action.expression
-    assert response.robot_action.motion
+    assert response.mode.mode_id == "care"
+    assert response.active_rag_namespace == "care"
+    assert response.robot_action.expression == "comfort"
+    assert response.robot_action.motion == "slow_nod"
 
 
-def test_mode_switch_to_child_returns_child_namespace() -> None:
-    service = RobotChatService(modes=ModeManager())
+def test_mode_switch_to_accompany_returns_general_namespace() -> None:
+    service = _service()
 
-    response = service.handle_chat_turn(_request("session-child", "进入儿童模式"))
-
-    assert response.mode_changed is True
-    assert response.mode.mode_id == "child"
-    assert response.active_rag_namespace == "child_companion"
-    assert response.robot_action.speech_style == "child_playful"
-
-
-def test_mode_switch_to_student_returns_learning_namespace() -> None:
-    service = RobotChatService(modes=ModeManager())
-
-    response = service.handle_chat_turn(_request("session-student", "学习模式"))
+    response = service.handle_chat_turn(_request("session-accompany", "进入陪伴模式"))
 
     assert response.mode_changed is True
-    assert response.mode.mode_id == "student"
-    assert response.active_rag_namespace == "student_learning"
-    assert response.robot_action.speech_style == "student_focused"
+    assert response.mode.mode_id == "accompany"
+    assert response.active_rag_namespace == "general"
+    assert response.robot_action.speech_style == "natural_warm"
+
+
+def test_mode_switch_to_learning_returns_learning_namespace() -> None:
+    service = _service()
+
+    response = service.handle_chat_turn(_request("session-learning", "切换为学习模式"))
+
+    assert response.mode_changed is True
+    assert response.mode.mode_id == "learning"
+    assert response.active_rag_namespace == "learning"
+    assert response.robot_action.speech_style == "learning_focused"
+
+
+def test_mode_switch_to_game_returns_game_namespace() -> None:
+    service = _service()
+
+    response = service.handle_chat_turn(_request("session-game", "进入游戏模式"))
+
+    assert response.mode_changed is True
+    assert response.mode.mode_id == "game"
+    assert response.active_rag_namespace == "game"
+    assert response.robot_action.speech_style == "game_playful"
 
 
 def test_normal_message_after_switch_uses_stored_session_mode() -> None:
-    service = RobotChatService(modes=ModeManager())
+    service = _service()
 
-    service.handle_chat_turn(_request("session-persist", "孩子模式", mode="normal", turn_id="turn-0001"))
+    service.handle_chat_turn(_request("session-persist", "切换为游戏模式", mode="accompany", turn_id="turn-0001"))
     response = service.handle_chat_turn(
-        _request("session-persist", "今天想聊点轻松的", mode="normal", turn_id="turn-0002")
+        _request("session-persist", "今天想聊点轻松的", mode="accompany", turn_id="turn-0002")
     )
 
     assert response.mode_changed is False
-    assert response.mode.mode_id == "child"
-    assert response.active_rag_namespace == "child_companion"
-    assert response.robot_action.speech_style == "child_playful"
+    assert response.mode.mode_id == "game"
+    assert response.active_rag_namespace == "game"
+    assert response.robot_action.speech_style == "game_playful"
+
+
+def test_implicit_mode_phrases_do_not_switch() -> None:
+    service = _service()
+
+    for index, text in enumerate(("我有点累", "帮我学习", "帮我复习", "玩个游戏", "陪我聊聊天"), start=1):
+        response = service.handle_chat_turn(
+            _request("session-implicit", text, mode="care", turn_id=f"turn-{index:04d}")
+        )
+        assert response.mode_changed is False
+        assert response.mode.mode_id == "care"
+
+
+def test_mode_switch_skips_llm() -> None:
+    service = _service(llm=RaisingLLMClient())
+
+    response = service.handle_chat_turn(_request("session-skip-llm", "切换为关怀模式", mode="accompany"))
+
+    assert response.mode_changed is True
+    assert response.debug["sources"]["llm"] == "mode_switch"
 
 
 def test_robot_response_contains_no_avatar_fields() -> None:
-    service = RobotChatService(modes=ModeManager())
+    service = _service()
 
-    response = service.handle_chat_turn(_request("session-no-avatar", "普通模式"))
+    response = service.handle_chat_turn(_request("session-no-avatar", "你好"))
     payload = _payload(response)
     encoded = json.dumps(payload, ensure_ascii=False)
 

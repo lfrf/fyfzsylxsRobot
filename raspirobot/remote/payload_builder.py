@@ -14,7 +14,7 @@ from shared.logging_utils import log_event
 @dataclass
 class RobotPayloadBuilder:
     session_id: str
-    mode_id: str = "elderly"
+    mode_id: str = "care"
     vision_context_provider: VisionContextProvider | None = None
     request_options: dict = field(default_factory=dict)
 
