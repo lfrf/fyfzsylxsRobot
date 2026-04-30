@@ -118,6 +118,17 @@ def test_implicit_mode_phrases_do_not_switch() -> None:
         assert response.mode.mode_id == "care"
 
 
+def test_care_normal_chat_uses_care_rag_context() -> None:
+    service = _service()
+
+    response = service.handle_chat_turn(_request("session-care-rag", "我今天有点累", mode="care"))
+
+    assert response.mode_changed is False
+    assert response.mode.mode_id == "care"
+    assert response.active_rag_namespace == "care"
+    assert response.debug["rag_context_used"] is True
+
+
 def test_mode_switch_skips_llm() -> None:
     service = _service(llm=RaisingLLMClient())
 

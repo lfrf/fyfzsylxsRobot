@@ -122,6 +122,19 @@ class LLMClient:
         parts = [
             settings.system_prompt,
             mode_policy.system_instruction,
+            (
+                "【语音输出约束】\n"
+                "1. 你的回复会被直接 TTS 播放。\n"
+                "2. 不要使用 Markdown。\n"
+                "3. 不要使用表格。\n"
+                "4. 不要使用长列表。\n"
+                "5. 不要输出括号里的舞台说明。\n"
+                "6. 不要说“作为一个 AI”。\n"
+                "7. care/accompany/game 模式通常不超过 120 个汉字。\n"
+                "8. learning 模式可以稍长，但也要分层清楚、适合语音播放。\n"
+                "9. 每次回复尽量只完成一个主要意图。\n"
+                "10. 除非用户要求详细解释，否则不要长篇展开。"
+            ),
             f"Current robot mode: {mode_policy.mode_id}.",
             f"Display mode name: {mode_policy.display_name}.",
             f"Speech style: {mode_policy.speech_style}.",

@@ -1,4 +1,6 @@
 from clients.llm_client import LLMClient
+from clients.rag_client import RAGClient
+from services.mode_chains.router import ModeChainRouter, get_chain
 from services.mode_manager import ModeManager
 from services.mode_policy import get_mode_policy, normalize_mode
 from services.rag_router import RagRoute
@@ -42,7 +44,30 @@ def test_llm_prompt_contains_mode_instructions() -> None:
         policy = get_mode_policy(mode_id)
         prompt = client._build_system_prompt(policy, RagRoute(namespace=policy.rag_namespace), None)
         assert marker in prompt
+        assert "【语音输出约束】" in prompt
+        assert "不要使用 Markdown" in prompt
         assert f"Current robot mode: {mode_id}." in prompt
+
+
+def test_llm_prompt_can_include_care_rag_context() -> None:
+    client = LLMClient(use_mock=True)
+    policy = get_mode_policy("care")
+    rag_context = RAGClient().retrieve_context(namespace="care", query="我今天有点累")
+
+    prompt = client._build_system_prompt(policy, RagRoute(namespace=policy.rag_namespace), rag_context)
+
+    assert "你现在处于“关怀模式”" in prompt
+    assert "Optional retrieved context:" in prompt
+    assert "【来源：" in prompt
+    assert "02_daily_life_reminders.md" in prompt or "05_sleep_and_rest_support.md" in prompt
+
+
+def test_mode_chain_router_returns_reserved_chains() -> None:
+    router = ModeChainRouter()
+
+    for mode_id in ("care", "accompany", "learning", "game"):
+        assert router.get_chain(mode_id).mode_id == mode_id
+        assert get_chain(mode_id).mode_id == mode_id
 
 
 def test_robot_action_service_mode_defaults() -> None:
