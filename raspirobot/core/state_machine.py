@@ -114,7 +114,7 @@ class RobotStateMachine:
     ) -> None:
         log_event(
             "state_transition",
-            event=event.value,
+            transition_event=event.value,
             from_state=from_state.value,
             to_state=self.state.value,
             turn_id=turn_id,

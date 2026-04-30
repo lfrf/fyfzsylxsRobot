@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import argparse
+import threading
 from pathlib import Path
+from typing import Any
 
 from raspirobot.actions import DefaultRobotActionDispatcher
 from raspirobot.audio import (
@@ -131,6 +133,112 @@ def run_live_loop() -> None:
     runtime.run_forever()
 
 
+def _start_face_tracking_for_live(args: argparse.Namespace) -> tuple[Any, threading.Thread] | None:
+    if not getattr(args, "face_track", False):
+        return None
+
+    try:
+        from raspirobot.hardware.pan_tilt_face_tracker import (
+            CameraCapture,
+            CameraConfig,
+            FaceDetector,
+            FaceTrackingPanTiltRunner,
+            PanTiltServoConfig,
+            PanTiltServoDriver,
+            ServoSpec,
+            TrackerConfig,
+        )
+    except Exception as exc:  # pragma: no cover - depends on hardware runtime
+        print(f"[live] face tracking disabled: import failed: {exc}")
+        return None
+
+    try:
+        pan_spec = ServoSpec(
+            model_name="LD-3015MG",
+            min_pulse_us=args.face_track_servo_min_pulse,
+            max_pulse_us=args.face_track_servo_max_pulse,
+            actuation_range_deg=args.face_track_actuation_range,
+            safe_min_angle_deg=args.face_track_pan_min_angle,
+            safe_max_angle_deg=args.face_track_pan_max_angle,
+            center_angle_deg=args.face_track_center_pan,
+        )
+        tilt_spec = ServoSpec(
+            model_name="LD-3015MG",
+            min_pulse_us=args.face_track_servo_min_pulse,
+            max_pulse_us=args.face_track_servo_max_pulse,
+            actuation_range_deg=args.face_track_actuation_range,
+            safe_min_angle_deg=args.face_track_tilt_min_angle,
+            safe_max_angle_deg=args.face_track_tilt_max_angle,
+            center_angle_deg=args.face_track_center_tilt,
+        )
+
+        servo_cfg = PanTiltServoConfig(
+            i2c_address=args.face_track_i2c_address,
+            frequency_hz=args.face_track_frequency,
+            pan_channel=args.face_track_pan_channel,
+            tilt_channel=args.face_track_tilt_channel,
+            pan_inverted=args.face_track_pan_inverted,
+            tilt_inverted=args.face_track_tilt_inverted,
+            pan_zero_offset_deg=args.face_track_pan_zero_offset,
+            tilt_zero_offset_deg=args.face_track_tilt_zero_offset,
+            pan_spec=pan_spec,
+            tilt_spec=tilt_spec,
+        )
+        camera_cfg = CameraConfig(
+            width=args.face_track_camera_width,
+            height=args.face_track_camera_height,
+            use_picamera2=not args.face_track_no_picamera2,
+            cv2_device_index=args.face_track_device_index,
+        )
+        tracker_cfg = TrackerConfig(
+            detect_scale=args.face_track_detect_scale,
+            min_face_size=args.face_track_min_face_size,
+        )
+
+        servo = PanTiltServoDriver(servo_cfg)
+        camera = CameraCapture(camera_cfg)
+        detector = FaceDetector(
+            detector_mode=args.face_track_detector,
+            min_face_size=args.face_track_min_face_size,
+            min_detection_confidence=args.face_track_min_detection_confidence,
+            haar_scale_factor=args.face_track_haar_scale_factor,
+            haar_min_neighbors=args.face_track_haar_min_neighbors,
+        )
+        runner = FaceTrackingPanTiltRunner(
+            servo=servo,
+            camera=camera,
+            detector=detector,
+            config=tracker_cfg,
+            show_window=args.face_track_window,
+        )
+    except Exception as exc:  # pragma: no cover - depends on hardware runtime
+        print(f"[live] face tracking disabled: startup failed: {exc}")
+        return None
+
+    thread = threading.Thread(target=runner.run, daemon=True, name="face-tracking")
+    thread.start()
+    print("[live] face tracking started in background thread")
+    return runner, thread
+
+
+def run_live_loop_with_optional_face_tracking(args: argparse.Namespace) -> None:
+    settings = load_settings()
+    start_raspi_runtime_log("live_audio_loop", settings)
+    runtime = build_runtime(input_provider=build_live_input_provider(settings), settings=settings)
+    runner_thread = _start_face_tracking_for_live(args)
+
+    try:
+        runtime.run_forever()
+    except KeyboardInterrupt:
+        print("[live] interrupted by user")
+    finally:
+        if runner_thread is not None:
+            runner, worker = runner_thread
+            print("[live] stopping face tracking...")
+            runner.request_stop()
+            worker.join(timeout=3.0)
+
+
 def start_raspi_runtime_log(runtime_name: str, settings: Settings) -> str:
     log_session_id = start_log_session()
     log_event(
@@ -163,7 +271,59 @@ def main() -> None:
     file_parser.add_argument("--real-remote", action="store_true")
     file_parser.add_argument("--local-playback", action="store_true")
 
-    subparsers.add_parser("live", help="Run continuous microphone listening loop.")
+    live_parser = subparsers.add_parser("live", help="Run continuous microphone listening loop.")
+    live_parser.add_argument("--face-track", action="store_true", help="Enable pan-tilt face tracking in background.")
+    live_parser.add_argument("--face-track-window", action="store_true", help="Show tracking window for debugging.")
+    live_parser.add_argument("--face-track-detector", choices=["auto", "haar", "mediapipe"], default="auto")
+    live_parser.add_argument("--face-track-min-detection-confidence", type=float, default=0.55)
+    live_parser.add_argument("--face-track-haar-scale-factor", type=float, default=1.08)
+    live_parser.add_argument("--face-track-haar-min-neighbors", type=int, default=4)
+    live_parser.add_argument("--face-track-detect-scale", type=float, default=1.0)
+    live_parser.add_argument("--face-track-min-face-size", type=int, default=28)
+    live_parser.add_argument("--face-track-camera-width", type=int, default=320)
+    live_parser.add_argument("--face-track-camera-height", type=int, default=240)
+    live_parser.add_argument("--face-track-no-picamera2", action="store_true", help="Use cv2.VideoCapture backend.")
+    live_parser.add_argument("--face-track-device-index", type=int, default=0)
+    live_parser.add_argument("--face-track-pan-channel", type=int, default=0)
+    live_parser.add_argument("--face-track-tilt-channel", type=int, default=1)
+    live_parser.add_argument("--face-track-i2c-address", type=lambda x: int(x, 0), default=0x40)
+    live_parser.add_argument("--face-track-frequency", type=int, default=50)
+    live_parser.add_argument("--face-track-servo-min-pulse", type=int, default=500)
+    live_parser.add_argument("--face-track-servo-max-pulse", type=int, default=2500)
+    live_parser.add_argument("--face-track-actuation-range", type=float, default=270.0)
+    live_parser.add_argument("--face-track-center-pan", type=float, default=135.0)
+    live_parser.add_argument("--face-track-center-tilt", type=float, default=135.0)
+    live_parser.add_argument("--face-track-pan-min-angle", type=float, default=0.0)
+    live_parser.add_argument("--face-track-pan-max-angle", type=float, default=270.0)
+    live_parser.add_argument("--face-track-tilt-min-angle", type=float, default=35.0)
+    live_parser.add_argument("--face-track-tilt-max-angle", type=float, default=235.0)
+    live_parser.add_argument("--face-track-pan-zero-offset", type=float, default=0.0)
+    live_parser.add_argument("--face-track-tilt-zero-offset", type=float, default=0.0)
+    live_parser.set_defaults(face_track_pan_inverted=True, face_track_tilt_inverted=True)
+    live_parser.add_argument(
+        "--face-track-pan-inverted",
+        dest="face_track_pan_inverted",
+        action="store_true",
+        help="Invert pan axis",
+    )
+    live_parser.add_argument(
+        "--face-track-no-pan-inverted",
+        dest="face_track_pan_inverted",
+        action="store_false",
+        help="Do not invert pan axis",
+    )
+    live_parser.add_argument(
+        "--face-track-tilt-inverted",
+        dest="face_track_tilt_inverted",
+        action="store_true",
+        help="Invert tilt axis",
+    )
+    live_parser.add_argument(
+        "--face-track-no-tilt-inverted",
+        dest="face_track_tilt_inverted",
+        action="store_false",
+        help="Do not invert tilt axis",
+    )
 
     args = parser.parse_args()
     if args.command == "file-once":
@@ -173,7 +333,7 @@ def main() -> None:
             mock_playback=not args.local_playback,
         )
     elif args.command == "live":
-        run_live_loop()
+        run_live_loop_with_optional_face_tracking(args)
 
 
 if __name__ == "__main__":
