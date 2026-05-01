@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
+from raspirobot.audio.preprocessor import AudioPreprocessor
 from shared.schemas import RobotChatResponse
 
 from raspirobot.actions import RobotActionDispatcher
@@ -29,6 +30,7 @@ class TurnManager:
         audio_output: AudioOutputProvider,
         session: SessionManager,
         logger: TurnLogger | None = None,
+        audio_preprocessor: AudioPreprocessor | None = None,
     ) -> None:
         self.payload_builder = payload_builder
         self.remote_client = remote_client
@@ -36,6 +38,7 @@ class TurnManager:
         self.audio_output = audio_output
         self.session = session
         self.logger = logger or TurnLogger()
+        self.audio_preprocessor = audio_preprocessor
 
     def handle_utterance(
         self,
@@ -44,9 +47,23 @@ class TurnManager:
         state: str = "UPLOADING",
         before_playback: Callable[[RobotChatResponse], None] | None = None,
     ) -> TurnResult:
+        raw_wav_path = Path(wav_path)
+        payload_wav_path = raw_wav_path
+        preprocess_result = None
+
+        if self.audio_preprocessor is not None:
+            try:
+                preprocess_result = self.audio_preprocessor.process_file(
+                    raw_wav_path,
+                    output_dir=raw_wav_path.parent,
+                )
+                payload_wav_path = preprocess_result.used_for_payload_path
+            except Exception:
+                payload_wav_path = raw_wav_path
+
         turn_id = self.session.next_turn_id()
         request = self.payload_builder.build(
-            wav_path=wav_path,
+            wav_path=payload_wav_path,
             turn_id=turn_id,
             state=state,
             mode_id=self.session.mode_id,
@@ -92,7 +109,9 @@ class TurnManager:
             {
                 "session_id": response.session_id,
                 "turn_id": response.turn_id,
-                "wav_path": str(wav_path),
+                "raw_wav_path": str(raw_wav_path),
+                "clean_wav_path": str(preprocess_result.clean_wav_path) if preprocess_result and preprocess_result.clean_wav_path else None,
+                "payload_wav_path": str(payload_wav_path),
                 "mode": self.session.mode_id,
                 "success": response.success,
                 "asr_text": response.asr_text,

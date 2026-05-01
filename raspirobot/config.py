@@ -27,6 +27,16 @@ class Settings:
     vad_pre_roll_ms: int
     audio_work_dir: str
     live_loop_sleep_seconds: float
+    # Audio preprocessing fields (disabled by default for backward compatibility)
+    audio_preprocess_enabled: bool
+    audio_enable_noise_gate: bool
+    audio_enable_trim: bool
+    audio_min_speech_ms: int
+    audio_post_speech_padding_ms: int
+    audio_noise_calibration_ms: int
+    audio_noise_gate_ratio: float
+    audio_min_rms: float
+    audio_save_debug_wav: bool
 
 
 def load_settings() -> Settings:
@@ -56,6 +66,16 @@ def load_settings() -> Settings:
         vad_pre_roll_ms=int(os.getenv("ROBOT_VAD_PRE_ROLL_MS", "300")),
         audio_work_dir=os.getenv("ROBOT_AUDIO_WORK_DIR", "/tmp/raspirobot_audio").strip() or "/tmp/raspirobot_audio",
         live_loop_sleep_seconds=float(os.getenv("ROBOT_LIVE_LOOP_SLEEP_SECONDS", "0.05")),
+        # Audio preprocessing — disabled by default for backward compatibility
+        audio_preprocess_enabled=_bool_env("ROBOT_AUDIO_PREPROCESS_ENABLED", default=False),
+        audio_enable_noise_gate=_bool_env("ROBOT_AUDIO_ENABLE_NOISE_GATE", default=True),
+        audio_enable_trim=_bool_env("ROBOT_AUDIO_ENABLE_TRIM", default=True),
+        audio_min_speech_ms=int(os.getenv("ROBOT_AUDIO_MIN_SPEECH_MS", "400")),
+        audio_post_speech_padding_ms=int(os.getenv("ROBOT_AUDIO_POST_SPEECH_PADDING_MS", "150")),
+        audio_noise_calibration_ms=int(os.getenv("ROBOT_AUDIO_NOISE_CALIBRATION_MS", "1000")),
+        audio_noise_gate_ratio=float(os.getenv("ROBOT_AUDIO_NOISE_GATE_RATIO", "3.0")),
+        audio_min_rms=float(os.getenv("ROBOT_AUDIO_MIN_RMS", "80")),
+        audio_save_debug_wav=_bool_env("ROBOT_AUDIO_SAVE_DEBUG_WAV", default=False),
     )
 
 
@@ -66,3 +86,29 @@ def _none_if_empty(value: str | None) -> str | None:
     if not value or value.lower() in {"none", "null", "off"}:
         return None
     return value
+
+
+def _bool_env(name: str, *, default: bool) -> bool:
+    """Read an environment variable as a boolean.
+
+    Accepted truthy values  : 1, true, yes, on
+    Accepted falsy values   : 0, false, no, off
+    Missing or empty value  : returns *default*
+    Unrecognised value      : logs a warning and returns *default*
+    """
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    normalised = raw.strip().lower()
+    if normalised in {"1", "true", "yes", "on"}:
+        return True
+    if normalised in {"0", "false", "no", "off"}:
+        return False
+    # Unrecognised value — fall back to default rather than crashing live loop
+    import sys
+    print(
+        f"[config] WARNING: unrecognised boolean value for {name}={raw!r}; "
+        f"using default={default}",
+        file=sys.stderr,
+    )
+    return default

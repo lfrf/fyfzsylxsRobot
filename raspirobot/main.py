@@ -17,6 +17,7 @@ from raspirobot.audio import (
     LocalCommandAudioOutputProvider,
     MockAudioOutputProvider,
 )
+from raspirobot.audio.preprocessor import AudioPreprocessor, AudioPreprocessConfig
 from raspirobot.config import Settings, load_settings
 from raspirobot.core import RaspiRobotRuntime, RobotStateMachine, TurnManager
 from raspirobot.hardware import MockEyesDriver, MockHeadDriver
@@ -61,6 +62,25 @@ def build_output_provider(settings: Settings, *, mock: bool = False) -> AudioOut
     )
 
 
+def build_audio_preprocessor(settings: Settings) -> AudioPreprocessor | None:
+    if not settings.audio_preprocess_enabled:
+        return None
+    config = AudioPreprocessConfig(
+        enabled=settings.audio_preprocess_enabled,
+        enable_noise_gate=settings.audio_enable_noise_gate,
+        enable_trim=settings.audio_enable_trim,
+        frame_ms=settings.audio_frame_ms,
+        min_speech_ms=settings.audio_min_speech_ms,
+        post_speech_padding_ms=settings.audio_post_speech_padding_ms,
+        noise_calibration_ms=settings.audio_noise_calibration_ms,
+        noise_gate_ratio=settings.audio_noise_gate_ratio,
+        min_rms=settings.audio_min_rms,
+        save_debug_wav=settings.audio_save_debug_wav,
+        debug_dir=Path(settings.audio_work_dir) / "preprocessor_debug" if settings.audio_save_debug_wav else None,
+    )
+    return AudioPreprocessor(config)
+
+
 def build_runtime(
     *,
     input_provider: AudioInputProvider,
@@ -84,6 +104,7 @@ def build_runtime(
         mode_id=settings.default_mode,
         vision_context_provider=MockVisionContextProvider(),
     )
+    audio_preprocessor = build_audio_preprocessor(settings)
     turn_manager = TurnManager(
         payload_builder=payload_builder,
         remote_client=remote,
@@ -91,6 +112,7 @@ def build_runtime(
         audio_output=output,
         session=session,
         logger=TurnLogger(work_dir / "turns.jsonl"),
+        audio_preprocessor=audio_preprocessor,
     )
     listener = AudioListenWorker(
         input_provider=input_provider,

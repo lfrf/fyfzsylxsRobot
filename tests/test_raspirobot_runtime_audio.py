@@ -13,6 +13,7 @@ from raspirobot.audio import (
     make_sine_pcm,
     write_wav,
 )
+from raspirobot.audio.preprocessor import AudioPreprocessor, AudioPreprocessConfig
 from raspirobot.core import RaspiRobotRuntime, RobotRuntimeState, RobotStateMachine, TurnManager
 from raspirobot.hardware import MockEyesDriver, MockHeadDriver
 from raspirobot.remote import MockRemoteClient, RobotPayloadBuilder
@@ -142,3 +143,88 @@ def test_local_audio_output_skips_missing_or_mock_tts_url(tmp_path: Path) -> Non
     assert empty.skipped_reason == "empty audio_url"
     assert mock.played is False
     assert "mock" in (mock.skipped_reason or "")
+
+
+def test_turn_manager_without_preprocessor_uses_raw_wav(tmp_path: Path) -> None:
+    wav_path = _speech_wav(tmp_path / "input.wav")
+    session = SessionManager(session_id="session-no-preproc", mode_id="care")
+    turn_manager = TurnManager(
+        payload_builder=RobotPayloadBuilder(
+            session_id=session.session_id,
+            mode_id=session.mode_id,
+            vision_context_provider=MockVisionContextProvider(),
+        ),
+        remote_client=MockRemoteClient(),
+        action_dispatcher=DefaultRobotActionDispatcher(eyes=MockEyesDriver(), head=MockHeadDriver(), audio=None),
+        audio_output=MockAudioOutputProvider(),
+        session=session,
+        logger=TurnLogger(),
+        audio_preprocessor=None,
+    )
+
+    result = turn_manager.handle_utterance(wav_path=wav_path)
+
+    assert result.response.success is True
+    assert result.response.asr_text is not None
+
+
+def test_turn_manager_with_enabled_preprocessor_uses_clean_wav(tmp_path: Path) -> None:
+    wav_path = _speech_wav(tmp_path / "input.wav")
+    session = SessionManager(session_id="session-preproc-enabled", mode_id="care")
+    preprocessor = AudioPreprocessor(
+        AudioPreprocessConfig(
+            enabled=True,
+            enable_noise_gate=True,
+            enable_trim=True,
+        )
+    )
+    turn_manager = TurnManager(
+        payload_builder=RobotPayloadBuilder(
+            session_id=session.session_id,
+            mode_id=session.mode_id,
+            vision_context_provider=MockVisionContextProvider(),
+        ),
+        remote_client=MockRemoteClient(),
+        action_dispatcher=DefaultRobotActionDispatcher(eyes=MockEyesDriver(), head=MockHeadDriver(), audio=None),
+        audio_output=MockAudioOutputProvider(),
+        session=session,
+        logger=TurnLogger(),
+        audio_preprocessor=preprocessor,
+    )
+
+    result = turn_manager.handle_utterance(wav_path=wav_path)
+
+    assert result.response.success is True
+    assert result.response.asr_text is not None
+    clean_wav_path = wav_path.with_stem(f"{wav_path.stem}.clean")
+    assert clean_wav_path.exists()
+
+
+def test_turn_manager_gracefully_handles_preprocessor_exception(tmp_path: Path) -> None:
+    wav_path = _speech_wav(tmp_path / "input.wav")
+    session = SessionManager(session_id="session-preproc-exception", mode_id="care")
+
+    class FailingPreprocessor(AudioPreprocessor):
+        def process_file(self, wav_path, *, output_dir=None):
+            raise RuntimeError("Simulated preprocessor failure")
+
+    preprocessor = FailingPreprocessor()
+    turn_manager = TurnManager(
+        payload_builder=RobotPayloadBuilder(
+            session_id=session.session_id,
+            mode_id=session.mode_id,
+            vision_context_provider=MockVisionContextProvider(),
+        ),
+        remote_client=MockRemoteClient(),
+        action_dispatcher=DefaultRobotActionDispatcher(eyes=MockEyesDriver(), head=MockHeadDriver(), audio=None),
+        audio_output=MockAudioOutputProvider(),
+        session=session,
+        logger=TurnLogger(),
+        audio_preprocessor=preprocessor,
+    )
+
+    result = turn_manager.handle_utterance(wav_path=wav_path)
+
+    assert result.response.success is True
+    clean_wav_path = wav_path.with_stem(f"{wav_path.stem}.clean")
+    assert not clean_wav_path.exists()
