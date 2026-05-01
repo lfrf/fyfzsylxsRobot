@@ -28,6 +28,7 @@ class RobotEvent(str, Enum):
     PLAYBACK_STARTED = "PlaybackStarted"
     PLAYBACK_DONE = "PlaybackDone"
     NEW_SPEECH_INPUT = "NewSpeechInput"
+    UTTERANCE_REJECTED = "UtteranceRejected"
     SYSTEM_ERROR = "SystemError"
     RECOVERY_DONE = "RecoveryDone"
 
@@ -57,6 +58,13 @@ class RobotStateMachine:
             self.remote_request_in_progress = False
             self.state = RobotRuntimeState.ERROR_FALLBACK
             self._log_transition(event, from_state, turn_id=turn_id, error=self.last_error)
+            return self.state
+
+        if event == RobotEvent.UTTERANCE_REJECTED:
+            self.active_turn_id = None
+            self.remote_request_in_progress = False
+            self.state = RobotRuntimeState.LISTENING
+            self._log_transition(event, from_state, turn_id=turn_id)
             return self.state
 
         if event == RobotEvent.NEW_SPEECH_INPUT and self.state in BUSY_STATES:

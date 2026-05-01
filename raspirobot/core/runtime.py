@@ -93,7 +93,7 @@ class RaspiRobotRuntime:
                 reason=exc.reason,
             )
             self.event_bus.publish(RuntimeEvent(RuntimeEventType.SPEECH_ENDED))
-            self.state_machine.transition(RobotEvent.NEW_SPEECH_INPUT)
+            self.state_machine.transition(RobotEvent.UTTERANCE_REJECTED)
             return RuntimeLoopResult(handled=False, state=self.state_machine.state)
         except Exception as exc:
             message = str(exc)
