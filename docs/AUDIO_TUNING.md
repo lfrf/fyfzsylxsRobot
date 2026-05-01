@@ -33,9 +33,12 @@ export ROBOT_AUDIO_PREPROCESS_ENABLED=true
   Enable dynamic noise gate to mute low-energy frames.
 
 - `ROBOT_AUDIO_NOISE_GATE_RATIO` (float, default: `3.0`)  
-  Multiplier for gate threshold. Recommended range: 2.0–5.0  
-  - Lower (2.0–3.0): More aggressive gating, may cut fricatives (s, sh)
-  - Higher (4.0–5.0): Less aggressive, may leave more background noise
+  Multiplier applied to noise floor to compute gate threshold. Higher = more aggressive muting.  
+  Recommended range: 2.0–5.0  
+  - **Lower (2.0–3.0)**: **Conservative gating** — preserves more audio, risk of background noise
+  - **Higher (4.0–5.0)**: **Aggressive gating** — removes more noise, may cut quiet speech/fricatives
+  - **Default (3.0)**: Balanced, suitable for most environments  
+  Formula: `gate_threshold_rms = max(noise_floor_rms * ratio, min_rms)`
 
 - `ROBOT_AUDIO_MIN_RMS` (float, default: `80.0`)  
   Minimum RMS threshold for gate fallback. Prevents gate collapse on very quiet speech.
@@ -60,6 +63,27 @@ export ROBOT_AUDIO_PREPROCESS_ENABLED=true
 ### Debug Output
 - `ROBOT_AUDIO_SAVE_DEBUG_WAV` (bool, default: `true`)  
   Write debug JSON with detailed metrics. Set to `false` to disable (minimal overhead).
+
+### Post-Playback Cooldown
+- `ROBOT_AUDIO_POST_PLAYBACK_COOLDOWN_MS` (int, default: `0`)  
+  Silence duration after TTS playback completes before resuming microphone listening.  
+  Recommended: 0 (disabled) or 500–800ms to avoid TTS echo feedback.  
+  When enabled, robot pauses listening after speaking to prevent picking up its own voice.
+
+### Invalid Utterance Drop (Experimental)
+- `ROBOT_AUDIO_DROP_INVALID_UTTERANCE` (bool, default: `false`)  
+  Enable dropping of invalid utterances based on preprocessing results.  
+  Prevents uploading clearly invalid audio (no speech, too short) to ASR service.
+
+- `ROBOT_AUDIO_DROP_REASONS` (string, default: `no_speech_detected,speech_too_short`)  
+  Comma-separated list of preprocessing fallback reasons that trigger utterance drop.  
+  Possible values:
+    - `no_speech_detected`: Audio contains no voice activity above gate threshold
+    - `speech_too_short`: Speech duration below `ROBOT_AUDIO_MIN_SPEECH_MS`
+    - `invalid_trim_range`: Trimming calculation error
+    - `invalid_trimmed_audio`: Trimmed audio is empty or invalid
+    - `disabled`: Preprocessing was disabled
+  Example: `ROBOT_AUDIO_DROP_REASONS=no_speech_detected,speech_too_short`
 
 ## File Output
 
@@ -158,6 +182,23 @@ export ROBOT_AUDIO_MIN_SPEECH_MS=400            # Avoid processing < 400ms
 export ROBOT_AUDIO_SAVE_DEBUG_WAV=false         # Disable debug overhead
 ```
 
+### Demo/Testing Recommended Settings
+
+For live demos with TTS feedback issues:
+
+```bash
+export ROBOT_AUDIO_PREPROCESS_ENABLED=true
+export ROBOT_AUDIO_ENABLE_NOISE_GATE=true
+export ROBOT_AUDIO_ENABLE_TRIM=true
+export ROBOT_AUDIO_NOISE_GATE_RATIO=2.0         # Less aggressive (preserve speech)
+export ROBOT_AUDIO_POST_SPEECH_PADDING_MS=150   # Natural speech tail
+export ROBOT_AUDIO_MIN_SPEECH_MS=400             # Reject too-short utterances
+export ROBOT_AUDIO_POST_PLAYBACK_COOLDOWN_MS=800 # Prevent TTS echo feedback
+export ROBOT_AUDIO_DROP_INVALID_UTTERANCE=true
+export ROBOT_AUDIO_DROP_REASONS=no_speech_detected,speech_too_short
+export ROBOT_AUDIO_SAVE_DEBUG_WAV=true          # Enable metrics for debugging
+```
+
 ## Fallback on Session Failure
 
 If the entire preprocessing session fails (e.g., audio device error), the robot:
@@ -189,3 +230,31 @@ A: Trimming is optional. For robust always-on: disable trimming, use noise gate 
 
 **Q: How do I verify preprocessing is working?**
 A: Check for `.clean.wav` files in `/tmp/raspirobot/utterances/`. Use debug script to inspect metrics.
+
+## Verifying Clean WAV is Used for ASR Payload
+
+The `audio_payload_selected` event in logs confirms which WAV is sent to ASR:
+
+```json
+{
+  "event": "audio_payload_selected",
+  "raw_wav_path": "/tmp/raspirobot/utterances/utterance-001.wav",
+  "clean_wav_path": "/tmp/raspirobot/utterances/utterance-001.clean.wav",
+  "payload_wav_path": "/tmp/raspirobot/utterances/utterance-001.clean.wav",
+  "preprocess_enabled": true,
+  "preprocess_fallback_used": false,
+  "noise_floor_rms": 145.2,
+  "gate_threshold_rms": 435.6,
+  "speech_peak_rms": 8234.1,
+  "trimmed_head_ms": 200,
+  "trimmed_tail_ms": 150
+}
+```
+
+**Key fields to check:**
+- `payload_wav_path == clean_wav_path`: Clean audio is being used ✓
+- `preprocess_fallback_used: false`: Preprocessing succeeded ✓
+- `gate_threshold_rms > 0`: Noise gate was applied ✓
+- `trimmed_head_ms > 0 or trimmed_tail_ms > 0`: Trimming was applied ✓
+
+If `payload_wav_path == raw_wav_path`, preprocessing was skipped or failed (check `preprocess_fallback_reason`).

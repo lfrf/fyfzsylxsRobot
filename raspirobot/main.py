@@ -113,6 +113,8 @@ def build_runtime(
         session=session,
         logger=TurnLogger(work_dir / "turns.jsonl"),
         audio_preprocessor=audio_preprocessor,
+        audio_drop_invalid_utterance=settings.audio_drop_invalid_utterance,
+        audio_drop_reasons=settings.audio_drop_reasons,
     )
     listener = AudioListenWorker(
         input_provider=input_provider,
@@ -124,6 +126,7 @@ def build_runtime(
         turn_manager=turn_manager,
         state_machine=RobotStateMachine(mode_id=settings.default_mode),
         loop_sleep_seconds=settings.live_loop_sleep_seconds,
+        post_playback_cooldown_ms=settings.audio_post_playback_cooldown_ms,
     )
 
 

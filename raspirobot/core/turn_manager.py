@@ -14,6 +14,16 @@ from raspirobot.session import SessionManager, TurnLogger
 from shared.logging_utils import log_event
 
 
+class UtteranceRejected(Exception):
+    """Raised when an utterance is rejected due to preprocessing fallback or other criteria."""
+    
+    def __init__(self, reason: str, *, wav_path: Path, preprocess_result: Any = None):
+        self.reason = reason
+        self.wav_path = wav_path
+        self.preprocess_result = preprocess_result
+        super().__init__(f"Utterance rejected: {reason}")
+
+
 @dataclass
 class TurnResult:
     response: RobotChatResponse
@@ -31,6 +41,8 @@ class TurnManager:
         session: SessionManager,
         logger: TurnLogger | None = None,
         audio_preprocessor: AudioPreprocessor | None = None,
+        audio_drop_invalid_utterance: bool = False,
+        audio_drop_reasons: str = "no_speech_detected,speech_too_short",
     ) -> None:
         self.payload_builder = payload_builder
         self.remote_client = remote_client
@@ -39,6 +51,11 @@ class TurnManager:
         self.session = session
         self.logger = logger or TurnLogger()
         self.audio_preprocessor = audio_preprocessor
+        self.audio_drop_invalid_utterance = audio_drop_invalid_utterance
+        # Parse drop reasons into a set for efficient lookup
+        self.audio_drop_reasons_set = set(
+            reason.strip() for reason in audio_drop_reasons.split(",") if reason.strip()
+        )
 
     def handle_utterance(
         self,
@@ -50,8 +67,10 @@ class TurnManager:
         raw_wav_path = Path(wav_path)
         payload_wav_path = raw_wav_path
         preprocess_result = None
+        preprocess_enabled = False
 
         if self.audio_preprocessor is not None:
+            preprocess_enabled = True
             try:
                 preprocess_result = self.audio_preprocessor.process_file(
                     raw_wav_path,
@@ -60,6 +79,53 @@ class TurnManager:
                 payload_wav_path = preprocess_result.used_for_payload_path
             except Exception:
                 payload_wav_path = raw_wav_path
+
+        # Log audio payload selection with detailed metrics
+        log_event(
+            "audio_payload_selected",
+            raw_wav_path=str(raw_wav_path),
+            clean_wav_path=str(preprocess_result.clean_wav_path) if preprocess_result and preprocess_result.clean_wav_path else None,
+            payload_wav_path=str(payload_wav_path),
+            preprocess_enabled=preprocess_enabled,
+            preprocess_fallback_used=preprocess_result.fallback_used if preprocess_result else None,
+            preprocess_fallback_reason=preprocess_result.fallback_reason if preprocess_result else None,
+            raw_duration_ms=preprocess_result.raw_duration_ms if preprocess_result else None,
+            clean_duration_ms=preprocess_result.clean_duration_ms if preprocess_result else None,
+            trimmed_head_ms=preprocess_result.trimmed_head_ms if preprocess_result else None,
+            trimmed_tail_ms=preprocess_result.trimmed_tail_ms if preprocess_result else None,
+            noise_floor_rms=preprocess_result.noise_floor_rms if preprocess_result else None,
+            noise_floor_strategy=preprocess_result.noise_floor_strategy if preprocess_result else None,
+            gate_threshold_rms=preprocess_result.gate_threshold_rms if preprocess_result else None,
+            speech_peak_rms=preprocess_result.speech_peak_rms if preprocess_result else None,
+            speech_mean_rms=preprocess_result.speech_mean_rms if preprocess_result else None,
+            speech_frames=preprocess_result.speech_frames if preprocess_result else None,
+            muted_frames=preprocess_result.muted_frames if preprocess_result else None,
+            debug_json_path=str(preprocess_result.debug_json_path) if preprocess_result and preprocess_result.debug_json_path else None,
+        )
+
+        # Check if utterance should be dropped due to invalid preprocessing result
+        if (
+            self.audio_drop_invalid_utterance
+            and preprocess_result is not None
+            and preprocess_result.fallback_reason in self.audio_drop_reasons_set
+        ):
+            log_event(
+                "utterance_dropped_after_preprocess",
+                raw_wav_path=str(raw_wav_path),
+                fallback_reason=preprocess_result.fallback_reason,
+                speech_duration_ms=preprocess_result.speech_duration_ms,
+                raw_duration_ms=preprocess_result.raw_duration_ms,
+                noise_floor_rms=preprocess_result.noise_floor_rms,
+                gate_threshold_rms=preprocess_result.gate_threshold_rms,
+                speech_peak_rms=preprocess_result.speech_peak_rms,
+                speech_mean_rms=preprocess_result.speech_mean_rms,
+                debug_json_path=str(preprocess_result.debug_json_path) if preprocess_result.debug_json_path else None,
+            )
+            raise UtteranceRejected(
+                f"preprocess fallback: {preprocess_result.fallback_reason}",
+                wav_path=raw_wav_path,
+                preprocess_result=preprocess_result,
+            )
 
         turn_id = self.session.next_turn_id()
         request = self.payload_builder.build(
@@ -112,6 +178,21 @@ class TurnManager:
                 "raw_wav_path": str(raw_wav_path),
                 "clean_wav_path": str(preprocess_result.clean_wav_path) if preprocess_result and preprocess_result.clean_wav_path else None,
                 "payload_wav_path": str(payload_wav_path),
+                "preprocess_enabled": preprocess_enabled,
+                "preprocess_fallback_used": preprocess_result.fallback_used if preprocess_result else None,
+                "preprocess_fallback_reason": preprocess_result.fallback_reason if preprocess_result else None,
+                "raw_duration_ms": preprocess_result.raw_duration_ms if preprocess_result else None,
+                "clean_duration_ms": preprocess_result.clean_duration_ms if preprocess_result else None,
+                "trimmed_head_ms": preprocess_result.trimmed_head_ms if preprocess_result else None,
+                "trimmed_tail_ms": preprocess_result.trimmed_tail_ms if preprocess_result else None,
+                "noise_floor_rms": preprocess_result.noise_floor_rms if preprocess_result else None,
+                "noise_floor_strategy": preprocess_result.noise_floor_strategy if preprocess_result else None,
+                "gate_threshold_rms": preprocess_result.gate_threshold_rms if preprocess_result else None,
+                "speech_peak_rms": preprocess_result.speech_peak_rms if preprocess_result else None,
+                "speech_mean_rms": preprocess_result.speech_mean_rms if preprocess_result else None,
+                "speech_frames": preprocess_result.speech_frames if preprocess_result else None,
+                "muted_frames": preprocess_result.muted_frames if preprocess_result else None,
+                "debug_json_path": str(preprocess_result.debug_json_path) if preprocess_result and preprocess_result.debug_json_path else None,
                 "mode": self.session.mode_id,
                 "success": response.success,
                 "asr_text": response.asr_text,

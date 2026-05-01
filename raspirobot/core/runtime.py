@@ -4,11 +4,12 @@ from dataclasses import dataclass
 from time import sleep
 
 from raspirobot.audio import AudioListenWorker
+from shared.logging_utils import log_event
 
 from .event_bus import EventBus
 from .events import RuntimeEvent, RuntimeEventType
 from .state_machine import RobotEvent, RobotRuntimeState, RobotStateMachine
-from .turn_manager import TurnManager, TurnResult
+from .turn_manager import TurnManager, TurnResult, UtteranceRejected
 
 
 @dataclass
@@ -28,12 +29,14 @@ class RaspiRobotRuntime:
         state_machine: RobotStateMachine | None = None,
         event_bus: EventBus | None = None,
         loop_sleep_seconds: float = 0.05,
+        post_playback_cooldown_ms: int = 0,
     ) -> None:
         self.listener = listener
         self.turn_manager = turn_manager
         self.state_machine = state_machine or RobotStateMachine()
         self.event_bus = event_bus or EventBus()
         self.loop_sleep_seconds = loop_sleep_seconds
+        self.post_playback_cooldown_ms = post_playback_cooldown_ms
         self._ensure_listening()
 
     def run_once(self) -> RuntimeLoopResult:
@@ -69,7 +72,29 @@ class RaspiRobotRuntime:
             self.event_bus.publish(RuntimeEvent(RuntimeEventType.ROBOT_ACTION_RECEIVED))
             self.event_bus.publish(RuntimeEvent(RuntimeEventType.PLAYBACK_DONE))
             self.state_machine.transition(RobotEvent.PLAYBACK_DONE)
+            
+            # Apply post-playback cooldown if configured
+            if self.post_playback_cooldown_ms > 0:
+                log_event(
+                    "playback_cooldown_started",
+                    cooldown_ms=self.post_playback_cooldown_ms,
+                )
+                sleep(self.post_playback_cooldown_ms / 1000.0)
+                log_event(
+                    "playback_cooldown_done",
+                    cooldown_ms=self.post_playback_cooldown_ms,
+                )
+            
             return RuntimeLoopResult(handled=True, state=self.state_machine.state, turn=turn)
+        except UtteranceRejected as exc:
+            log_event(
+                "utterance_rejected_at_runtime",
+                wav_path=str(exc.wav_path),
+                reason=exc.reason,
+            )
+            self.event_bus.publish(RuntimeEvent(RuntimeEventType.SPEECH_ENDED))
+            self.state_machine.transition(RobotEvent.NEW_SPEECH_INPUT)
+            return RuntimeLoopResult(handled=False, state=self.state_machine.state)
         except Exception as exc:
             message = str(exc)
             self.event_bus.publish(RuntimeEvent(RuntimeEventType.REMOTE_REQUEST_FAILED, {"error": message}))
