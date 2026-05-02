@@ -103,6 +103,7 @@ def build_eyes_driver(settings: Settings) -> MockEyesDriver | ST7789EyesDriver:
                 right_cs=settings.eyes_right_cs,
                 right_enabled=settings.eyes_right_enabled,
                 mirror_right=settings.eyes_mirror_right,
+                gpio_chip=settings.eyes_gpio_chip,
             )
         )
     except Exception as exc:
