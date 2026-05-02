@@ -243,14 +243,30 @@ class _ST7789Display:
 
     @staticmethod
     def _to_rgb565(image: Image.Image) -> bytearray:
-        buf = bytearray(image.width * image.height * 2)
-        idx = 0
-        for r, g, b in image.getdata():
-            pixel = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3)
-            buf[idx] = (pixel >> 8) & 0xFF
-            buf[idx + 1] = pixel & 0xFF
-            idx += 2
-        return buf
+        try:
+            import numpy as np
+            arr = np.array(image, dtype=np.uint16)
+            r = (arr[:, :, 0] >> 3).astype(np.uint16)
+            g = (arr[:, :, 1] >> 2).astype(np.uint16)
+            b = (arr[:, :, 2] >> 3).astype(np.uint16)
+            rgb565 = (r << 11) | (g << 5) | b
+            # 大端序
+            high = (rgb565 >> 8).astype(np.uint8)
+            low = (rgb565 & 0xFF).astype(np.uint8)
+            interleaved = np.empty((image.height, image.width, 2), dtype=np.uint8)
+            interleaved[:, :, 0] = high
+            interleaved[:, :, 1] = low
+            return bytearray(interleaved.tobytes())
+        except ImportError:
+            # fallback: 纯 Python
+            buf = bytearray(image.width * image.height * 2)
+            idx = 0
+            for r, g, b in image.getdata():
+                pixel = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3)
+                buf[idx] = (pixel >> 8) & 0xFF
+                buf[idx + 1] = pixel & 0xFF
+                idx += 2
+            return buf
 
 
 class ST7789EyesDriver:
