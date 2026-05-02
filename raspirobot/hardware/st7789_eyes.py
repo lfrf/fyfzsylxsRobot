@@ -198,8 +198,9 @@ class ST7789EyesDriver:
             self._frame_index += 1
             try:
                 self._display_frame(frame)
-            except Exception:
-                pass  # 渲染异常不中断循环
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
 
             elapsed = monotonic() - started
             if elapsed < frame_interval:
