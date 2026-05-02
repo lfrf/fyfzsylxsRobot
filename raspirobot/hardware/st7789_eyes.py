@@ -10,9 +10,8 @@ from PIL import Image, ImageOps, ImageSequence
 
 IMAGE_SUFFIXES = (".png", ".jpg", ".jpeg", ".bmp", ".webp")
 
-# ST7789V 初始化序列
+# ST7789V 初始化序列（不含软件复位，硬件复位由 ST7789EyesDriver 统一管理）
 _INIT_CMDS: list[tuple[int, list[int] | None]] = [
-    (0x01, None),   # Software reset
     (0x11, None),   # Sleep out
     (0x3A, [0x55]), # 16-bit color (RGB565)
     (0x36, [0x00]), # Memory access control
@@ -99,7 +98,7 @@ class _ST7789Display:
             self._cmd(cmd)
             if data:
                 self._data(data)
-            if cmd in (0x01, 0x11):
+            if cmd == 0x11:  # Sleep out 需要等待
                 time.sleep(0.15)
 
     def _set_window(self, x0: int, y0: int, x1: int, y1: int) -> None:
