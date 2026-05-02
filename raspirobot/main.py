@@ -99,6 +99,7 @@ def build_eyes_driver(settings: Settings) -> MockEyesDriver | ST7789EyesDriver:
                 height=settings.eyes_screen_height,
                 rotation=settings.eyes_rotation,
                 spi_port=settings.eyes_spi_port,
+                right_spi_port=settings.eyes_right_spi_port,
                 spi_speed_hz=settings.eyes_spi_speed_hz,
                 rst_gpio=settings.eyes_rst_gpio,
                 left_dc_gpio=settings.eyes_left_dc_gpio,

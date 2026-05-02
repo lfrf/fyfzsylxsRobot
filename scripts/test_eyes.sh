@@ -27,6 +27,8 @@ export ROBOT_EYES_GPIO_CHIP=/dev/gpiochip0
 export ROBOT_EYES_RST_GPIO=22
 export ROBOT_EYES_LEFT_DC_GPIO=25
 export ROBOT_EYES_RIGHT_DC_GPIO=24
+export ROBOT_EYES_RIGHT_SPI_PORT=1
+export ROBOT_EYES_RIGHT_CS=0
 
 echo "=== 检查 st7789 包 ==="
 python -c "import st7789; print('st7789 OK:', st7789.__file__)" 2>&1 || echo "st7789 包未安装"

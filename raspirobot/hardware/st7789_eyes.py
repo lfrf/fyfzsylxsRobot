@@ -28,16 +28,17 @@ class ST7789EyeConfig:
     width: int = 240
     height: int = 320
     rotation: int = 0
-    spi_port: int = 0
+    spi_port: int = 0                       # 左眼 SPI 端口
+    right_spi_port: int = 1                 # 右眼 SPI 端口（独立总线）
     spi_speed_hz: int = 40_000_000
     rst_gpio: int = 22                      # 共享复位引脚
     left_dc_gpio: int = 25                  # 左眼独立 DC
     right_dc_gpio: int = 24                 # 右眼独立 DC
     left_cs: int = 0
-    right_cs: int = 1
+    right_cs: int = 0                       # SPI1 只有一个 CS，用 0
     right_enabled: bool = True
-    left_assets_dir: Path | None = None     # 左眼素材目录，None 时使用 assets_dir
-    right_assets_dir: Path | None = None    # 右眼素材目录，None 时使用 assets_dir
+    left_assets_dir: Path | None = None
+    right_assets_dir: Path | None = None
     gpio_chip: str = "/dev/gpiochip0"
 
     def get_left_assets_dir(self) -> Path:
@@ -280,7 +281,7 @@ class ST7789EyesDriver:
         self._right: _ST7789Display | None = None
         if config.right_enabled:
             self._right = _ST7789Display(
-                spi_port=config.spi_port,
+                spi_port=config.right_spi_port,
                 spi_cs=config.right_cs,
                 spi_speed_hz=config.spi_speed_hz,
                 dc_gpio=config.right_dc_gpio,

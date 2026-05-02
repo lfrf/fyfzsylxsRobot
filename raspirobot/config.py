@@ -61,6 +61,7 @@ class Settings:
     eyes_right_dc_gpio: int
     eyes_left_assets_dir: str
     eyes_right_assets_dir: str
+    eyes_right_spi_port: int
 
 
 def load_settings() -> Settings:
@@ -122,6 +123,7 @@ def load_settings() -> Settings:
         eyes_right_dc_gpio=int(os.getenv("ROBOT_EYES_RIGHT_DC_GPIO", "24")),
         eyes_left_assets_dir=os.getenv("ROBOT_EYES_LEFT_ASSETS_DIR", "").strip(),
         eyes_right_assets_dir=os.getenv("ROBOT_EYES_RIGHT_ASSETS_DIR", "").strip(),
+        eyes_right_spi_port=int(os.getenv("ROBOT_EYES_RIGHT_SPI_PORT", "1")),
     )
 
 
