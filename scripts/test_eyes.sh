@@ -17,6 +17,6 @@ export ROBOT_EYES_DC_GPIO=25
 export ROBOT_EYES_RST_GPIO=24
 export ROBOT_EYES_LEFT_CS=0
 export ROBOT_EYES_RIGHT_CS=1
-export ROBOT_EYES_RIGHT_ENABLED=true
+export ROBOT_EYES_RIGHT_ENABLED=false
 
 python -m raspirobot.scripts.st7789_eyes_demo --expressions neutral --hold-seconds 5
