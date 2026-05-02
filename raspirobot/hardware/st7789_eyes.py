@@ -236,8 +236,10 @@ class _ST7789Display:
 
     def _data_bytes(self, data: bytes | bytearray) -> None:
         self._lines.set_value(self._dc_gpio, self._gpiod.line.Value.ACTIVE)
-        # 用 writebytes2 替代 xfer2，对大数据传输更稳定
-        self._spi.writebytes2(data)
+        # SPI1 (spi-bcm2835aux) 单次传输有字节数限制，分块传输
+        chunk = 65535
+        for i in range(0, len(data), chunk):
+            self._spi.writebytes2(data[i:i + chunk])
 
     @staticmethod
     def _to_rgb565(image: Image.Image) -> bytearray:
