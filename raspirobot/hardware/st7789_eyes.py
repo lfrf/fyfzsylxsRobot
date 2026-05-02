@@ -236,7 +236,7 @@ class _ST7789Display:
 
     def _data_bytes(self, data: bytes | bytearray) -> None:
         self._lines.set_value(self._dc_gpio, self._gpiod.line.Value.ACTIVE)
-        chunk = 4096
+        chunk = 512  # SPI1 驱动对传输大小更敏感，用更小的 chunk
         mv = memoryview(data)
         for i in range(0, len(data), chunk):
             self._spi.xfer2(mv[i:i + chunk].tolist())
