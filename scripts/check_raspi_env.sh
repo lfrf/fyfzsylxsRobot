@@ -39,6 +39,18 @@ echo "[check] ROBOT_AUDIO_CAPTURE_DEVICE=${ROBOT_AUDIO_CAPTURE_DEVICE:-<unset>}"
 echo "[check] ROBOT_AUDIO_PLAYBACK_DEVICE=${ROBOT_AUDIO_PLAYBACK_DEVICE:-<unset>}"
 echo "[check] ROBOT_AUDIO_SAMPLE_RATE=${ROBOT_AUDIO_SAMPLE_RATE:-<unset>}"
 echo "[check] ROBOT_AUDIO_CHANNELS=${ROBOT_AUDIO_CHANNELS:-<unset>}"
+echo "[check] ROBOT_EYES_PROVIDER=${ROBOT_EYES_PROVIDER:-<unset>}"
+echo "[check] ROBOT_EYES_ASSETS_DIR=${ROBOT_EYES_ASSETS_DIR:-<unset>}"
+echo "[check] ROBOT_EYES_DC_GPIO=${ROBOT_EYES_DC_GPIO:-<unset>}"
+echo "[check] ROBOT_EYES_RST_GPIO=${ROBOT_EYES_RST_GPIO:-<unset>}"
+echo "[check] ROBOT_EYES_LEFT_CS=${ROBOT_EYES_LEFT_CS:-<unset>}"
+echo "[check] ROBOT_EYES_RIGHT_CS=${ROBOT_EYES_RIGHT_CS:-<unset>}"
+
+if [[ -e "/dev/spidev0.0" || -e "/dev/spidev0.1" ]]; then
+  echo "[check] spidev: present"
+else
+  echo "[warn] spidev not found; enable SPI in raspi-config and reboot."
+fi
 
 PYTHONPATH="$ROOT_DIR" "$PYTHON_BIN" - <<'PY'
 import raspirobot

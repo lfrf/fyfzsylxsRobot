@@ -42,6 +42,20 @@ class Settings:
     # Invalid utterance drop configuration
     audio_drop_invalid_utterance: bool
     audio_drop_reasons: str
+    eyes_provider: str
+    eyes_assets_dir: str
+    eyes_frame_fps: int
+    eyes_screen_width: int
+    eyes_screen_height: int
+    eyes_rotation: int
+    eyes_spi_port: int
+    eyes_spi_speed_hz: int
+    eyes_dc_gpio: int
+    eyes_rst_gpio: int
+    eyes_left_cs: int
+    eyes_right_cs: int
+    eyes_right_enabled: bool
+    eyes_mirror_right: bool
 
 
 def load_settings() -> Settings:
@@ -71,7 +85,7 @@ def load_settings() -> Settings:
         vad_pre_roll_ms=int(os.getenv("ROBOT_VAD_PRE_ROLL_MS", "300")),
         audio_work_dir=os.getenv("ROBOT_AUDIO_WORK_DIR", "/tmp/raspirobot_audio").strip() or "/tmp/raspirobot_audio",
         live_loop_sleep_seconds=float(os.getenv("ROBOT_LIVE_LOOP_SLEEP_SECONDS", "0.05")),
-        # Audio preprocessing — disabled by default for backward compatibility
+        # Audio preprocessing - disabled by default for backward compatibility
         audio_preprocess_enabled=_bool_env("ROBOT_AUDIO_PREPROCESS_ENABLED", default=False),
         audio_enable_noise_gate=_bool_env("ROBOT_AUDIO_ENABLE_NOISE_GATE", default=True),
         audio_enable_trim=_bool_env("ROBOT_AUDIO_ENABLE_TRIM", default=True),
@@ -84,6 +98,20 @@ def load_settings() -> Settings:
         audio_post_playback_cooldown_ms=int(os.getenv("ROBOT_AUDIO_POST_PLAYBACK_COOLDOWN_MS", "0")),
         audio_drop_invalid_utterance=_bool_env("ROBOT_AUDIO_DROP_INVALID_UTTERANCE", default=False),
         audio_drop_reasons=os.getenv("ROBOT_AUDIO_DROP_REASONS", "no_speech_detected,speech_too_short").strip(),
+        eyes_provider=os.getenv("ROBOT_EYES_PROVIDER", "mock").strip().lower() or "mock",
+        eyes_assets_dir=os.getenv("ROBOT_EYES_ASSETS_DIR", "/tmp/raspirobot_eyes").strip() or "/tmp/raspirobot_eyes",
+        eyes_frame_fps=int(os.getenv("ROBOT_EYES_FRAME_FPS", "12")),
+        eyes_screen_width=int(os.getenv("ROBOT_EYES_SCREEN_WIDTH", "240")),
+        eyes_screen_height=int(os.getenv("ROBOT_EYES_SCREEN_HEIGHT", "320")),
+        eyes_rotation=int(os.getenv("ROBOT_EYES_ROTATION", "0")),
+        eyes_spi_port=int(os.getenv("ROBOT_EYES_SPI_PORT", "0")),
+        eyes_spi_speed_hz=int(os.getenv("ROBOT_EYES_SPI_SPEED_HZ", "40000000")),
+        eyes_dc_gpio=int(os.getenv("ROBOT_EYES_DC_GPIO", "25")),
+        eyes_rst_gpio=int(os.getenv("ROBOT_EYES_RST_GPIO", "24")),
+        eyes_left_cs=int(os.getenv("ROBOT_EYES_LEFT_CS", "0")),
+        eyes_right_cs=int(os.getenv("ROBOT_EYES_RIGHT_CS", "1")),
+        eyes_right_enabled=_bool_env("ROBOT_EYES_RIGHT_ENABLED", default=True),
+        eyes_mirror_right=_bool_env("ROBOT_EYES_MIRROR_RIGHT", default=False),
     )
 
 
@@ -112,8 +140,9 @@ def _bool_env(name: str, *, default: bool) -> bool:
         return True
     if normalised in {"0", "false", "no", "off"}:
         return False
-    # Unrecognised value — fall back to default rather than crashing live loop
+    # Unrecognised value - fall back to default rather than crashing live loop
     import sys
+
     print(
         f"[config] WARNING: unrecognised boolean value for {name}={raw!r}; "
         f"using default={default}",

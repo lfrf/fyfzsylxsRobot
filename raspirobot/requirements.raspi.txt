@@ -3,3 +3,5 @@ httpx
 fastapi
 uvicorn
 pytest
+Pillow
+st7789

@@ -31,6 +31,9 @@ Next:
   export ROBOT_AUDIO_PLAYBACK_DEVICE=plughw:3,0
   export ROBOT_AUDIO_SAMPLE_RATE=16000
   export ROBOT_AUDIO_CHANNELS=2
+  export ROBOT_EYES_PROVIDER=st7789
+  export ROBOT_EYES_ASSETS_DIR=/tmp/raspirobot_eyes
   python -m raspirobot.scripts.audio_tunnel_smoke --wav /tmp/robot_test.wav
+  python -m raspirobot.scripts.st7789_eyes_demo --expressions neutral happy blink
   python -m raspirobot.scripts.live_audio_loop
 TXT

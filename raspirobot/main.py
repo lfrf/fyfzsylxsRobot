@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import threading
 from pathlib import Path
 from typing import Any
@@ -20,12 +21,14 @@ from raspirobot.audio import (
 from raspirobot.audio.preprocessor import AudioPreprocessor, AudioPreprocessConfig
 from raspirobot.config import Settings, load_settings
 from raspirobot.core import RaspiRobotRuntime, RobotStateMachine, TurnManager
-from raspirobot.hardware import MockEyesDriver, MockHeadDriver
+from raspirobot.hardware import MockEyesDriver, MockHeadDriver, ST7789EyeConfig, ST7789EyesDriver
 from raspirobot.remote import MockRemoteClient, RemoteClient, RemoteClientProtocol, RobotPayloadBuilder
 from raspirobot.session import SessionManager, TurnLogger
 from raspirobot.utils import ensure_dir
 from raspirobot.vision import MockVisionContextProvider
 from shared.logging_utils import get_log_file_path, get_log_session_id, log_event, start_log_session
+
+logger = logging.getLogger(__name__)
 
 
 def build_vad(settings: Settings) -> EnergyVAD:
@@ -81,6 +84,32 @@ def build_audio_preprocessor(settings: Settings) -> AudioPreprocessor | None:
     return AudioPreprocessor(config)
 
 
+def build_eyes_driver(settings: Settings) -> MockEyesDriver | ST7789EyesDriver:
+    if settings.eyes_provider != "st7789":
+        return MockEyesDriver()
+    try:
+        return ST7789EyesDriver(
+            ST7789EyeConfig(
+                assets_dir=Path(settings.eyes_assets_dir),
+                fps=settings.eyes_frame_fps,
+                width=settings.eyes_screen_width,
+                height=settings.eyes_screen_height,
+                rotation=settings.eyes_rotation,
+                spi_port=settings.eyes_spi_port,
+                spi_speed_hz=settings.eyes_spi_speed_hz,
+                dc_gpio=settings.eyes_dc_gpio,
+                rst_gpio=settings.eyes_rst_gpio,
+                left_cs=settings.eyes_left_cs,
+                right_cs=settings.eyes_right_cs,
+                right_enabled=settings.eyes_right_enabled,
+                mirror_right=settings.eyes_mirror_right,
+            )
+        )
+    except Exception as exc:
+        logger.warning("failed_to_init_st7789_eyes; fallback_to_mock: %s", exc)
+        return MockEyesDriver()
+
+
 def build_runtime(
     *,
     input_provider: AudioInputProvider,
@@ -94,7 +123,7 @@ def build_runtime(
     output = audio_output or build_output_provider(settings)
     remote = remote_client or RemoteClient()
     dispatcher = DefaultRobotActionDispatcher(
-        eyes=MockEyesDriver(),
+        eyes=build_eyes_driver(settings),
         head=MockHeadDriver(),
         audio=None,
         remote_base_url=getattr(remote, "base_url", None),
