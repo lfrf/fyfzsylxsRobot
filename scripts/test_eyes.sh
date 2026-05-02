@@ -8,8 +8,8 @@ source .venv/bin/activate
 export ROBOT_EYES_PROVIDER=st7789
 export ROBOT_EYES_ASSETS_DIR=/home/pi/Desktop/code/fyfzsylxsRobot/raspirobot/assets/eyes
 export ROBOT_EYES_FRAME_FPS=12
-export ROBOT_EYES_SCREEN_WIDTH=320
-export ROBOT_EYES_SCREEN_HEIGHT=240
+export ROBOT_EYES_SCREEN_WIDTH=240
+export ROBOT_EYES_SCREEN_HEIGHT=320
 export ROBOT_EYES_ROTATION=90
 export ROBOT_EYES_SPI_PORT=0
 export ROBOT_EYES_SPI_SPEED_HZ=40000000
