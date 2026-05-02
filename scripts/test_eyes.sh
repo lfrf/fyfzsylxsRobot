@@ -5,6 +5,8 @@
 cd /home/pi/Desktop/code/fyfzsylxsRobot
 source .venv/bin/activate
 
+export PYTHONPATH=/home/pi/Desktop/code/fyfzsylxsRobot
+
 export ROBOT_EYES_PROVIDER=st7789
 export ROBOT_EYES_ASSETS_DIR=/home/pi/Desktop/code/fyfzsylxsRobot/raspirobot/assets/eyes
 export ROBOT_EYES_FRAME_FPS=12
