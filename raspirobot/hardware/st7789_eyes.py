@@ -54,7 +54,6 @@ class _ST7789Display:
         height: int,
         gpio_chip: str,
         gpio_lines: Any,  # gpiod RequestLines 对象，由外部统一管理
-        skip_reset: bool = False,  # 右眼复用左眼的复位，不重复 reset
     ) -> None:
         self.width = width
         self.height = height
@@ -71,8 +70,7 @@ class _ST7789Display:
         self._spi.max_speed_hz = spi_speed_hz
         self._spi.mode = 0
 
-        if not skip_reset:
-            self._reset()
+        # 复位由 ST7789EyesDriver 统一管理，这里只发初始化命令
         self._init()
 
     def display(self, image: Image.Image) -> None:
@@ -157,9 +155,10 @@ class ST7789EyesDriver:
         self._blank_frame = Image.new("RGB", (config.width, config.height), (0, 0, 0))
 
         self._gpio_lines = self._init_gpio()
+        self._hardware_reset()  # 先统一复位两块屏
         self._left_display = self._build_display(cs=config.left_cs)
         self._right_display = (
-            self._build_display(cs=config.right_cs, skip_reset=True) if config.right_enabled else None
+            self._build_display(cs=config.right_cs) if config.right_enabled else None
         )
 
         self._render_thread = Thread(
@@ -287,6 +286,15 @@ class ST7789EyesDriver:
 
     # ── 硬件初始化 ────────────────────────────────────────
 
+    def _hardware_reset(self) -> None:
+        """统一复位所有屏幕（共享 RST 引脚，一次复位同时作用于所有屏）。"""
+        import time
+        import gpiod
+        self._gpio_lines.set_value(self.config.rst_gpio, gpiod.line.Value.INACTIVE)
+        time.sleep(0.1)
+        self._gpio_lines.set_value(self.config.rst_gpio, gpiod.line.Value.ACTIVE)
+        time.sleep(0.15)
+
     def _init_gpio(self) -> Any:
         try:
             import gpiod
@@ -306,7 +314,7 @@ class ST7789EyesDriver:
             },
         )
 
-    def _build_display(self, *, cs: int, skip_reset: bool = False) -> _ST7789Display:
+    def _build_display(self, *, cs: int) -> _ST7789Display:
         try:
             import spidev  # noqa: F401
         except ImportError as exc:
@@ -324,5 +332,4 @@ class ST7789EyesDriver:
             height=self.config.height,
             gpio_chip=self.config.gpio_chip,
             gpio_lines=self._gpio_lines,
-            skip_reset=skip_reset,
         )
