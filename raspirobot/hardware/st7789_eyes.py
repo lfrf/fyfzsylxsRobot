@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from queue import Queue, Empty
+from queue import Empty, Queue
 from threading import Event, Lock, Thread
 from time import monotonic, sleep
 from typing import Any
@@ -11,7 +11,7 @@ from PIL import Image, ImageOps, ImageSequence
 
 IMAGE_SUFFIXES = (".png", ".jpg", ".jpeg", ".bmp", ".webp")
 
-# ST7789V 初始化序列（不含软件复位，硬件复位由 ST7789EyesDriver 统一管理）
+# ST7789V 初始化序列（不含软件复位）
 _INIT_CMDS: list[tuple[int, list[int] | None]] = [
     (0x11, None),    # Sleep out
     (0x3A, [0x55]),  # 16-bit color (RGB565)
@@ -23,24 +23,32 @@ _INIT_CMDS: list[tuple[int, list[int] | None]] = [
 
 @dataclass(frozen=True)
 class ST7789EyeConfig:
-    assets_dir: Path
+    assets_dir: Path                        # 兼容旧配置，作为左眼素材目录的默认值
     fps: int = 12
     width: int = 240
     height: int = 320
     rotation: int = 0
     spi_port: int = 0
     spi_speed_hz: int = 40_000_000
-    dc_gpio: int = 25
-    rst_gpio: int = 24
+    rst_gpio: int = 22                      # 共享复位引脚
+    left_dc_gpio: int = 25                  # 左眼独立 DC
+    right_dc_gpio: int = 24                 # 右眼独立 DC
     left_cs: int = 0
     right_cs: int = 1
     right_enabled: bool = True
-    mirror_right: bool = False
+    left_assets_dir: Path | None = None     # 左眼素材目录，None 时使用 assets_dir
+    right_assets_dir: Path | None = None    # 右眼素材目录，None 时使用 assets_dir
     gpio_chip: str = "/dev/gpiochip0"
+
+    def get_left_assets_dir(self) -> Path:
+        return self.left_assets_dir or self.assets_dir
+
+    def get_right_assets_dir(self) -> Path:
+        return self.right_assets_dir or self.assets_dir
 
 
 class _ST7789Display:
-    """单块 ST7789V 屏幕底层驱动，每块屏有独立的渲染线程和帧队列。"""
+    """单块 ST7789V 屏幕，有独立的 DC 引脚、素材目录和渲染线程。"""
 
     def __init__(
         self,
@@ -52,13 +60,19 @@ class _ST7789Display:
         rst_gpio: int,
         width: int,
         height: int,
+        assets_dir: Path,
+        fps: int,
         gpio_lines: Any,
+        name: str = "eye",
     ) -> None:
         self.width = width
         self.height = height
+        self.assets_dir = assets_dir
         self._dc_gpio = dc_gpio
         self._rst_gpio = rst_gpio
         self._lines = gpio_lines
+        self._name = name
+        self._fps = fps
 
         import spidev
         import gpiod
@@ -69,25 +83,28 @@ class _ST7789Display:
         self._spi.max_speed_hz = spi_speed_hz
         self._spi.mode = 0
 
-        # 独立帧队列和渲染线程
-        self._queue: Queue[Image.Image | None] = Queue(maxsize=1)
+        self._blank = Image.new("RGB", (width, height), (0, 0, 0))
+        self._frame_cache: dict[str, list[Image.Image]] = {}
+        self._expression = "neutral"
+        self._frame_index = 0
+        self._last_expression = "neutral"
+        self._lock = Lock()
+        self._queue: Queue[Image.Image | None] = Queue(maxsize=2)
         self._stop = Event()
-        self._thread = Thread(target=self._render_loop, daemon=True)
-        self._thread.start()
 
-        # 复位由外部统一管理，这里只发初始化命令
+        # 初始化屏幕（复位已由外部统一完成）
         self._init()
 
-    def push_frame(self, image: Image.Image) -> None:
-        """推送一帧到队列，如果队列满则丢弃旧帧。"""
-        try:
-            self._queue.get_nowait()
-        except Empty:
-            pass
-        try:
-            self._queue.put_nowait(image)
-        except Exception:
-            pass
+        # 启动独立渲染线程
+        self._thread = Thread(target=self._render_loop, name=f"st7789-{name}", daemon=True)
+        self._thread.start()
+
+    def set_expression(self, expression: str) -> None:
+        normalized = (expression or "neutral").strip().lower() or "neutral"
+        with self._lock:
+            if normalized != self._expression:
+                self._expression = normalized
+                self._frame_index = 0
 
     def close(self) -> None:
         self._stop.set()
@@ -98,21 +115,36 @@ class _ST7789Display:
         self._thread.join(timeout=2.0)
         self._spi.close()
 
-    # ── 渲染线程（独立于主渲染循环）────────────────────────
+    # ── 渲染线程 ──────────────────────────────────────────
 
     def _render_loop(self) -> None:
+        frame_interval = 1.0 / max(1, self._fps)
         while not self._stop.is_set():
-            try:
-                frame = self._queue.get(timeout=0.1)
-            except Empty:
-                continue
-            if frame is None:
-                break
+            started = monotonic()
+
+            with self._lock:
+                expression = self._expression
+
+            frames = self._frames_for_expression(expression)
+            if not frames:
+                frames = [self._blank]
+
+            if expression != self._last_expression:
+                self._frame_index = 0
+                self._last_expression = expression
+
+            frame = frames[self._frame_index % len(frames)]
+            self._frame_index += 1
+
             try:
                 self._send_frame(frame)
             except Exception:
                 import traceback
                 traceback.print_exc()
+
+            elapsed = monotonic() - started
+            if elapsed < frame_interval:
+                sleep(frame_interval - elapsed)
 
     def _send_frame(self, image: Image.Image) -> None:
         self._set_window(0, 0, self.width - 1, self.height - 1)
@@ -120,6 +152,61 @@ class _ST7789Display:
         pixels = self._to_rgb565(image)
         self._data_bytes(pixels)
         self._lines.set_value(self._dc_gpio, self._gpiod.line.Value.INACTIVE)
+
+    # ── 素材加载 ──────────────────────────────────────────
+
+    def _frames_for_expression(self, expression: str) -> list[Image.Image]:
+        cached = self._frame_cache.get(expression)
+        if cached is not None:
+            return cached
+        frames = self._load_frames(expression)
+        self._frame_cache[expression] = frames
+        return frames
+
+    def _load_frames(self, expression: str) -> list[Image.Image]:
+        asset = self._expression_asset(expression) or self._expression_asset("neutral")
+        if asset is None:
+            return [self._blank]
+
+        if asset.is_dir():
+            files = sorted(
+                p for p in asset.iterdir()
+                if p.is_file() and p.suffix.lower() in IMAGE_SUFFIXES
+            )
+            return [self._load_image(f) for f in files] if files else [self._blank]
+
+        suffix = asset.suffix.lower()
+        if suffix == ".gif":
+            return self._load_gif(asset)
+        if suffix in IMAGE_SUFFIXES:
+            return [self._load_image(asset)]
+        return [self._blank]
+
+    def _expression_asset(self, expression: str) -> Path | None:
+        base = self.assets_dir / expression
+        if base.is_dir():
+            return base
+        for ext in [".gif"] + list(IMAGE_SUFFIXES):
+            candidate = base.with_suffix(ext)
+            if candidate.exists():
+                return candidate
+        return None
+
+    def _load_gif(self, path: Path) -> list[Image.Image]:
+        frames: list[Image.Image] = []
+        with Image.open(path) as image:
+            for gif_frame in ImageSequence.Iterator(image):
+                frames.append(self._fit_frame(gif_frame.convert("RGB")))
+        return frames or [self._blank]
+
+    def _load_image(self, path: Path) -> Image.Image:
+        with Image.open(path) as image:
+            return self._fit_frame(image.convert("RGB"))
+
+    def _fit_frame(self, frame: Image.Image) -> Image.Image:
+        if frame.size == (self.width, self.height):
+            return frame
+        return ImageOps.fit(frame, (self.width, self.height), method=Image.Resampling.BICUBIC)
 
     # ── 硬件操作 ──────────────────────────────────────────
 
@@ -166,148 +253,55 @@ class _ST7789Display:
 
 
 class ST7789EyesDriver:
-    """双眼 ST7789V 驱动，使用 spidev + gpiod，兼容树莓派5。
+    """双眼 ST7789V 驱动。
 
-    左右眼各有独立渲染线程，互不干扰。
-    接口：
-        driver.set_expression("neutral")
-        driver.close()
+    左右眼各有独立 DC 引脚、独立素材目录、独立渲染线程，完全并行。
     """
 
     def __init__(self, config: ST7789EyeConfig) -> None:
         self.config = config
-        self._lock = Lock()
-        self._stop = Event()
-        self._expression = "neutral"
-        self._frame_index = 0
-        self._last_expression = "neutral"
-        self._frame_cache: dict[str, list[Image.Image]] = {}
-        self._blank_frame = Image.new("RGB", (config.width, config.height), (0, 0, 0))
-
         self._gpio_lines = self._init_gpio()
         self._hardware_reset()
-        self._left_display = self._build_display(cs=config.left_cs)
-        self._right_display = (
-            self._build_display(cs=config.right_cs) if config.right_enabled else None
+
+        self._left = _ST7789Display(
+            spi_port=config.spi_port,
+            spi_cs=config.left_cs,
+            spi_speed_hz=config.spi_speed_hz,
+            dc_gpio=config.left_dc_gpio,
+            rst_gpio=config.rst_gpio,
+            width=config.width,
+            height=config.height,
+            assets_dir=config.get_left_assets_dir(),
+            fps=config.fps,
+            gpio_lines=self._gpio_lines,
+            name="left",
         )
 
-        self._render_thread = Thread(
-            target=self._render_loop, name="st7789-eyes-render", daemon=True
-        )
-        self._render_thread.start()
+        self._right: _ST7789Display | None = None
+        if config.right_enabled:
+            self._right = _ST7789Display(
+                spi_port=config.spi_port,
+                spi_cs=config.right_cs,
+                spi_speed_hz=config.spi_speed_hz,
+                dc_gpio=config.right_dc_gpio,
+                rst_gpio=config.rst_gpio,
+                width=config.width,
+                height=config.height,
+                assets_dir=config.get_right_assets_dir(),
+                fps=config.fps,
+                gpio_lines=self._gpio_lines,
+                name="right",
+            )
 
     def set_expression(self, expression: str) -> None:
-        normalized = (expression or "neutral").strip().lower() or "neutral"
-        with self._lock:
-            if normalized != self._expression:
-                self._expression = normalized
-                self._frame_index = 0
+        self._left.set_expression(expression)
+        if self._right is not None:
+            self._right.set_expression(expression)
 
     def close(self) -> None:
-        self._stop.set()
-        self._render_thread.join(timeout=2.0)
-        self._left_display.close()
-        if self._right_display is not None:
-            self._right_display.close()
-
-    # ── 主渲染循环（只负责推帧，不直接操作 SPI）─────────────
-
-    def _render_loop(self) -> None:
-        frame_interval = 1.0 / max(1, self.config.fps)
-        while not self._stop.is_set():
-            started = monotonic()
-            expression = self._get_expression()
-            frames = self._frames_for_expression(expression)
-            if not frames:
-                frames = [self._blank_frame]
-
-            if expression != self._last_expression:
-                self._frame_index = 0
-                self._last_expression = expression
-
-            frame = frames[self._frame_index % len(frames)]
-            self._frame_index += 1
-
-            # 推帧到左眼队列
-            self._left_display.push_frame(frame)
-
-            # 推帧到右眼队列
-            if self._right_display is not None:
-                right_frame = ImageOps.mirror(frame) if self.config.mirror_right else frame
-                self._right_display.push_frame(right_frame)
-
-            elapsed = monotonic() - started
-            if elapsed < frame_interval:
-                sleep(frame_interval - elapsed)
-
-    def _get_expression(self) -> str:
-        with self._lock:
-            return self._expression
-
-    # ── 素材加载 ──────────────────────────────────────────
-
-    def _frames_for_expression(self, expression: str) -> list[Image.Image]:
-        cached = self._frame_cache.get(expression)
-        if cached is not None:
-            return cached
-        frames = self._load_frames(expression)
-        self._frame_cache[expression] = frames
-        return frames
-
-    def _load_frames(self, expression: str) -> list[Image.Image]:
-        primary = self._expression_asset(expression)
-        fallback = self._expression_asset("neutral")
-        asset = primary or fallback
-        if asset is None:
-            return [self._blank_frame]
-
-        if asset.is_dir():
-            files = sorted(
-                path
-                for path in asset.iterdir()
-                if path.is_file() and path.suffix.lower() in IMAGE_SUFFIXES
-            )
-            if not files:
-                return [self._blank_frame]
-            return [self._load_image(f) for f in files]
-
-        suffix = asset.suffix.lower()
-        if suffix == ".gif":
-            return self._load_gif(asset)
-        if suffix in IMAGE_SUFFIXES:
-            return [self._load_image(asset)]
-        return [self._blank_frame]
-
-    def _expression_asset(self, expression: str) -> Path | None:
-        base = self.config.assets_dir / expression
-        if base.is_dir():
-            return base
-        candidates = [base.with_suffix(".gif")]
-        candidates.extend(base.with_suffix(ext) for ext in IMAGE_SUFFIXES)
-        for candidate in candidates:
-            if candidate.exists():
-                return candidate
-        return None
-
-    def _load_gif(self, path: Path) -> list[Image.Image]:
-        frames: list[Image.Image] = []
-        with Image.open(path) as image:
-            for gif_frame in ImageSequence.Iterator(image):
-                frames.append(self._fit_frame(gif_frame.convert("RGB")))
-        return frames or [self._blank_frame]
-
-    def _load_image(self, path: Path) -> Image.Image:
-        with Image.open(path) as image:
-            return self._fit_frame(image.convert("RGB"))
-
-    def _fit_frame(self, frame: Image.Image) -> Image.Image:
-        if frame.size == (self.config.width, self.config.height):
-            return frame
-        return ImageOps.fit(
-            frame,
-            (self.config.width, self.config.height),
-            method=Image.Resampling.BICUBIC,
-        )
+        self._left.close()
+        if self._right is not None:
+            self._right.close()
 
     # ── 硬件初始化 ────────────────────────────────────────
 
@@ -325,7 +319,11 @@ class ST7789EyesDriver:
         except ImportError as exc:
             raise RuntimeError("gpiod 未安装，请运行: pip install gpiod") from exc
 
-        gpio_pins = {self.config.dc_gpio, self.config.rst_gpio}
+        gpio_pins = {
+            self.config.rst_gpio,
+            self.config.left_dc_gpio,
+            self.config.right_dc_gpio,
+        }
         return gpiod.request_lines(
             self.config.gpio_chip,
             consumer="st7789-eyes",
@@ -334,21 +332,4 @@ class ST7789EyesDriver:
                     direction=gpiod.line.Direction.OUTPUT
                 )
             },
-        )
-
-    def _build_display(self, *, cs: int) -> _ST7789Display:
-        try:
-            import spidev  # noqa: F401
-        except ImportError as exc:
-            raise RuntimeError("spidev 未安装，请运行: pip install spidev") from exc
-
-        return _ST7789Display(
-            spi_port=self.config.spi_port,
-            spi_cs=cs,
-            spi_speed_hz=self.config.spi_speed_hz,
-            dc_gpio=self.config.dc_gpio,
-            rst_gpio=self.config.rst_gpio,
-            width=self.config.width,
-            height=self.config.height,
-            gpio_lines=self._gpio_lines,
         )

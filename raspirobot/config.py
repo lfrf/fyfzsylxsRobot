@@ -57,6 +57,10 @@ class Settings:
     eyes_right_enabled: bool
     eyes_mirror_right: bool
     eyes_gpio_chip: str
+    eyes_left_dc_gpio: int
+    eyes_right_dc_gpio: int
+    eyes_left_assets_dir: str
+    eyes_right_assets_dir: str
 
 
 def load_settings() -> Settings:
@@ -114,6 +118,10 @@ def load_settings() -> Settings:
         eyes_right_enabled=_bool_env("ROBOT_EYES_RIGHT_ENABLED", default=True),
         eyes_mirror_right=_bool_env("ROBOT_EYES_MIRROR_RIGHT", default=False),
         eyes_gpio_chip=os.getenv("ROBOT_EYES_GPIO_CHIP", "/dev/gpiochip0").strip() or "/dev/gpiochip0",
+        eyes_left_dc_gpio=int(os.getenv("ROBOT_EYES_LEFT_DC_GPIO", "25")),
+        eyes_right_dc_gpio=int(os.getenv("ROBOT_EYES_RIGHT_DC_GPIO", "24")),
+        eyes_left_assets_dir=os.getenv("ROBOT_EYES_LEFT_ASSETS_DIR", "").strip(),
+        eyes_right_assets_dir=os.getenv("ROBOT_EYES_RIGHT_ASSETS_DIR", "").strip(),
     )
 
 

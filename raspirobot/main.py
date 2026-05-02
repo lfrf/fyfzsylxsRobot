@@ -88,21 +88,26 @@ def build_eyes_driver(settings: Settings) -> MockEyesDriver | ST7789EyesDriver:
     if settings.eyes_provider != "st7789":
         return MockEyesDriver()
     try:
+        base_assets = Path(settings.eyes_assets_dir)
+        left_assets = Path(settings.eyes_left_assets_dir) if settings.eyes_left_assets_dir else None
+        right_assets = Path(settings.eyes_right_assets_dir) if settings.eyes_right_assets_dir else None
         return ST7789EyesDriver(
             ST7789EyeConfig(
-                assets_dir=Path(settings.eyes_assets_dir),
+                assets_dir=base_assets,
                 fps=settings.eyes_frame_fps,
                 width=settings.eyes_screen_width,
                 height=settings.eyes_screen_height,
                 rotation=settings.eyes_rotation,
                 spi_port=settings.eyes_spi_port,
                 spi_speed_hz=settings.eyes_spi_speed_hz,
-                dc_gpio=settings.eyes_dc_gpio,
                 rst_gpio=settings.eyes_rst_gpio,
+                left_dc_gpio=settings.eyes_left_dc_gpio,
+                right_dc_gpio=settings.eyes_right_dc_gpio,
                 left_cs=settings.eyes_left_cs,
                 right_cs=settings.eyes_right_cs,
                 right_enabled=settings.eyes_right_enabled,
-                mirror_right=settings.eyes_mirror_right,
+                left_assets_dir=left_assets,
+                right_assets_dir=right_assets,
                 gpio_chip=settings.eyes_gpio_chip,
             )
         )
