@@ -228,11 +228,11 @@ class _ST7789Display:
 
     def _cmd(self, cmd: int) -> None:
         self._lines.set_value(self._dc_gpio, self._gpiod.line.Value.INACTIVE)
-        self._spi.xfer2([cmd])
+        self._spi.writebytes2(bytearray([cmd]))
 
     def _data(self, data: list[int]) -> None:
         self._lines.set_value(self._dc_gpio, self._gpiod.line.Value.ACTIVE)
-        self._spi.xfer2(data)
+        self._spi.writebytes2(bytearray(data))
 
     def _data_bytes(self, data: bytes | bytearray) -> None:
         self._lines.set_value(self._dc_gpio, self._gpiod.line.Value.ACTIVE)
