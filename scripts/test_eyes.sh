@@ -21,4 +21,25 @@ export ROBOT_EYES_LEFT_CS=0
 export ROBOT_EYES_RIGHT_CS=1
 export ROBOT_EYES_RIGHT_ENABLED=false
 
+echo "=== 检查 st7789 包 ==="
+python -c "import st7789; print('st7789 OK:', st7789.__file__)" 2>&1 || echo "st7789 包未安装"
+
+echo ""
+echo "=== 检查 SPI 设备 ==="
+ls /dev/spidev* 2>&1 || echo "SPI 设备不存在，请先开启 SPI"
+
+echo ""
+echo "=== 检查驱动初始化 ==="
+python -c "
+from raspirobot.config import load_settings
+from raspirobot.main import build_eyes_driver
+s = load_settings()
+print('provider:', s.eyes_provider)
+print('assets_dir:', s.eyes_assets_dir)
+eyes = build_eyes_driver(s)
+print('driver type:', type(eyes).__name__)
+" 2>&1
+
+echo ""
+echo "=== 运行眼睛 demo ==="
 python -m raspirobot.scripts.st7789_eyes_demo --expressions neutral --hold-seconds 5
