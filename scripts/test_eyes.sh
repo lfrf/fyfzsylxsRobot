@@ -51,4 +51,4 @@ print('driver type:', type(eyes).__name__)
 
 echo ""
 echo "=== 运行眼睛 demo ==="
-python -m raspirobot.scripts.st7789_eyes_demo --expressions neutral --hold-seconds 5
+python -m raspirobot.scripts.st7789_eyes_demo --expressions neutral happy blink neutral --hold-seconds 3 --loops 1
