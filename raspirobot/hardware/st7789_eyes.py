@@ -76,9 +76,10 @@ class _ST7789Display:
         """将 PIL Image 推送到屏幕，图像必须是 RGB 模式且尺寸匹配。"""
         self._set_window(0, 0, self.width - 1, self.height - 1)
         self._cmd(0x2C)
-        # 转换为 RGB565
         pixels = self._to_rgb565(image)
         self._data_bytes(pixels)
+        # 推帧完成后将 DC 拉低，避免下一块屏初始化时状态混乱
+        self._lines.set_value(self._dc_gpio, self._gpiod.line.Value.INACTIVE)
 
     def close(self) -> None:
         self._spi.close()
@@ -214,6 +215,7 @@ class ST7789EyesDriver:
         self._left_display.display(frame)
         if self._right_display is None:
             return
+        sleep(0.002)  # 等待 SPI 总线稳定后再切换到右眼
         if self.config.mirror_right:
             self._right_display.display(ImageOps.mirror(frame))
         else:
