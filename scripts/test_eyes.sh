@@ -9,6 +9,8 @@ export PYTHONPATH=/home/pi/Desktop/code/fyfzsylxsRobot
 
 export ROBOT_EYES_PROVIDER=st7789
 export ROBOT_EYES_ASSETS_DIR=/home/pi/Desktop/code/fyfzsylxsRobot/raspirobot/assets/eyes
+export ROBOT_EYES_LEFT_ASSETS_DIR=/home/pi/Desktop/code/fyfzsylxsRobot/raspirobot/assets/eyes/left
+export ROBOT_EYES_RIGHT_ASSETS_DIR=/home/pi/Desktop/code/fyfzsylxsRobot/raspirobot/assets/eyes/right
 export ROBOT_EYES_FRAME_FPS=12
 export ROBOT_EYES_SCREEN_WIDTH=240
 export ROBOT_EYES_SCREEN_HEIGHT=320
