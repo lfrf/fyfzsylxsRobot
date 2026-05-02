@@ -156,14 +156,15 @@ class ST7789EyesDriver:
         return ImageOps.fit(frame, (self.config.width, self.config.height), method=Image.Resampling.BICUBIC)
 
     def _build_display(self, st7789: Any, *, cs: int) -> Any:
+        # Pimoroni st7789 1.0.1: port, cs, dc are positional args
         return st7789.ST7789(
-            height=self.config.height,
-            width=self.config.width,
-            rotation=self.config.rotation,
-            port=self.config.spi_port,
-            cs=cs,
-            dc=self.config.dc_gpio,
+            self.config.spi_port,
+            cs,
+            self.config.dc_gpio,
             rst=self.config.rst_gpio,
+            width=self.config.width,
+            height=self.config.height,
+            rotation=self.config.rotation,
             spi_speed_hz=self.config.spi_speed_hz,
         )
 
