@@ -212,13 +212,23 @@ class ST7789EyesDriver:
             return self._expression
 
     def _display_frame(self, frame: Image.Image) -> None:
-        self._left_display.display(frame)
+        # 如果素材宽度明显大于高度，认为是双眼合图，裁切左右两半
+        w, h = frame.size
+        if w >= h * 1.5:
+            mid = w // 2
+            left_frame = self._fit_frame(frame.crop((0, 0, mid, h)))
+            right_frame = self._fit_frame(frame.crop((mid, 0, w, h)))
+        else:
+            left_frame = frame
+            right_frame = frame
+
+        self._left_display.display(left_frame)
         if self._right_display is None:
             return
         if self.config.mirror_right:
-            self._right_display.display(ImageOps.mirror(frame))
+            self._right_display.display(ImageOps.mirror(right_frame))
         else:
-            self._right_display.display(frame)
+            self._right_display.display(right_frame)
 
     # ── 素材加载 ──────────────────────────────────────────
 
@@ -269,12 +279,12 @@ class ST7789EyesDriver:
         frames: list[Image.Image] = []
         with Image.open(path) as image:
             for gif_frame in ImageSequence.Iterator(image):
-                frames.append(self._fit_frame(gif_frame.convert("RGB")))
+                frames.append(gif_frame.convert("RGB").copy())  # 保留原始尺寸
         return frames or [self._blank_frame]
 
     def _load_image(self, path: Path) -> Image.Image:
         with Image.open(path) as image:
-            return self._fit_frame(image.convert("RGB"))
+            return image.convert("RGB").copy()  # 保留原始尺寸，裁切在 _display_frame 里做
 
     def _fit_frame(self, frame: Image.Image) -> Image.Image:
         if frame.size == (self.config.width, self.config.height):
