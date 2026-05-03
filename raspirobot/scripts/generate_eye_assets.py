@@ -201,14 +201,14 @@ def _happy_frames() -> list[Image.Image]:
     return frames
 
 
-# ── comfort：温柔放松眼，不做明显下垂，避免显得低落 ───────────────
+# ── comfort：温柔微闭眼，整体轻微下移，表达放松但不低落 ───────────
 
 def _comfort_frames() -> list[Image.Image]:
     frames = []
-    offsets = [(0, 0), (1, 0), (1, -1), (0, 0), (-1, -1), (-1, 0)]
+    offsets = [(0, 1), (1, 1), (1, 0), (0, 1), (-1, 0), (-1, 1)]
     for dx, dy in offsets:
         img, draw = _canvas()
-        _draw_eye(draw, CX, CY + 1, dx, dy, 0.08, pupil_r=30)
+        _draw_eye(draw, CX, CY + 4, dx, dy, 0.16, pupil_r=30)
         frames.append(img)
 
     return frames
