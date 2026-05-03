@@ -98,6 +98,22 @@ class _ST7789Display:
         self._queue: Queue[bytearray | None] = Queue(maxsize=2)
         self._stop = Event()
 
+        # 局部刷新区域：只刷新眼睛内容所在的区域，减少传输数据量
+        # 在旋转后的坐标系中，眼睛内容约在中心 192×192 区域
+        pad = 8  # 边距
+        cx, cy = width // 2, height // 2
+        half = 96 + pad  # 192/2 + 边距
+        self._partial_rect: tuple[int, int, int, int] | None = (
+            max(0, cx - half),
+            max(0, cy - half),
+            min(width - 1, cx + half - 1),
+            min(height - 1, cy + half - 1),
+        )
+        px0, py0, px1, py1 = self._partial_rect
+        self._partial_w = px1 - px0 + 1
+        self._partial_h = py1 - py0 + 1
+        self._blank = bytearray(self._partial_w * self._partial_h * 2)
+
         # 初始化屏幕（复位已由外部统一完成）
         self._init()
 
@@ -157,8 +173,12 @@ class _ST7789Display:
                 sleep(frame_interval - elapsed)
 
     def _send_frame(self, frame: bytes | bytearray) -> None:
-        """frame 是预转换好的 RGB565 字节流。"""
-        self._set_window(0, 0, self.width - 1, self.height - 1)
+        """frame 是预转换好的 RGB565 字节流，支持全帧或局部帧。"""
+        if hasattr(self, '_partial_rect') and self._partial_rect is not None:
+            x0, y0, x1, y1 = self._partial_rect
+            self._set_window(x0, y0, x1, y1)
+        else:
+            self._set_window(0, 0, self.width - 1, self.height - 1)
         self._cmd(0x2C)
         self._data_bytes(frame)
         self._lines.set_value(self._dc_gpio, self._gpiod.line.Value.INACTIVE)
@@ -216,9 +236,14 @@ class _ST7789Display:
     def _fit_frame(self, frame: Image.Image) -> Image.Image:
         if self._img_rotation:
             frame = frame.rotate(-self._img_rotation, expand=True)
-        if frame.size == (self.width, self.height):
-            return frame
-        return ImageOps.fit(frame, (self.width, self.height), method=Image.Resampling.BICUBIC)
+        # 先缩放到全屏尺寸
+        if frame.size != (self.width, self.height):
+            frame = ImageOps.fit(frame, (self.width, self.height), method=Image.Resampling.BICUBIC)
+        # 再裁剪到局部刷新区域
+        if self._partial_rect is not None:
+            x0, y0, x1, y1 = self._partial_rect
+            frame = frame.crop((x0, y0, x1 + 1, y1 + 1))
+        return frame
 
     # ── 硬件操作 ──────────────────────────────────────────
 
@@ -247,14 +272,7 @@ class _ST7789Display:
 
     def _data_bytes(self, data: bytes | bytearray) -> None:
         self._lines.set_value(self._dc_gpio, self._gpiod.line.Value.ACTIVE)
-        # writebytes2 支持大缓冲区，分两块传输（SPI1 单次上限约 65535 字节）
-        # 一帧 240×320×2 = 153600 字节，分两块
-        mid = 65535
-        if len(data) <= mid:
-            self._spi.writebytes2(data)
-        else:
-            self._spi.writebytes2(data[:mid])
-            self._spi.writebytes2(data[mid:])
+        self._spi.writebytes2(data)
 
     @staticmethod
     def _to_rgb565(image: Image.Image) -> bytearray:
