@@ -272,10 +272,11 @@ def _draw_closed_line(draw: ImageDraw.ImageDraw, cx: int, cy: int, width: int, t
 
 def _blink_frames() -> list[Image.Image]:
     # 符号化线条眨眼：避免整只眼睛从圆形大面积压缩，降低眨眼瞬间撕裂感。
+    # 开眼帧沿用 neutral 的大瞳孔，避免待机 → 眨眼时瞳孔突然变小。
     frames = []
 
     img, draw = _canvas()
-    _draw_eye(draw, CX, CY, 0, 0, 0.0)
+    _draw_eye(draw, CX, CY, 0, 0, 0.0, pupil_r=32)
     frames.append(img)
 
     img, draw = _canvas()
@@ -291,7 +292,7 @@ def _blink_frames() -> list[Image.Image]:
     frames.append(img)
 
     img, draw = _canvas()
-    _draw_eye(draw, CX, CY, 0, 0, 0.0)
+    _draw_eye(draw, CX, CY, 0, 0, 0.0, pupil_r=32)
     frames.append(img)
 
     return frames
@@ -319,19 +320,25 @@ def main() -> None:
         default="raspirobot/assets/eyes",
         help="输出根目录，左眼放 left/，右眼放 right/",
     )
+    parser.add_argument(
+        "--include-happy",
+        action="store_true",
+        help="同时生成 happy。默认跳过 happy，避免覆盖手工绘制的开心表情素材。",
+    )
     args = parser.parse_args()
 
     root = Path(args.out_dir)
 
     expressions = {
         "neutral": _neutral_frames,
-        "happy": _happy_frames,
         "comfort": _comfort_frames,
         "listening": _listening_frames,
         "thinking": _thinking_frames,
         "sleep": _sleep_frames,
         "blink": _blink_frames,
     }
+    if args.include_happy:
+        expressions["happy"] = _happy_frames
 
     for name, fn in expressions.items():
         print(f"生成 {name}...")
