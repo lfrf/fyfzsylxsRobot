@@ -194,6 +194,12 @@ def _blink_frames() -> list[Image.Image]:
 
 def _save(frames: list[Image.Image], out_dir: Path) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    # 重新生成素材前清理旧图片，避免旧帧残留被驱动继续加载。
+    for old_file in out_dir.iterdir():
+        if old_file.is_file() and old_file.suffix.lower() in {".png", ".jpg", ".jpeg", ".bmp", ".webp", ".gif"}:
+            old_file.unlink()
+
     for i, frame in enumerate(frames):
         frame.save(out_dir / f"{i:03d}.png")
     print(f"  生成 {len(frames)} 帧 → {out_dir}")
