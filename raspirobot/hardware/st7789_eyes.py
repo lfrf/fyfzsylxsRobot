@@ -336,6 +336,7 @@ class ST7789EyesDriver:
         self._hardware_reset()
         self._animation_clock = _SharedAnimationClock(config.fps)
         self._stop = Event()
+        self._render_left_first = True
 
         self._left = _ST7789Display(
             spi_port=config.spi_port,
@@ -393,9 +394,15 @@ class ST7789EyesDriver:
         while not self._stop.is_set():
             started = monotonic()
             try:
-                self._left.render_once()
-                if self._right is not None:
+                if self._right is None:
+                    self._left.render_once()
+                elif self._render_left_first:
+                    self._left.render_once()
                     self._right.render_once()
+                else:
+                    self._right.render_once()
+                    self._left.render_once()
+                self._render_left_first = not self._render_left_first
             except Exception:
                 import traceback
                 traceback.print_exc()
