@@ -111,18 +111,23 @@ def _canvas() -> tuple[Image.Image, ImageDraw.ImageDraw]:
     return img, ImageDraw.Draw(img)
 
 
-# ── neutral：瞳孔漂移 + 眨眼 ──────────────────────────────
+# ── neutral：缓慢瞳孔漂移 + 轻柔眨眼 ───────────────────────
 
 def _neutral_frames() -> list[Image.Image]:
     frames = []
-    total = 24
+    total = 32
 
-    # 瞳孔漂移轨迹（正弦波）
-    drift_x = [int(6 * math.sin(2 * math.pi * i / total)) for i in range(total)]
-    drift_y = [int(3 * math.sin(4 * math.pi * i / total)) for i in range(total)]
+    # 陪伴型机器人更适合慢一点、幅度小一点的漂移
+    drift_x = [int(4 * math.sin(2 * math.pi * i / total)) for i in range(total)]
+    drift_y = [int(2 * math.sin(2 * math.pi * i / total)) for i in range(total)]
 
-    # 眨眼在第 16-21 帧：睁→半闭→全闭→全闭→半闭→睁
-    blink_frames = {16: 0.5, 17: 1.0, 18: 1.0, 19: 1.0, 20: 0.5}
+    # 眨眼改成更轻柔的半闭 → 全闭 → 半闭，减少大幅跳变
+    blink_frames = {
+        22: 0.45,
+        23: 1.0,
+        24: 1.0,
+        25: 0.45,
+    }
 
     for i in range(total):
         img, draw = _canvas()
@@ -169,11 +174,12 @@ def _draw_crescent(img: Image.Image, cx: int, cy: int, dy: int = 0) -> None:
 
 def _happy_frames() -> list[Image.Image]:
     frames = []
-    for i in range(8):
+    total = 16
+    for i in range(total):
         img, draw = _canvas()
 
-        # 轻微上下浮动
-        dy = int(4 * math.sin(2 * math.pi * i / 8))
+        # 可爱陪伴型笑眼：更慢、更小幅的上下浮动
+        dy = int(2 * math.sin(2 * math.pi * i / total))
         _draw_crescent(img, CX, CY, dy)
 
         frames.append(img)
@@ -185,7 +191,8 @@ def _happy_frames() -> list[Image.Image]:
 
 def _comfort_frames() -> list[Image.Image]:
     frames = []
-    for i in range(8):
+    total = 16
+    for i in range(total):
         img, draw = _canvas()
 
         # 眼白
@@ -194,8 +201,8 @@ def _comfort_frames() -> list[Image.Image]:
             fill=WHITE,
         )
 
-        # 瞳孔（稍微偏下）
-        dy = 8 + int(2 * math.sin(2 * math.pi * i / 8))
+        # 瞳孔（稍微偏下，慢速呼吸感）
+        dy = 8 + int(1 * math.sin(2 * math.pi * i / total))
         draw.ellipse(
             [CX - PUPIL_R, CY - PUPIL_R + dy, CX + PUPIL_R, CY + PUPIL_R + dy],
             fill=BLACK,
@@ -225,15 +232,16 @@ def _comfort_frames() -> list[Image.Image]:
 
 def _listening_frames() -> list[Image.Image]:
     frames = []
-    for i in range(8):
+    total = 16
+    for i in range(total):
         img, draw = _canvas()
 
         # 眼白（稍大）
         r = EYEBALL_R + 6
         draw.ellipse([CX - r, CY - r, CX + r, CY + r], fill=WHITE)
 
-        # 瞳孔居中，轻微脉动
-        pr = PUPIL_R - 4 + int(4 * math.sin(2 * math.pi * i / 8))
+        # 瞳孔居中，轻微慢速脉动，避免快速放大缩小造成撕裂感
+        pr = PUPIL_R - 4 + int(2 * math.sin(2 * math.pi * i / total))
         draw.ellipse([CX - pr, CY - pr, CX + pr, CY + pr], fill=BLACK)
 
         # 高光
@@ -251,8 +259,8 @@ def _listening_frames() -> list[Image.Image]:
 # ── blink：快速眨眼过渡 ───────────────────────────────────
 
 def _blink_frames() -> list[Image.Image]:
-    # 睁开 → 半闭 → 全闭(长条) → 全闭 → 半闭 → 睁开，共8帧
-    blink_seq = [0.0, 0.0, 0.5, 1.0, 1.0, 0.5, 0.0, 0.0]
+    # 慢速柔和眨眼：减少睁开/闭合之间的大面积瞬间跳变
+    blink_seq = [0.0, 0.35, 0.75, 1.0, 1.0, 0.75, 0.35, 0.0]
     frames = []
     for b in blink_seq:
         img, draw = _canvas()
