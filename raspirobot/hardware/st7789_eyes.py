@@ -94,6 +94,8 @@ class _ST7789Display:
         self._expression = "neutral"
         self._frame_index = 0
         self._last_expression = "neutral"
+        self._fallback_expression = "neutral"
+        self._oneshot_expressions = {"blink"}
         self._lock = Lock()
         self._queue: Queue[bytearray | None] = Queue(maxsize=2)
         self._stop = Event()
@@ -127,6 +129,8 @@ class _ST7789Display:
             if normalized != self._expression:
                 self._expression = normalized
                 self._frame_index = 0
+                if normalized not in self._oneshot_expressions:
+                    self._fallback_expression = normalized
 
     def close(self) -> None:
         self._stop.set()
@@ -156,8 +160,15 @@ class _ST7789Display:
                 self._frame_index = 0
                 self._last_expression = expression
 
-            frame = frames[self._frame_index % len(frames)]
+            frame_count = len(frames)
+            frame = frames[self._frame_index % frame_count]
             self._frame_index += 1
+
+            if expression in self._oneshot_expressions and self._frame_index >= frame_count:
+                with self._lock:
+                    if self._expression == expression:
+                        self._expression = self._fallback_expression
+                        self._frame_index = 0
 
             # 只有帧内容变化时才发送，减少持续撕裂
             if frame is not last_sent:
