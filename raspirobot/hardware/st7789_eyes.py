@@ -51,6 +51,32 @@ class ST7789EyeConfig:
         return self.right_assets_dir or self.assets_dir
 
 
+class _SharedAnimationClock:
+    """为左右眼提供共享的帧时钟，避免各自线程独立累加 frame_index 导致相位漂移。"""
+
+    def __init__(self, fps: int) -> None:
+        self._fps = max(1, fps)
+        self._lock = Lock()
+        self._expression_started_at: dict[str, float] = {}
+
+    def reset_expression(self, expression: str) -> None:
+        with self._lock:
+            self._expression_started_at[(expression or "neutral").strip().lower() or "neutral"] = monotonic()
+
+    def frame_index_for(self, expression: str, frame_count: int) -> int:
+        if frame_count <= 1:
+            return 0
+        normalized = (expression or "neutral").strip().lower() or "neutral"
+        now = monotonic()
+        with self._lock:
+            started_at = self._expression_started_at.get(normalized)
+            if started_at is None:
+                started_at = now
+                self._expression_started_at[normalized] = started_at
+        elapsed = max(0.0, now - started_at)
+        return int(elapsed * self._fps) % frame_count
+
+
 class _ST7789Display:
     """单块 ST7789V 屏幕，有独立的 DC 引脚、素材目录和渲染线程。"""
 
@@ -69,6 +95,7 @@ class _ST7789Display:
         gpio_lines: Any,
         name: str = "eye",
         img_rotation: int = 0,
+        animation_clock: _SharedAnimationClock | None = None,
     ) -> None:
         self.width = width
         self.height = height
@@ -79,6 +106,7 @@ class _ST7789Display:
         self._name = name
         self._fps = fps
         self._img_rotation = img_rotation
+        self._animation_clock = animation_clock
 
         import spidev
         import gpiod
@@ -94,8 +122,6 @@ class _ST7789Display:
         self._expression = "neutral"
         self._frame_index = 0
         self._last_expression = "neutral"
-        self._fallback_expression = "neutral"
-        self._oneshot_expressions = {"blink"}
         self._lock = Lock()
         self._queue: Queue[bytearray | None] = Queue(maxsize=2)
         self._stop = Event()
@@ -125,12 +151,14 @@ class _ST7789Display:
 
     def set_expression(self, expression: str) -> None:
         normalized = (expression or "neutral").strip().lower() or "neutral"
+        changed = False
         with self._lock:
             if normalized != self._expression:
                 self._expression = normalized
                 self._frame_index = 0
-                if normalized not in self._oneshot_expressions:
-                    self._fallback_expression = normalized
+                changed = True
+        if changed and self._animation_clock is not None:
+            self._animation_clock.reset_expression(normalized)
 
     def close(self) -> None:
         self._stop.set()
@@ -159,16 +187,15 @@ class _ST7789Display:
             if expression != self._last_expression:
                 self._frame_index = 0
                 self._last_expression = expression
+                if self._animation_clock is not None:
+                    self._animation_clock.reset_expression(expression)
 
-            frame_count = len(frames)
-            frame = frames[self._frame_index % frame_count]
-            self._frame_index += 1
-
-            if expression in self._oneshot_expressions and self._frame_index >= frame_count:
-                with self._lock:
-                    if self._expression == expression:
-                        self._expression = self._fallback_expression
-                        self._frame_index = 0
+            if self._animation_clock is not None:
+                self._frame_index = self._animation_clock.frame_index_for(expression, len(frames))
+                frame = frames[self._frame_index]
+            else:
+                frame = frames[self._frame_index % len(frames)]
+                self._frame_index += 1
 
             # 只有帧内容变化时才发送，减少持续撕裂
             if frame is not last_sent:
@@ -331,6 +358,7 @@ class ST7789EyesDriver:
         self.config = config
         self._gpio_lines = self._init_gpio()
         self._hardware_reset()
+        self._animation_clock = _SharedAnimationClock(config.fps)
 
         self._left = _ST7789Display(
             spi_port=config.spi_port,
@@ -345,6 +373,7 @@ class ST7789EyesDriver:
             gpio_lines=self._gpio_lines,
             name="left",
             img_rotation=config.left_rotation,
+            animation_clock=self._animation_clock,
         )
 
         self._right: _ST7789Display | None = None
@@ -362,6 +391,7 @@ class ST7789EyesDriver:
                 gpio_lines=self._gpio_lines,
                 name="right",
                 img_rotation=config.right_rotation,
+                animation_clock=self._animation_clock,
             )
 
     def set_expression(self, expression: str) -> None:
