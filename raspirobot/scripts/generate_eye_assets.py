@@ -177,6 +177,31 @@ def _listening_frames() -> list[Image.Image]:
     return frames
 
 
+# ── thinking：轻微偏视，表达思考 ──────────────────────────
+
+def _thinking_frames() -> list[Image.Image]:
+    frames = []
+    offsets = [(4, -3), (5, -3), (4, -2), (3, -3)]
+    for dx, dy in offsets:
+        img, draw = _canvas()
+        _draw_eye(draw, CX, CY, dx, dy, 0.0)
+        frames.append(img)
+
+    return frames
+
+
+# ── sleep：闭眼休眠，几乎静止 ────────────────────────────
+
+def _sleep_frames() -> list[Image.Image]:
+    frames = []
+    for dy in (0, 1):
+        img, draw = _canvas()
+        _draw_closed_line(draw, CX, CY + dy, width=96, thickness=6)
+        frames.append(img)
+
+    return frames
+
+
 # ── blink：demo 风格线条式眨眼 ────────────────────────────
 
 def _draw_closed_bar(draw: ImageDraw.ImageDraw, cx: int, cy: int, width: int, height: int) -> None:
@@ -253,6 +278,8 @@ def main() -> None:
         "happy": _happy_frames,
         "comfort": _comfort_frames,
         "listening": _listening_frames,
+        "thinking": _thinking_frames,
+        "sleep": _sleep_frames,
         "blink": _blink_frames,
     }
 
