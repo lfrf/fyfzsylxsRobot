@@ -40,6 +40,7 @@ def _draw_eye(
     pupil_dx: int = 0,
     pupil_dy: int = 0,
     blink: float = 0.0,  # 0.0=全开, 1.0=全闭
+    pupil_r: int = PUPIL_R,
 ) -> None:
     """画一只眼睛。
     blink=0: 全开
@@ -68,11 +69,11 @@ def _draw_eye(
         )
 
         # 瞳孔随之压缩
-        pupil_half_h = max(int(PUPIL_R * (1 - blink)), BAR_H // 2 - 2)
+        pupil_half_h = max(int(pupil_r * (1 - blink)), BAR_H // 2 - 2)
         px = cx + pupil_dx
         py = cy + pupil_dy
         draw.ellipse(
-            [px - PUPIL_R, py - pupil_half_h, px + PUPIL_R, py + pupil_half_h],
+            [px - pupil_r, py - pupil_half_h, px + pupil_r, py + pupil_half_h],
             fill=BLACK,
         )
 
@@ -95,12 +96,12 @@ def _draw_eye(
     px = cx + pupil_dx
     py = cy + pupil_dy
     draw.ellipse(
-        [px - PUPIL_R, py - PUPIL_R, px + PUPIL_R, py + PUPIL_R],
+        [px - pupil_r, py - pupil_r, px + pupil_r, py + pupil_r],
         fill=BLACK,
     )
 
-    hx = px - PUPIL_R // 3
-    hy = py - PUPIL_R // 3
+    hx = px - pupil_r // 3
+    hy = py - pupil_r // 3
     draw.ellipse(
         [hx - HIGHLIGHT_R, hy - HIGHLIGHT_R, hx + HIGHLIGHT_R, hy + HIGHLIGHT_R],
         fill=WHITE,
@@ -121,7 +122,7 @@ def _neutral_frames() -> list[Image.Image]:
     # 多数时间近似静态，只保留极小幅度的瞳孔漂移。
     for dx, dy in offsets:
         img, draw = _canvas()
-        _draw_eye(draw, CX, CY, dx, dy, 0.0)
+        _draw_eye(draw, CX, CY, dx, dy, 0.0, pupil_r=32)
         frames.append(img)
 
     return frames
