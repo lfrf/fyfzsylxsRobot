@@ -40,46 +40,69 @@ def _draw_eye(
     pupil_dy: int = 0,
     blink: float = 0.0,  # 0.0=全开, 1.0=全闭
 ) -> None:
-    """画一只眼睛。blink=0全开，blink=1全闭。"""
+    """画一只眼睛。blink=0全开，blink=1全闭（变成长条）。"""
 
-    # 眼白
+    if blink >= 1.0:
+        # 全闭：画一个白色圆角矩形长条
+        bar_h = 12
+        draw.rounded_rectangle(
+            [cx - EYEBALL_R, cy - bar_h // 2, cx + EYEBALL_R, cy + bar_h // 2],
+            radius=bar_h // 2,
+            fill=WHITE,
+        )
+        return
+
+    if blink > 0.0:
+        # 眯眼过渡：眼白高度逐渐压缩成长条
+        open_r = EYEBALL_R
+        bar_h = 12
+        # 当前眼白高度从 open_r*2 线性压缩到 bar_h
+        current_h = int(open_r * 2 * (1 - blink) + bar_h * blink)
+        half_h = max(current_h // 2, bar_h // 2)
+
+        draw.ellipse(
+            [cx - open_r, cy - half_h, cx + open_r, cy + half_h],
+            fill=WHITE,
+        )
+
+        # 瞳孔也随之压缩
+        pupil_h = max(int(PUPIL_R * (1 - blink)), 4)
+        px = cx + pupil_dx
+        py = cy + pupil_dy
+        draw.ellipse(
+            [px - PUPIL_R, py - pupil_h, px + PUPIL_R, py + pupil_h],
+            fill=BLACK,
+        )
+
+        # 高光
+        if pupil_h > 8:
+            hx = px - PUPIL_R // 3
+            hy = py - pupil_h // 2
+            draw.ellipse(
+                [hx - HIGHLIGHT_R, hy - HIGHLIGHT_R, hx + HIGHLIGHT_R, hy + HIGHLIGHT_R],
+                fill=WHITE,
+            )
+        return
+
+    # 全开
     draw.ellipse(
         [cx - EYEBALL_R, cy - EYEBALL_R, cx + EYEBALL_R, cy + EYEBALL_R],
         fill=WHITE,
     )
 
-    if blink < 1.0:
-        # 瞳孔位置
-        px = cx + pupil_dx
-        py = cy + pupil_dy
+    px = cx + pupil_dx
+    py = cy + pupil_dy
+    draw.ellipse(
+        [px - PUPIL_R, py - PUPIL_R, px + PUPIL_R, py + PUPIL_R],
+        fill=BLACK,
+    )
 
-        # 瞳孔（被眼白裁剪）
-        draw.ellipse(
-            [px - PUPIL_R, py - PUPIL_R, px + PUPIL_R, py + PUPIL_R],
-            fill=BLACK,
-        )
-
-        # 高光
-        hx = px - PUPIL_R // 3
-        hy = py - PUPIL_R // 3
-        draw.ellipse(
-            [hx - HIGHLIGHT_R, hy - HIGHLIGHT_R, hx + HIGHLIGHT_R, hy + HIGHLIGHT_R],
-            fill=WHITE,
-        )
-
-    # 眨眼遮罩（从上下两侧覆盖黑色）
-    if blink > 0.0:
-        cover = int(EYEBALL_R * blink)
-        # 上眼皮
-        draw.ellipse(
-            [cx - EYEBALL_R, cy - EYEBALL_R, cx + EYEBALL_R, cy - EYEBALL_R + cover * 2],
-            fill=BLACK,
-        )
-        # 下眼皮
-        draw.ellipse(
-            [cx - EYEBALL_R, cy + EYEBALL_R - cover * 2, cx + EYEBALL_R, cy + EYEBALL_R],
-            fill=BLACK,
-        )
+    hx = px - PUPIL_R // 3
+    hy = py - PUPIL_R // 3
+    draw.ellipse(
+        [hx - HIGHLIGHT_R, hy - HIGHLIGHT_R, hx + HIGHLIGHT_R, hy + HIGHLIGHT_R],
+        fill=WHITE,
+    )
 
 
 def _canvas() -> tuple[Image.Image, ImageDraw.ImageDraw]:
