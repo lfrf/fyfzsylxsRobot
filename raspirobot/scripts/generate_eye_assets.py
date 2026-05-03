@@ -14,7 +14,7 @@ import argparse
 import math
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageDraw
 
 W = 320
 H = 240
@@ -177,16 +177,48 @@ def _listening_frames() -> list[Image.Image]:
     return frames
 
 
-# ── blink：快速眨眼过渡 ───────────────────────────────────
+# ── blink：demo 风格线条式眨眼 ────────────────────────────
+
+def _draw_closed_bar(draw: ImageDraw.ImageDraw, cx: int, cy: int, width: int, height: int) -> None:
+    draw.rounded_rectangle(
+        [cx - width // 2, cy - height // 2, cx + width // 2, cy + height // 2],
+        radius=max(1, height // 2),
+        fill=WHITE,
+    )
+
+
+def _draw_closed_line(draw: ImageDraw.ImageDraw, cx: int, cy: int, width: int, thickness: int) -> None:
+    draw.line(
+        [cx - width // 2, cy, cx + width // 2, cy],
+        fill=WHITE,
+        width=thickness,
+    )
+
 
 def _blink_frames() -> list[Image.Image]:
-    # 参考 demo：闭眼区域尽量小，减少大块白色区域变化。
-    blink_seq = [0.0, 0.25, 0.55, 0.85, 1.0, 0.85, 0.55, 0.25]
+    # 符号化线条眨眼：避免整只眼睛从圆形大面积压缩，降低眨眼瞬间撕裂感。
     frames = []
-    for b in blink_seq:
-        img, draw = _canvas()
-        _draw_eye(draw, CX, CY, 0, 0, b)
-        frames.append(img)
+
+    img, draw = _canvas()
+    _draw_eye(draw, CX, CY, 0, 0, 0.0)
+    frames.append(img)
+
+    img, draw = _canvas()
+    _draw_closed_bar(draw, CX, CY, width=118, height=28)
+    frames.append(img)
+
+    img, draw = _canvas()
+    _draw_closed_line(draw, CX, CY, width=110, thickness=8)
+    frames.append(img)
+
+    img, draw = _canvas()
+    _draw_closed_bar(draw, CX, CY, width=118, height=28)
+    frames.append(img)
+
+    img, draw = _canvas()
+    _draw_eye(draw, CX, CY, 0, 0, 0.0)
+    frames.append(img)
+
     return frames
 
 
