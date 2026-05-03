@@ -56,5 +56,5 @@ print('right assets:', eyes._right.assets_dir if hasattr(eyes, '_right') and eye
 " 2>&1
 
 echo ""
-echo "=== 运行眼睛 demo（连续眨眼，按 Ctrl+C 结束） ==="
-python -m raspirobot.scripts.st7789_eyes_demo --expressions blink --hold-seconds 4 --loops 0
+echo "=== 运行眼睛 demo：待机 → 眨眼 → 开心 ==="
+python -m raspirobot.scripts.st7789_eyes_demo --expressions neutral blink happy --hold-seconds 4 --loops 1
