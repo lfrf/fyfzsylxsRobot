@@ -133,7 +133,7 @@ def _draw_crescent(img: Image.Image, cx: int, cy: int, dy: int = 0) -> None:
     """画 demo 风格笑眼弧线，避免大面积填充月牙。"""
     draw = ImageDraw.Draw(img)
     arc_box = (cx - 74, cy - 16 + dy, cx + 74, cy + 52 + dy)
-    draw.arc(arc_box, start=200, end=340, fill=WHITE, width=8)
+    draw.arc(arc_box, start=200, end=340, fill=WHITE, width=12)
 
 
 def _happy_frames() -> list[Image.Image]:
