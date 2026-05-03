@@ -40,6 +40,8 @@ class ST7789EyeConfig:
     left_assets_dir: Path | None = None
     right_assets_dir: Path | None = None
     gpio_chip: str = "/dev/gpiochip0"
+    left_rotation: int = 90                 # 左眼素材旋转角度（横放屏幕）
+    right_rotation: int = 90                # 右眼素材旋转角度（横放屏幕）
 
     def get_left_assets_dir(self) -> Path:
         return self.left_assets_dir or self.assets_dir
@@ -65,6 +67,7 @@ class _ST7789Display:
         fps: int,
         gpio_lines: Any,
         name: str = "eye",
+        img_rotation: int = 0,
     ) -> None:
         self.width = width
         self.height = height
@@ -74,6 +77,7 @@ class _ST7789Display:
         self._lines = gpio_lines
         self._name = name
         self._fps = fps
+        self._img_rotation = img_rotation
 
         import spidev
         import gpiod
@@ -205,6 +209,10 @@ class _ST7789Display:
             return self._fit_frame(image.convert("RGB"))
 
     def _fit_frame(self, frame: Image.Image) -> Image.Image:
+        # 先旋转（旋转后尺寸可能变化）
+        if self._img_rotation:
+            frame = frame.rotate(-self._img_rotation, expand=True)
+        # 再缩放到屏幕尺寸
         if frame.size == (self.width, self.height):
             return frame
         return ImageOps.fit(frame, (self.width, self.height), method=Image.Resampling.BICUBIC)
@@ -292,6 +300,7 @@ class ST7789EyesDriver:
             fps=config.fps,
             gpio_lines=self._gpio_lines,
             name="left",
+            img_rotation=config.left_rotation,
         )
 
         self._right: _ST7789Display | None = None
@@ -308,6 +317,7 @@ class ST7789EyesDriver:
                 fps=config.fps,
                 gpio_lines=self._gpio_lines,
                 name="right",
+                img_rotation=config.right_rotation,
             )
 
     def set_expression(self, expression: str) -> None:

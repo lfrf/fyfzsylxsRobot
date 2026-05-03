@@ -110,6 +110,8 @@ def build_eyes_driver(settings: Settings) -> MockEyesDriver | ST7789EyesDriver:
                 left_assets_dir=left_assets,
                 right_assets_dir=right_assets,
                 gpio_chip=settings.eyes_gpio_chip,
+                left_rotation=settings.eyes_left_rotation,
+                right_rotation=settings.eyes_right_rotation,
             )
         )
     except Exception as exc:

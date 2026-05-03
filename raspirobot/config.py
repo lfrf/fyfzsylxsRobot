@@ -62,6 +62,8 @@ class Settings:
     eyes_left_assets_dir: str
     eyes_right_assets_dir: str
     eyes_right_spi_port: int
+    eyes_left_rotation: int
+    eyes_right_rotation: int
 
 
 def load_settings() -> Settings:
@@ -124,6 +126,8 @@ def load_settings() -> Settings:
         eyes_left_assets_dir=os.getenv("ROBOT_EYES_LEFT_ASSETS_DIR", "").strip(),
         eyes_right_assets_dir=os.getenv("ROBOT_EYES_RIGHT_ASSETS_DIR", "").strip(),
         eyes_right_spi_port=int(os.getenv("ROBOT_EYES_RIGHT_SPI_PORT", "1")),
+        eyes_left_rotation=int(os.getenv("ROBOT_EYES_LEFT_ROTATION", "90")),
+        eyes_right_rotation=int(os.getenv("ROBOT_EYES_RIGHT_ROTATION", "90")),
     )
 
 
