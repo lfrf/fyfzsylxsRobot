@@ -88,13 +88,13 @@ class _ST7789Display:
         self._spi.max_speed_hz = spi_speed_hz
         self._spi.mode = 0
 
-        self._blank = Image.new("RGB", (width, height), (0, 0, 0))
-        self._frame_cache: dict[str, list[Image.Image]] = {}
+        self._blank: bytearray = bytearray(width * height * 2)  # 全黑预转换帧
+        self._frame_cache: dict[str, list[bytearray]] = {}
         self._expression = "neutral"
         self._frame_index = 0
         self._last_expression = "neutral"
         self._lock = Lock()
-        self._queue: Queue[Image.Image | None] = Queue(maxsize=2)
+        self._queue: Queue[bytearray | None] = Queue(maxsize=2)
         self._stop = Event()
 
         # 初始化屏幕（复位已由外部统一完成）
@@ -151,11 +151,11 @@ class _ST7789Display:
             if elapsed < frame_interval:
                 sleep(frame_interval - elapsed)
 
-    def _send_frame(self, image: Image.Image) -> None:
+    def _send_frame(self, frame: bytes | bytearray) -> None:
+        """frame 是预转换好的 RGB565 字节流。"""
         self._set_window(0, 0, self.width - 1, self.height - 1)
         self._cmd(0x2C)
-        pixels = self._to_rgb565(image)
-        self._data_bytes(pixels)
+        self._data_bytes(frame)
         self._lines.set_value(self._dc_gpio, self._gpiod.line.Value.INACTIVE)
 
     # ── 素材加载 ──────────────────────────────────────────
@@ -197,22 +197,20 @@ class _ST7789Display:
                 return candidate
         return None
 
-    def _load_gif(self, path: Path) -> list[Image.Image]:
-        frames: list[Image.Image] = []
+    def _load_gif(self, path: Path) -> list[bytearray]:
+        frames: list[bytearray] = []
         with Image.open(path) as image:
             for gif_frame in ImageSequence.Iterator(image):
-                frames.append(self._fit_frame(gif_frame.convert("RGB")))
+                frames.append(self._to_rgb565(self._fit_frame(gif_frame.convert("RGB"))))
         return frames or [self._blank]
 
-    def _load_image(self, path: Path) -> Image.Image:
+    def _load_image(self, path: Path) -> bytearray:
         with Image.open(path) as image:
-            return self._fit_frame(image.convert("RGB"))
+            return self._to_rgb565(self._fit_frame(image.convert("RGB")))
 
     def _fit_frame(self, frame: Image.Image) -> Image.Image:
-        # 先旋转（旋转后尺寸可能变化）
         if self._img_rotation:
             frame = frame.rotate(-self._img_rotation, expand=True)
-        # 再缩放到屏幕尺寸
         if frame.size == (self.width, self.height):
             return frame
         return ImageOps.fit(frame, (self.width, self.height), method=Image.Resampling.BICUBIC)
