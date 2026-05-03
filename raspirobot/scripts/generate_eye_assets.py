@@ -130,36 +130,60 @@ def _neutral_frames() -> list[Image.Image]:
 # ── happy：笑眼（弧形） ───────────────────────────────────
 
 def _draw_crescent(img: Image.Image, cx: int, cy: int, dy: int = 0) -> None:
-    """画 ElectronBot 风格的厚实半月笑眼。
+    """画参考 ElectronBot 的圆润实心笑眼。
 
-    用两个椭圆相减生成圆润实心笑眼，而不是单纯画 arc 线条。
-    形状更可爱，同时保持静态/低幅动画，减少持续刷新带来的撕裂暴露。
+    不是两个椭圆简单裁剪，而是用闭合曲线做出：
+    - 顶部饱满圆弧
+    - 底部柔和内凹弧线
+    - 左右两端圆润收口
     """
-    scale = 3
+    scale = 4
     layer = Image.new("RGB", (W * scale, H * scale), BG)
     draw = ImageDraw.Draw(layer)
 
     scx = cx * scale
     scy = (cy + dy) * scale
 
-    outer_rx = 92 * scale
-    outer_ry = 52 * scale
-    inner_rx = 78 * scale
-    inner_ry = 40 * scale
+    half_w = 80 * scale
+    top_h = 58 * scale
+    bottom_dip = 12 * scale
+    corner_r = 14 * scale
 
-    # 外椭圆决定笑眼整体圆润厚度。
-    draw.ellipse(
-        [scx - outer_rx, scy - outer_ry, scx + outer_rx, scy + outer_ry],
-        fill=WHITE,
-    )
+    # 构造一个闭合曲线轮廓：上半部分是半椭圆，底部是微笑式内凹弧线。
+    points: list[tuple[float, float]] = []
+    samples = 48
 
-    # 内椭圆向下覆盖，留下上方厚实半月形。
-    inner_cy = scy + 22 * scale
-    draw.ellipse(
-        [scx - inner_rx, inner_cy - inner_ry, scx + inner_rx, inner_cy + inner_ry],
-        fill=BG,
-    )
+    # 上边：从左到右的饱满半椭圆。
+    for i in range(samples + 1):
+        t = math.pi - math.pi * i / samples
+        x = scx + half_w * math.cos(t)
+        y = scy - top_h * math.sin(t)
+        points.append((x, y))
 
+    # 右端圆润过渡。
+    for i in range(1, 9):
+        t = i / 8
+        x = scx + half_w - corner_r * (1 - math.cos(t * math.pi / 2))
+        y = scy + corner_r * math.sin(t * math.pi / 2)
+        points.append((x, y))
+
+    # 底边：从右到左的柔和内凹弧线，中间略向下。
+    for i in range(samples + 1):
+        u = i / samples
+        x = scx + half_w - 2 * half_w * u
+        y = scy + bottom_dip * math.sin(math.pi * u)
+        points.append((x, y))
+
+    # 左端圆润过渡。
+    for i in range(1, 9):
+        t = i / 8
+        x = scx - half_w + corner_r * (1 - math.cos(t * math.pi / 2))
+        y = scy + corner_r * math.sin((1 - t) * math.pi / 2)
+        points.append((x, y))
+
+    draw.polygon([(round(x), round(y)) for x, y in points], fill=WHITE)
+
+    layer = layer.filter(ImageFilter.GaussianBlur(radius=0.35 * scale))
     layer = layer.resize((W, H), Image.Resampling.LANCZOS)
     img.paste(layer)
 
