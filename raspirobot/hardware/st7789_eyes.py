@@ -124,6 +124,7 @@ class _ST7789Display:
 
     def _render_loop(self) -> None:
         frame_interval = 1.0 / max(1, self._fps)
+        last_sent: bytes | None = None
         while not self._stop.is_set():
             started = monotonic()
 
@@ -141,11 +142,14 @@ class _ST7789Display:
             frame = frames[self._frame_index % len(frames)]
             self._frame_index += 1
 
-            try:
-                self._send_frame(frame)
-            except Exception:
-                import traceback
-                traceback.print_exc()
+            # 只有帧内容变化时才发送，减少持续撕裂
+            if frame is not last_sent:
+                try:
+                    self._send_frame(frame)
+                    last_sent = frame
+                except Exception:
+                    import traceback
+                    traceback.print_exc()
 
             elapsed = monotonic() - started
             if elapsed < frame_interval:
