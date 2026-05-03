@@ -271,8 +271,9 @@ def _draw_closed_line(draw: ImageDraw.ImageDraw, cx: int, cy: int, width: int, t
 
 
 def _blink_frames() -> list[Image.Image]:
-    # 符号化线条眨眼：避免整只眼睛从圆形大面积压缩，降低眨眼瞬间撕裂感。
+    # 符号化条形眨眼：避免整只眼睛从圆形大面积压缩，降低眨眼瞬间撕裂感。
     # 开眼帧沿用 neutral 的大瞳孔，避免待机 → 眨眼时瞳孔突然变小。
+    # 不生成闭眼细白线帧，避免眨眼时出现过细、过亮的瞬间线条。
     frames = []
 
     img, draw = _canvas()
@@ -281,10 +282,6 @@ def _blink_frames() -> list[Image.Image]:
 
     img, draw = _canvas()
     _draw_closed_bar(draw, CX, CY, width=118, height=28)
-    frames.append(img)
-
-    img, draw = _canvas()
-    _draw_closed_line(draw, CX, CY, width=110, thickness=8)
     frames.append(img)
 
     img, draw = _canvas()
