@@ -177,17 +177,48 @@ def _listening_frames() -> list[Image.Image]:
     return frames
 
 
-# ── blink：5 帧微变化眨眼 ────────────────────────────────
+# ── blink：demo 风格线条式眨眼 ────────────────────────────
+
+def _draw_closed_bar(draw: ImageDraw.ImageDraw, cx: int, cy: int, width: int, height: int) -> None:
+    draw.rounded_rectangle(
+        [cx - width // 2, cy - height // 2, cx + width // 2, cy + height // 2],
+        radius=max(1, height // 2),
+        fill=WHITE,
+    )
+
+
+def _draw_closed_line(draw: ImageDraw.ImageDraw, cx: int, cy: int, width: int, thickness: int) -> None:
+    draw.line(
+        [cx - width // 2, cy, cx + width // 2, cy],
+        fill=WHITE,
+        width=thickness,
+    )
+
 
 def _blink_frames() -> list[Image.Image]:
-    # 微变化眨眼：不完全闭眼，避免睁眼与细线之间的大面积跳变。
-    # 视觉上是轻轻眨一下，更适合可爱陪伴型机器人，也减少单帧像素变化。
-    blink_seq = [0.0, 0.18, 0.42, 0.18, 0.0]
+    # 符号化线条眨眼：避免整只眼睛从圆形大面积压缩，降低眨眼瞬间撕裂感。
     frames = []
-    for blink in blink_seq:
-        img, draw = _canvas()
-        _draw_eye(draw, CX, CY, 0, 0, blink)
-        frames.append(img)
+
+    img, draw = _canvas()
+    _draw_eye(draw, CX, CY, 0, 0, 0.0)
+    frames.append(img)
+
+    img, draw = _canvas()
+    _draw_closed_bar(draw, CX, CY, width=118, height=28)
+    frames.append(img)
+
+    img, draw = _canvas()
+    _draw_closed_line(draw, CX, CY, width=110, thickness=8)
+    frames.append(img)
+
+    img, draw = _canvas()
+    _draw_closed_bar(draw, CX, CY, width=118, height=28)
+    frames.append(img)
+
+    img, draw = _canvas()
+    _draw_eye(draw, CX, CY, 0, 0, 0.0)
+    frames.append(img)
+
     return frames
 
 
