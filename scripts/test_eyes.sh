@@ -11,12 +11,12 @@ export ROBOT_EYES_PROVIDER=st7789
 export ROBOT_EYES_ASSETS_DIR=/home/pi/Desktop/code/fyfzsylxsRobot/raspirobot/assets/eyes
 export ROBOT_EYES_LEFT_ASSETS_DIR=/home/pi/Desktop/code/fyfzsylxsRobot/raspirobot/assets/eyes/left
 export ROBOT_EYES_RIGHT_ASSETS_DIR=/home/pi/Desktop/code/fyfzsylxsRobot/raspirobot/assets/eyes/right
-export ROBOT_EYES_FRAME_FPS=8
+export ROBOT_EYES_FRAME_FPS=6
 export ROBOT_EYES_SCREEN_WIDTH=240
 export ROBOT_EYES_SCREEN_HEIGHT=320
 export ROBOT_EYES_ROTATION=0
 export ROBOT_EYES_SPI_PORT=0
-export ROBOT_EYES_SPI_SPEED_HZ=40000000
+export ROBOT_EYES_SPI_SPEED_HZ=16000000
 export ROBOT_EYES_DC_GPIO=25
 export ROBOT_EYES_RST_GPIO=24
 export ROBOT_EYES_LEFT_CS=0
@@ -57,4 +57,4 @@ print('right assets:', eyes._right.assets_dir if hasattr(eyes, '_right') and eye
 
 echo ""
 echo "=== 运行眼睛 demo ==="
-python -m raspirobot.scripts.st7789_eyes_demo --expressions neutral happy blink neutral --hold-seconds 3 --loops 1
+python -m raspirobot.scripts.st7789_eyes_demo --expressions neutral blink neutral --hold-seconds 4 --loops 1
