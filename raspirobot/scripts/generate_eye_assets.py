@@ -130,25 +130,47 @@ def _neutral_frames() -> list[Image.Image]:
 # ── happy：笑眼（弧形） ───────────────────────────────────
 
 def _draw_crescent(img: Image.Image, cx: int, cy: int, dy: int = 0) -> None:
-    """画更饱满、更自然的笑眼弧线。"""
-    draw = ImageDraw.Draw(img)
+    """画 ElectronBot 风格的厚实半月笑眼。
 
-    # 用更大的弧度和更厚的笔触，避免端点额外补圆造成的突兀感。
-    arc_width = 20
-    arc_box = (cx - 88, cy - 36 + dy, cx + 88, cy + 64 + dy)
-    draw.arc(arc_box, start=202, end=338, fill=WHITE, width=arc_width)
+    用两个椭圆相减生成圆润实心笑眼，而不是单纯画 arc 线条。
+    形状更可爱，同时保持静态/低幅动画，减少持续刷新带来的撕裂暴露。
+    """
+    scale = 3
+    layer = Image.new("RGB", (W * scale, H * scale), BG)
+    draw = ImageDraw.Draw(layer)
+
+    scx = cx * scale
+    scy = (cy + dy) * scale
+
+    outer_rx = 92 * scale
+    outer_ry = 52 * scale
+    inner_rx = 78 * scale
+    inner_ry = 40 * scale
+
+    # 外椭圆决定笑眼整体圆润厚度。
+    draw.ellipse(
+        [scx - outer_rx, scy - outer_ry, scx + outer_rx, scy + outer_ry],
+        fill=WHITE,
+    )
+
+    # 内椭圆向下覆盖，留下上方厚实半月形。
+    inner_cy = scy + 22 * scale
+    draw.ellipse(
+        [scx - inner_rx, inner_cy - inner_ry, scx + inner_rx, inner_cy + inner_ry],
+        fill=BG,
+    )
+
+    layer = layer.resize((W, H), Image.Resampling.LANCZOS)
+    img.paste(layer)
 
 
 def _happy_frames() -> list[Image.Image]:
     frames = []
-    total = 6
-    for i in range(total):
+
+    # ElectronBot 风格笑眼以形状表达为主，动画只做极小上下浮动。
+    for dy in (0, 1, 0, -1):
         img, draw = _canvas()
-
-        # demo 风格：小幅弧线变化
-        dy = [0, 1, 0, -1, 0, 1][i]
         _draw_crescent(img, CX, CY, dy)
-
         frames.append(img)
 
     return frames
