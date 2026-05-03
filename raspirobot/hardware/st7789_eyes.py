@@ -12,10 +12,11 @@ from PIL import Image, ImageOps, ImageSequence
 IMAGE_SUFFIXES = (".png", ".jpg", ".jpeg", ".bmp", ".webp")
 
 # ST7789V 初始化序列（不含软件复位）
+# MADCTL=0x00: 从左到右、从上到下扫描，与 SPI 写入方向一致，最小化撕裂
 _INIT_CMDS: list[tuple[int, list[int] | None]] = [
     (0x11, None),    # Sleep out
     (0x3A, [0x55]),  # 16-bit color (RGB565)
-    (0x36, [0x00]),  # Memory access control
+    (0x36, [0x00]),  # Memory access control: top-to-bottom, left-to-right
     (0x21, None),    # Display inversion on
     (0x29, None),    # Display on
 ]
@@ -246,10 +247,14 @@ class _ST7789Display:
 
     def _data_bytes(self, data: bytes | bytearray) -> None:
         self._lines.set_value(self._dc_gpio, self._gpiod.line.Value.ACTIVE)
-        # SPI1 (spi-bcm2835aux) 单次传输有字节数限制，分块传输
-        chunk = 65535
-        for i in range(0, len(data), chunk):
-            self._spi.writebytes2(data[i:i + chunk])
+        # writebytes2 支持大缓冲区，分两块传输（SPI1 单次上限约 65535 字节）
+        # 一帧 240×320×2 = 153600 字节，分两块
+        mid = 65535
+        if len(data) <= mid:
+            self._spi.writebytes2(data)
+        else:
+            self._spi.writebytes2(data[:mid])
+            self._spi.writebytes2(data[mid:])
 
     @staticmethod
     def _to_rgb565(image: Image.Image) -> bytearray:
