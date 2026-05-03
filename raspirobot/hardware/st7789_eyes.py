@@ -174,6 +174,7 @@ class _ST7789Display:
 
     def _send_frame(self, frame: bytes | bytearray) -> None:
         """frame 是预转换好的 RGB565 字节流，支持全帧或局部帧。"""
+        t0 = monotonic()
         if hasattr(self, '_partial_rect') and self._partial_rect is not None:
             x0, y0, x1, y1 = self._partial_rect
             self._set_window(x0, y0, x1, y1)
@@ -182,6 +183,13 @@ class _ST7789Display:
         self._cmd(0x2C)
         self._data_bytes(frame)
         self._lines.set_value(self._dc_gpio, self._gpiod.line.Value.INACTIVE)
+        # 让总传输时间凑成 16ms 的整数倍（48ms = 16×3）
+        # 撕裂线会固定在同一位置，视觉上不再移动
+        elapsed = (monotonic() - t0) * 1000
+        target_ms = 48.0
+        remaining = target_ms - elapsed
+        if remaining > 0:
+            sleep(remaining / 1000.0)
 
     # ── 素材加载 ──────────────────────────────────────────
 
