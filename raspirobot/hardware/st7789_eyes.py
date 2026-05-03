@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from queue import Empty, Queue
 from threading import Event, Lock, Thread
 from time import monotonic, sleep
 from typing import Any
@@ -127,8 +126,6 @@ class _ST7789Display:
         self._frame_index = 0
         self._last_expression = "neutral"
         self._lock = Lock()
-        self._queue: Queue[bytearray | None] = Queue(maxsize=2)
-        self._stop = Event()
 
         # 局部刷新区域：只刷新眼睛内容所在的区域，减少传输数据量
         # 在旋转后的坐标系中，眼睛内容约在中心 192×192 区域
@@ -149,10 +146,6 @@ class _ST7789Display:
         # 初始化屏幕（复位已由外部统一完成）
         self._init()
 
-        # 启动独立渲染线程
-        self._thread = Thread(target=self._render_loop, name=f"st7789-{name}", daemon=True)
-        self._thread.start()
-
     def set_expression(self, expression: str) -> None:
         normalized = (expression or "neutral").strip().lower() or "neutral"
         changed = False
@@ -165,58 +158,43 @@ class _ST7789Display:
             self._animation_clock.reset_expression(normalized)
 
     def close(self) -> None:
-        self._stop.set()
-        try:
-            self._queue.put_nowait(None)
-        except Exception:
-            pass
-        self._thread.join(timeout=2.0)
         self._spi.close()
 
-    # ── 渲染线程 ──────────────────────────────────────────
+    # ── 渲染辅助 ──────────────────────────────────────────
 
-    def _render_loop(self) -> None:
-        frame_interval = 1.0 / max(1, self._fps)
-        last_sent: bytes | None = None
-        while not self._stop.is_set():
-            started = monotonic()
+    def next_frame(self) -> bytearray:
+        with self._lock:
+            expression = self._expression
 
-            with self._lock:
-                expression = self._expression
+        frames = self._frames_for_expression(expression)
+        if not frames:
+            frames = [self._blank]
 
-            frames = self._frames_for_expression(expression)
-            if not frames:
-                frames = [self._blank]
-
-            if expression != self._last_expression:
-                self._frame_index = 0
-                self._last_expression = expression
-                if self._animation_clock is not None:
-                    self._animation_clock.reset_expression(expression)
-
+        if expression != self._last_expression:
+            self._frame_index = 0
+            self._last_expression = expression
             if self._animation_clock is not None:
-                self._frame_index = self._animation_clock.frame_index_for(
-                    expression,
-                    len(frames),
-                    phase_offset_ms=self._phase_offset_ms,
-                )
-                frame = frames[self._frame_index]
-            else:
-                frame = frames[self._frame_index % len(frames)]
-                self._frame_index += 1
+                self._animation_clock.reset_expression(expression)
 
-            # 只有帧内容变化时才发送，减少持续撕裂
-            if frame is not last_sent:
-                try:
-                    self._send_frame(frame)
-                    last_sent = frame
-                except Exception:
-                    import traceback
-                    traceback.print_exc()
+        if self._animation_clock is not None:
+            self._frame_index = self._animation_clock.frame_index_for(
+                expression,
+                len(frames),
+                phase_offset_ms=self._phase_offset_ms,
+            )
+            return frames[self._frame_index]
 
-            elapsed = monotonic() - started
-            if elapsed < frame_interval:
-                sleep(frame_interval - elapsed)
+        frame = frames[self._frame_index % len(frames)]
+        self._frame_index += 1
+        return frame
+
+    def send_frame_if_changed(self, frame: bytearray) -> bool:
+        last_sent = getattr(self, "_last_sent", None)
+        if frame is last_sent:
+            return False
+        self._send_frame(frame)
+        self._last_sent = frame
+        return True
 
     def _send_frame(self, frame: bytes | bytearray) -> None:
         """frame 是预转换好的 RGB565 字节流，支持全帧或局部帧。"""
@@ -359,7 +337,7 @@ class _ST7789Display:
 class ST7789EyesDriver:
     """双眼 ST7789V 驱动。
 
-    左右眼各有独立 DC 引脚、独立素材目录、独立渲染线程，完全并行。
+    左右眼各有独立 DC 引脚和独立素材目录，由统一渲染线程调度刷新。
     """
 
     def __init__(self, config: ST7789EyeConfig) -> None:
@@ -367,6 +345,8 @@ class ST7789EyesDriver:
         self._gpio_lines = self._init_gpio()
         self._hardware_reset()
         self._animation_clock = _SharedAnimationClock(config.fps)
+        self._stop = Event()
+        self._send_left_first = True
 
         self._left = _ST7789Display(
             spi_port=config.spi_port,
@@ -404,15 +384,45 @@ class ST7789EyesDriver:
                 phase_offset_ms=config.right_phase_offset_ms,
             )
 
+        self._thread = Thread(target=self._render_loop, name="st7789-eyes", daemon=True)
+        self._thread.start()
+
     def set_expression(self, expression: str) -> None:
         self._left.set_expression(expression)
         if self._right is not None:
             self._right.set_expression(expression)
 
     def close(self) -> None:
+        self._stop.set()
+        self._thread.join(timeout=2.0)
         self._left.close()
         if self._right is not None:
             self._right.close()
+
+    def _render_loop(self) -> None:
+        frame_interval = 1.0 / max(1, self.config.fps)
+        while not self._stop.is_set():
+            started = monotonic()
+            left_frame = self._left.next_frame()
+            right_frame = self._right.next_frame() if self._right is not None else None
+
+            try:
+                if self._right is None:
+                    self._left.send_frame_if_changed(left_frame)
+                elif self._send_left_first:
+                    self._left.send_frame_if_changed(left_frame)
+                    self._right.send_frame_if_changed(right_frame)
+                else:
+                    self._right.send_frame_if_changed(right_frame)
+                    self._left.send_frame_if_changed(left_frame)
+            except Exception:
+                import traceback
+                traceback.print_exc()
+
+            self._send_left_first = not self._send_left_first
+            elapsed = monotonic() - started
+            if elapsed < frame_interval:
+                sleep(frame_interval - elapsed)
 
     # ── 硬件初始化 ────────────────────────────────────────
 
