@@ -40,11 +40,11 @@ def _draw_eye(
     pupil_dy: int = 0,
     blink: float = 0.0,  # 0.0=全开, 1.0=全闭
 ) -> None:
-    """画一只眼睛。blink=0全开，blink=1全闭（变成长条）。"""
+    """画一只眼睛。blink=0全开，blink=1全闭（白色长条）。"""
 
-    if blink >= 1.0:
-        # 全闭：画一个白色圆角矩形长条
-        bar_h = 12
+    if blink >= 0.5:
+        # 闭眼：白色圆角矩形长条
+        bar_h = 14
         draw.rounded_rectangle(
             [cx - EYEBALL_R, cy - bar_h // 2, cx + EYEBALL_R, cy + bar_h // 2],
             radius=bar_h // 2,
@@ -52,39 +52,7 @@ def _draw_eye(
         )
         return
 
-    if blink > 0.0:
-        # 眯眼过渡：眼白高度逐渐压缩成长条
-        open_r = EYEBALL_R
-        bar_h = 12
-        # 当前眼白高度从 open_r*2 线性压缩到 bar_h
-        current_h = int(open_r * 2 * (1 - blink) + bar_h * blink)
-        half_h = max(current_h // 2, bar_h // 2)
-
-        draw.ellipse(
-            [cx - open_r, cy - half_h, cx + open_r, cy + half_h],
-            fill=WHITE,
-        )
-
-        # 瞳孔也随之压缩
-        pupil_h = max(int(PUPIL_R * (1 - blink)), 4)
-        px = cx + pupil_dx
-        py = cy + pupil_dy
-        draw.ellipse(
-            [px - PUPIL_R, py - pupil_h, px + PUPIL_R, py + pupil_h],
-            fill=BLACK,
-        )
-
-        # 高光
-        if pupil_h > 8:
-            hx = px - PUPIL_R // 3
-            hy = py - pupil_h // 2
-            draw.ellipse(
-                [hx - HIGHLIGHT_R, hy - HIGHLIGHT_R, hx + HIGHLIGHT_R, hy + HIGHLIGHT_R],
-                fill=WHITE,
-            )
-        return
-
-    # 全开
+    # 全开：正常眼睛
     draw.ellipse(
         [cx - EYEBALL_R, cy - EYEBALL_R, cx + EYEBALL_R, cy + EYEBALL_R],
         fill=WHITE,
@@ -120,8 +88,8 @@ def _neutral_frames() -> list[Image.Image]:
     drift_x = [int(6 * math.sin(2 * math.pi * i / total)) for i in range(total)]
     drift_y = [int(3 * math.sin(4 * math.pi * i / total)) for i in range(total)]
 
-    # 眨眼在第 16-20 帧
-    blink_frames = {16: 0.3, 17: 0.7, 18: 1.0, 19: 0.7, 20: 0.3}
+    # 眨眼在第 16-20 帧：睁→闭→睁，直接切换不做过渡
+    blink_frames = {17: 1.0, 18: 1.0, 19: 1.0}
 
     for i in range(total):
         img, draw = _canvas()
@@ -229,7 +197,8 @@ def _listening_frames() -> list[Image.Image]:
 # ── blink：快速眨眼过渡 ───────────────────────────────────
 
 def _blink_frames() -> list[Image.Image]:
-    blink_seq = [0.0, 0.4, 0.8, 1.0, 0.8, 0.4]
+    # 睁开 → 闭合(长条) → 睁开，共6帧
+    blink_seq = [0.0, 0.0, 1.0, 1.0, 0.0, 0.0]
     frames = []
     for b in blink_seq:
         img, draw = _canvas()
