@@ -140,27 +140,18 @@ def _happy_frames() -> list[Image.Image]:
     for i in range(8):
         img, draw = _canvas()
 
-        # 月牙形笑眼：大白圆 + 偏上的黑圆覆盖
-        # 白色大圆（眼白）
-        draw.ellipse(
-            [CX - EYEBALL_R, CY - EYEBALL_R, CX + EYEBALL_R, CY + EYEBALL_R],
-            fill=WHITE,
-        )
+        # 月牙形笑眼：用粗弧线画，两端尖朝下
+        # 弧线从左到右，开口朝下（start=200, end=340 是下半圆弧）
+        # 轻微动画：弧线粗细脉动
+        line_w = int(28 + 4 * math.sin(2 * math.pi * i / 8))
 
-        # 黑色圆覆盖上半部分，形成月牙
-        # 偏移量轻微动画
-        offset = int(28 + 3 * math.sin(2 * math.pi * i / 8))
-        cover_r = EYEBALL_R + 10
-        draw.ellipse(
-            [CX - cover_r, CY - cover_r - offset, CX + cover_r, CY + cover_r - offset],
-            fill=BLACK,
-        )
-
-        # 高光点
-        draw.ellipse(
-            [CX - 30 - HIGHLIGHT_R, CY + 10 - HIGHLIGHT_R,
-             CX - 30 + HIGHLIGHT_R, CY + 10 + HIGHLIGHT_R],
+        # 外弧（白色，粗）
+        r_outer = EYEBALL_R
+        draw.arc(
+            [CX - r_outer, CY - r_outer, CX + r_outer, CY + r_outer],
+            start=210, end=330,
             fill=WHITE,
+            width=line_w,
         )
 
         frames.append(img)
