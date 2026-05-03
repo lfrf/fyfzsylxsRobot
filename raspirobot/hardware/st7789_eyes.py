@@ -43,6 +43,8 @@ class ST7789EyeConfig:
     gpio_chip: str = "/dev/gpiochip0"
     left_rotation: int = 90                 # 左眼素材旋转角度（横放屏幕）
     right_rotation: int = 90                # 右眼素材旋转角度（横放屏幕）
+    left_phase_offset_ms: int = 0           # 正数=左眼动画延后，负数=提前
+    right_phase_offset_ms: int = 0          # 正数=右眼动画延后，负数=提前
 
     def get_left_assets_dir(self) -> Path:
         return self.left_assets_dir or self.assets_dir
@@ -63,7 +65,7 @@ class _SharedAnimationClock:
         with self._lock:
             self._expression_started_at[(expression or "neutral").strip().lower() or "neutral"] = monotonic()
 
-    def frame_index_for(self, expression: str, frame_count: int) -> int:
+    def frame_index_for(self, expression: str, frame_count: int, phase_offset_ms: int = 0) -> int:
         if frame_count <= 1:
             return 0
         normalized = (expression or "neutral").strip().lower() or "neutral"
@@ -73,7 +75,7 @@ class _SharedAnimationClock:
             if started_at is None:
                 started_at = now
                 self._expression_started_at[normalized] = started_at
-        elapsed = max(0.0, now - started_at)
+        elapsed = max(0.0, now - started_at - (phase_offset_ms / 1000.0))
         return int(elapsed * self._fps) % frame_count
 
 
@@ -96,6 +98,7 @@ class _ST7789Display:
         name: str = "eye",
         img_rotation: int = 0,
         animation_clock: _SharedAnimationClock | None = None,
+        phase_offset_ms: int = 0,
     ) -> None:
         self.width = width
         self.height = height
@@ -107,6 +110,7 @@ class _ST7789Display:
         self._fps = fps
         self._img_rotation = img_rotation
         self._animation_clock = animation_clock
+        self._phase_offset_ms = phase_offset_ms
 
         import spidev
         import gpiod
@@ -191,7 +195,11 @@ class _ST7789Display:
                     self._animation_clock.reset_expression(expression)
 
             if self._animation_clock is not None:
-                self._frame_index = self._animation_clock.frame_index_for(expression, len(frames))
+                self._frame_index = self._animation_clock.frame_index_for(
+                    expression,
+                    len(frames),
+                    phase_offset_ms=self._phase_offset_ms,
+                )
                 frame = frames[self._frame_index]
             else:
                 frame = frames[self._frame_index % len(frames)]
@@ -374,6 +382,7 @@ class ST7789EyesDriver:
             name="left",
             img_rotation=config.left_rotation,
             animation_clock=self._animation_clock,
+            phase_offset_ms=config.left_phase_offset_ms,
         )
 
         self._right: _ST7789Display | None = None
@@ -392,6 +401,7 @@ class ST7789EyesDriver:
                 name="right",
                 img_rotation=config.right_rotation,
                 animation_clock=self._animation_clock,
+                phase_offset_ms=config.right_phase_offset_ms,
             )
 
     def set_expression(self, expression: str) -> None:
