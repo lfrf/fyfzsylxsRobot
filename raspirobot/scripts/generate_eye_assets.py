@@ -135,32 +135,46 @@ def _neutral_frames() -> list[Image.Image]:
 
 # ── happy：笑眼（弧形） ───────────────────────────────────
 
+def _draw_crescent(img: Image.Image, cx: int, cy: int, dy: int = 0) -> None:
+    """用 numpy 逐像素绘制月牙形，两尖朝下，开口向下。"""
+    import numpy as np
+
+    arr = np.array(img)
+    h, w = arr.shape[:2]
+
+    # 外椭圆参数（月牙外轮廓）
+    rx_out = 95   # 水平半径
+    ry_out = 52   # 垂直半径
+
+    # 内椭圆参数（挖去上半部分）
+    rx_in = 88
+    ry_in = 38
+    # 内椭圆向上偏移，控制月牙厚度
+    inner_offset_y = -28
+
+    ys, xs = np.ogrid[:h, :w]
+
+    # 外椭圆区域
+    outer = ((xs - cx) ** 2 / rx_out ** 2 + (ys - (cy + dy)) ** 2 / ry_out ** 2) <= 1
+
+    # 内椭圆区域（向上偏移，挖去上部）
+    inner = ((xs - cx) ** 2 / rx_in ** 2 + (ys - (cy + dy + inner_offset_y)) ** 2 / ry_in ** 2) <= 1
+
+    # 月牙 = 外椭圆 - 内椭圆
+    crescent = outer & ~inner
+
+    arr[crescent] = [255, 255, 255]
+    img.paste(Image.fromarray(arr))
+
+
 def _happy_frames() -> list[Image.Image]:
     frames = []
     for i in range(8):
         img, draw = _canvas()
 
-        # 实心月牙：开口朝下，两端有弧度
-        # 轻微上下浮动动画
-        dy = int(3 * math.sin(2 * math.pi * i / 8))
-
-        # 月牙宽高
-        moon_w = 100
-        moon_h = 55
-
-        # 先画白色椭圆（月牙外轮廓）
-        draw.ellipse(
-            [CX - moon_w, CY - moon_h + dy, CX + moon_w, CY + moon_h + dy],
-            fill=WHITE,
-        )
-
-        # 再用黑色椭圆覆盖上半部分，留下月牙下半
-        cut_offset = 20  # 控制月牙厚度，越小越厚
-        draw.ellipse(
-            [CX - moon_w - 5, CY - moon_h - cut_offset + dy,
-             CX + moon_w + 5, CY + moon_h - cut_offset + dy],
-            fill=BLACK,
-        )
+        # 轻微上下浮动
+        dy = int(4 * math.sin(2 * math.pi * i / 8))
+        _draw_crescent(img, CX, CY, dy)
 
         frames.append(img)
 
