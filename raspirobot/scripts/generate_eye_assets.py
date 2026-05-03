@@ -140,21 +140,29 @@ def _happy_frames() -> list[Image.Image]:
     for i in range(8):
         img, draw = _canvas()
 
-        # 眼白（上半圆）
+        # 月牙形笑眼：大白圆 + 偏上的黑圆覆盖
+        # 白色大圆（眼白）
         draw.ellipse(
             [CX - EYEBALL_R, CY - EYEBALL_R, CX + EYEBALL_R, CY + EYEBALL_R],
             fill=WHITE,
         )
-        # 用黑色遮住下半部分，形成笑眼
-        offset = int(10 + 4 * math.sin(2 * math.pi * i / 8))
-        draw.rectangle([CX - EYEBALL_R - 5, CY - offset, CX + EYEBALL_R + 5, CY + EYEBALL_R + 5], fill=BLACK)
 
-        # 高光
+        # 黑色圆覆盖上半部分，形成月牙
+        # 偏移量轻微动画
+        offset = int(28 + 3 * math.sin(2 * math.pi * i / 8))
+        cover_r = EYEBALL_R + 10
         draw.ellipse(
-            [CX - 30 - HIGHLIGHT_R, CY - 40 - HIGHLIGHT_R,
-             CX - 30 + HIGHLIGHT_R, CY - 40 + HIGHLIGHT_R],
+            [CX - cover_r, CY - cover_r - offset, CX + cover_r, CY + cover_r - offset],
+            fill=BLACK,
+        )
+
+        # 高光点
+        draw.ellipse(
+            [CX - 30 - HIGHLIGHT_R, CY + 10 - HIGHLIGHT_R,
+             CX - 30 + HIGHLIGHT_R, CY + 10 + HIGHLIGHT_R],
             fill=WHITE,
         )
+
         frames.append(img)
 
     return frames
