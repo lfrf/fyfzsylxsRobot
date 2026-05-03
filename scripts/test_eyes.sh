@@ -47,8 +47,12 @@ from raspirobot.main import build_eyes_driver
 s = load_settings()
 print('provider:', s.eyes_provider)
 print('assets_dir:', s.eyes_assets_dir)
+print('left_assets_dir:', s.eyes_left_assets_dir)
+print('right_assets_dir:', s.eyes_right_assets_dir)
 eyes = build_eyes_driver(s)
 print('driver type:', type(eyes).__name__)
+print('left assets:', eyes._left.assets_dir if hasattr(eyes, '_left') else 'N/A')
+print('right assets:', eyes._right.assets_dir if hasattr(eyes, '_right') and eyes._right else 'N/A')
 " 2>&1
 
 echo ""
