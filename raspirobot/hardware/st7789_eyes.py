@@ -143,8 +143,9 @@ class _ST7789Display:
         self._partial_h = py1 - py0 + 1
         self._blank = bytearray(self._partial_w * self._partial_h * 2)
 
-        # 初始化屏幕（复位已由外部统一完成）
+        # 初始化屏幕（复位已由外部统一完成），先整屏清黑一次，避免局部刷新外的区域保留随机显存。
         self._init()
+        self._clear_screen()
 
     def set_expression(self, expression: str) -> None:
         normalized = (expression or "neutral").strip().lower() or "neutral"
@@ -195,6 +196,13 @@ class _ST7789Display:
         self._send_frame(frame)
         self._last_sent = frame
         return True
+
+    def _clear_screen(self) -> None:
+        full_black = bytearray(self.width * self.height * 2)
+        self._set_window(0, 0, self.width - 1, self.height - 1)
+        self._cmd(0x2C)
+        self._data_bytes(full_black)
+        self._lines.set_value(self._dc_gpio, self._gpiod.line.Value.INACTIVE)
 
     def _send_frame(self, frame: bytes | bytearray) -> None:
         """frame 是预转换好的 RGB565 字节流，支持全帧或局部帧。"""
