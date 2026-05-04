@@ -40,7 +40,7 @@ class ST7789EyeConfig:
     left_assets_dir: Path | None = None
     right_assets_dir: Path | None = None
     gpio_chip: str = "/dev/gpiochip0"
-    left_rotation: int = 90                 # 左眼素材旋转角度（横放屏幕）
+    left_rotation: int = 270                # 左眼素材旋转角度（横放屏幕）
     right_rotation: int = 90                # 右眼素材旋转角度（横放屏幕）
     left_phase_offset_ms: int = 0           # 正数=左眼动画延后，负数=提前
     right_phase_offset_ms: int = 0          # 正数=右眼动画延后，负数=提前

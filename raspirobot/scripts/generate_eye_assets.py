@@ -27,10 +27,12 @@ CX = W // 2
 CY = H // 2
 
 # 尺寸参数
-# 参考 demo 素材：缩小眼睛主体和瞳孔，减少每帧大面积黑白翻转。
-EYEBALL_R = 62    # 眼白半径
-PUPIL_R = 24      # 瞳孔半径
-HIGHLIGHT_R = 7   # 高光半径
+# 圆角方眼风格：黑底、白色圆角眼白、黑色瞳孔，和参考图保持一致。
+EYE_W = 138
+EYE_H = 110
+EYE_RADIUS = 32
+PUPIL_R = 28
+HIGHLIGHT_R = 7
 
 
 def _draw_eye(
@@ -39,73 +41,41 @@ def _draw_eye(
     cy: int,
     pupil_dx: int = 0,
     pupil_dy: int = 0,
-    blink: float = 0.0,  # 0.0=全开, 1.0=全闭
+    openness: float = 1.0,
     pupil_r: int = PUPIL_R,
+    eye_w: int = EYE_W,
+    eye_h: int = EYE_H,
+    radius: int = EYE_RADIUS,
+    highlight: bool = False,
 ) -> None:
-    """画一只眼睛。
-    blink=0: 全开
-    blink=0.5: 半闭（椭圆压扁到一半高度）
-    blink=1.0: 全闭（白色圆角矩形长条）
+    """画一只圆角方眼。
+
+    openness=1.0 表示全开；数值越小，眼睛越微闭。
     """
-    BAR_H = 14  # 闭眼长条高度，越小变化区域越小
-
-    if blink >= 1.0:
-        # 全闭：白色圆角矩形长条
-        draw.rounded_rectangle(
-            [cx - EYEBALL_R, cy - BAR_H // 2, cx + EYEBALL_R, cy + BAR_H // 2],
-            radius=BAR_H // 2,
-            fill=WHITE,
-        )
-        return
-
-    if blink > 0.0:
-        # 过渡：眼白高度从 EYEBALL_R 线性压缩到 BAR_H//2
-        half_h = int(EYEBALL_R * (1 - blink) + (BAR_H // 2) * blink)
-        half_h = max(half_h, BAR_H // 2)
-
-        draw.ellipse(
-            [cx - EYEBALL_R, cy - half_h, cx + EYEBALL_R, cy + half_h],
-            fill=WHITE,
-        )
-
-        # 瞳孔随之压缩
-        pupil_half_h = max(int(pupil_r * (1 - blink)), BAR_H // 2 - 2)
-        px = cx + pupil_dx
-        py = cy + pupil_dy
-        draw.ellipse(
-            [px - pupil_r, py - pupil_half_h, px + pupil_r, py + pupil_half_h],
-            fill=BLACK,
-        )
-
-        # 高光（压扁时隐藏）
-        if blink < 0.4:
-            hx = px - PUPIL_R // 3
-            hy = py - pupil_half_h // 2
-            draw.ellipse(
-                [hx - HIGHLIGHT_R, hy - HIGHLIGHT_R, hx + HIGHLIGHT_R, hy + HIGHLIGHT_R],
-                fill=WHITE,
-            )
-        return
-
-    # 全开
-    draw.ellipse(
-        [cx - EYEBALL_R, cy - EYEBALL_R, cx + EYEBALL_R, cy + EYEBALL_R],
+    openness = max(0.18, min(1.0, openness))
+    h = max(18, int(eye_h * openness))
+    r = min(radius, h // 2, eye_w // 2)
+    draw.rounded_rectangle(
+        [cx - eye_w // 2, cy - h // 2, cx + eye_w // 2, cy + h // 2],
+        radius=r,
         fill=WHITE,
     )
 
     px = cx + pupil_dx
     py = cy + pupil_dy
+    pupil_half_h = max(6, int(pupil_r * min(1.0, openness + 0.08)))
     draw.ellipse(
-        [px - pupil_r, py - pupil_r, px + pupil_r, py + pupil_r],
+        [px - pupil_r, py - pupil_half_h, px + pupil_r, py + pupil_half_h],
         fill=BLACK,
     )
 
-    hx = px - pupil_r // 3
-    hy = py - pupil_r // 3
-    draw.ellipse(
-        [hx - HIGHLIGHT_R, hy - HIGHLIGHT_R, hx + HIGHLIGHT_R, hy + HIGHLIGHT_R],
-        fill=WHITE,
-    )
+    if highlight and openness > 0.65:
+        hx = px - pupil_r // 3
+        hy = py - pupil_half_h // 3
+        draw.ellipse(
+            [hx - HIGHLIGHT_R, hy - HIGHLIGHT_R, hx + HIGHLIGHT_R, hy + HIGHLIGHT_R],
+            fill=WHITE,
+        )
 
 
 def _canvas() -> tuple[Image.Image, ImageDraw.ImageDraw]:
@@ -113,183 +83,132 @@ def _canvas() -> tuple[Image.Image, ImageDraw.ImageDraw]:
     return img, ImageDraw.Draw(img)
 
 
-# ── neutral：demo 风格低变化待机 ──────────────────────────
+# ── neutral：圆角方眼待机 ────────────────────────────────
 
 def _neutral_frames() -> list[Image.Image]:
     frames = []
-    offsets = [(-1, 0), (0, 0), (1, 0), (0, 1), (0, 0), (0, -1)]
-
-    # 多数时间近似静态，只保留极小幅度的瞳孔漂移。
+    offsets = [(-1, 0), (0, 0), (1, 0), (1, 1), (0, 0), (-1, 1)]
     for dx, dy in offsets:
         img, draw = _canvas()
-        _draw_eye(draw, CX, CY, dx, dy, 0.0, pupil_r=32)
+        _draw_eye(draw, CX, CY, dx, dy, openness=1.0, pupil_r=28)
         frames.append(img)
 
     return frames
 
 
-# ── happy：笑眼（弧形） ───────────────────────────────────
+# ── happy：圆角方眼 + 微笑弧形瞳孔 ───────────────────────
 
-def _draw_crescent(img: Image.Image, cx: int, cy: int, dy: int = 0) -> None:
-    """画参考 ElectronBot 的圆润实心笑眼。
-
-    不是两个椭圆简单裁剪，而是用闭合曲线做出：
-    - 顶部饱满圆弧
-    - 底部柔和内凹弧线
-    - 左右两端圆润收口
-    """
-    scale = 4
-    layer = Image.new("RGB", (W * scale, H * scale), BG)
-    draw = ImageDraw.Draw(layer)
-
-    scx = cx * scale
-    scy = (cy + dy) * scale
-
-    half_w = 80 * scale
-    top_h = 58 * scale
-    bottom_dip = 12 * scale
-    corner_r = 14 * scale
-
-    # 构造一个闭合曲线轮廓：上半部分是半椭圆，底部是微笑式内凹弧线。
-    points: list[tuple[float, float]] = []
-    samples = 48
-
-    # 上边：从左到右的饱满半椭圆。
-    for i in range(samples + 1):
-        t = math.pi - math.pi * i / samples
-        x = scx + half_w * math.cos(t)
-        y = scy - top_h * math.sin(t)
-        points.append((x, y))
-
-    # 右端圆润过渡。
-    for i in range(1, 9):
-        t = i / 8
-        x = scx + half_w - corner_r * (1 - math.cos(t * math.pi / 2))
-        y = scy + corner_r * math.sin(t * math.pi / 2)
-        points.append((x, y))
-
-    # 底边：从右到左的柔和内凹弧线，中间略向下。
-    for i in range(samples + 1):
-        u = i / samples
-        x = scx + half_w - 2 * half_w * u
-        y = scy + bottom_dip * math.sin(math.pi * u)
-        points.append((x, y))
-
-    # 左端圆润过渡。
-    for i in range(1, 9):
-        t = i / 8
-        x = scx - half_w + corner_r * (1 - math.cos(t * math.pi / 2))
-        y = scy + corner_r * math.sin((1 - t) * math.pi / 2)
-        points.append((x, y))
-
-    draw.polygon([(round(x), round(y)) for x, y in points], fill=WHITE)
-
-    layer = layer.filter(ImageFilter.GaussianBlur(radius=0.35 * scale))
-    layer = layer.resize((W, H), Image.Resampling.LANCZOS)
-    img.paste(layer)
+def _draw_smile_pupil(draw: ImageDraw.ImageDraw, cx: int, cy: int, width: int = 56, height: int = 30, thickness: int = 10) -> None:
+    bbox = [cx - width // 2, cy - height // 2, cx + width // 2, cy + height // 2]
+    draw.arc(bbox, start=200, end=340, fill=BLACK, width=thickness)
 
 
 def _happy_frames() -> list[Image.Image]:
     frames = []
-
-    # ElectronBot 风格笑眼以形状表达为主，动画只做极小上下浮动。
     for dy in (0, 1, 0, -1):
         img, draw = _canvas()
-        _draw_crescent(img, CX, CY, dy)
+        _draw_eye(draw, CX, CY, 0, dy, openness=0.92, pupil_r=26)
+        _draw_smile_pupil(draw, CX, CY + 10 + dy)
         frames.append(img)
 
     return frames
 
 
-# ── comfort：温柔微闭眼，整体轻微下移，表达放松但不低落 ───────────
+# ── comfort：微闭并下移的温柔眼 ───────────────────────────
 
 def _comfort_frames() -> list[Image.Image]:
     frames = []
     offsets = [(0, 1), (1, 1), (1, 0), (0, 1), (-1, 0), (-1, 1)]
     for dx, dy in offsets:
         img, draw = _canvas()
-        _draw_eye(draw, CX, CY + 4, dx, dy, 0.16, pupil_r=30)
+        _draw_eye(draw, CX, CY + 6, dx, dy, openness=0.78, pupil_r=26)
         frames.append(img)
 
     return frames
 
 
-# ── listening：睁大眼睛 ───────────────────────────────────
+# ── listening：更打开、更专注的圆角方眼 ───────────────────
 
 def _listening_frames() -> list[Image.Image]:
     frames = []
-    offsets = [(0, 0), (0, -1), (1, 0), (0, 0), (-1, 0), (0, 1)]
+    offsets = [(0, -1), (0, -2), (1, -1), (0, -1), (-1, -1), (0, 0)]
     for dx, dy in offsets:
         img, draw = _canvas()
-        _draw_eye(draw, CX, CY - 2, dx, dy, 0.0)
+        _draw_eye(draw, CX, CY - 3, dx, dy, openness=1.0, pupil_r=24, eye_w=142, eye_h=116)
         frames.append(img)
 
     return frames
 
 
-# ── thinking：轻微偏视，表达思考 ──────────────────────────
+# ── thinking：圆角方眼 + 偏视瞳孔 ─────────────────────────
 
 def _thinking_frames() -> list[Image.Image]:
     frames = []
-    offsets = [(4, -3), (5, -3), (4, -2), (3, -3)]
+    offsets = [(6, -4), (7, -4), (6, -3), (5, -4)]
     for dx, dy in offsets:
         img, draw = _canvas()
-        _draw_eye(draw, CX, CY, dx, dy, 0.0)
+        _draw_eye(draw, CX, CY, dx, dy, openness=0.92, pupil_r=24)
         frames.append(img)
 
     return frames
 
 
-# ── sleep：闭眼休眠，几乎静止 ────────────────────────────
+# ── sleep：圆润 U 形闭眼，几乎静止 ────────────────────────
 
 def _sleep_frames() -> list[Image.Image]:
     frames = []
     for dy in (0, 1):
         img, draw = _canvas()
-        _draw_closed_line(draw, CX, CY + dy, width=96, thickness=6)
+        _draw_closed_smile_arc(img, CX, CY + 8 + dy, width=118, height=64, thickness=18)
         frames.append(img)
 
     return frames
 
 
-# ── blink：demo 风格线条式眨眼 ────────────────────────────
+# ── blink：圆角方眼直接切换到 U 形闭眼 ────────────────────
 
-def _draw_closed_bar(draw: ImageDraw.ImageDraw, cx: int, cy: int, width: int, height: int) -> None:
-    draw.rounded_rectangle(
-        [cx - width // 2, cy - height // 2, cx + width // 2, cy + height // 2],
-        radius=max(1, height // 2),
-        fill=WHITE,
+def _draw_closed_smile_arc(img: Image.Image, cx: int, cy: int, width: int = 120, height: int = 64, thickness: int = 22) -> None:
+    """画 U 形闭眼弧线，用作眨眼闭合状态。"""
+    scale = 4
+    layer = Image.new("RGBA", (W * scale, H * scale), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(layer)
+    bbox = [
+        (cx - width // 2) * scale,
+        (cy - height // 2) * scale,
+        (cx + width // 2) * scale,
+        (cy + height // 2) * scale,
+    ]
+    draw.arc(
+        bbox,
+        start=18,
+        end=162,
+        fill=WHITE + (255,),
+        width=thickness * scale,
     )
-
-
-def _draw_closed_line(draw: ImageDraw.ImageDraw, cx: int, cy: int, width: int, thickness: int) -> None:
-    draw.line(
-        [cx - width // 2, cy, cx + width // 2, cy],
-        fill=WHITE,
-        width=thickness,
-    )
+    layer = layer.filter(ImageFilter.GaussianBlur(radius=0.25 * scale))
+    layer = layer.resize((W, H), Image.Resampling.LANCZOS)
+    img.paste(Image.new("RGB", (W, H), BG), mask=Image.new("L", (W, H), 0))
+    img.paste(Image.new("RGB", (W, H), WHITE), mask=layer.getchannel("A"))
 
 
 def _blink_frames() -> list[Image.Image]:
-    # 符号化条形眨眼：避免整只眼睛从圆形大面积压缩，降低眨眼瞬间撕裂感。
-    # 开眼帧沿用 neutral 的大瞳孔，避免待机 → 眨眼时瞳孔突然变小。
-    # 不生成闭眼细白线帧，避免眨眼时出现过细、过亮的瞬间线条。
+    # 直接从圆角方眼切换到 U 形闭眼，不再使用粗白条过渡。
     frames = []
 
     img, draw = _canvas()
-    _draw_eye(draw, CX, CY, 0, 0, 0.0, pupil_r=32)
+    _draw_eye(draw, CX, CY, 0, 0, openness=1.0, pupil_r=28)
     frames.append(img)
 
     img, draw = _canvas()
-    _draw_closed_bar(draw, CX, CY, width=118, height=28)
+    _draw_closed_smile_arc(img, CX, CY + 8, width=118, height=64, thickness=18)
     frames.append(img)
 
     img, draw = _canvas()
-    _draw_closed_bar(draw, CX, CY, width=118, height=28)
+    _draw_closed_smile_arc(img, CX, CY + 8, width=118, height=64, thickness=18)
     frames.append(img)
 
     img, draw = _canvas()
-    _draw_eye(draw, CX, CY, 0, 0, 0.0, pupil_r=32)
+    _draw_eye(draw, CX, CY, 0, 0, openness=1.0, pupil_r=28)
     frames.append(img)
 
     return frames
