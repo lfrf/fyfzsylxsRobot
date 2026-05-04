@@ -89,8 +89,8 @@ def build_eyes_driver(settings: Settings) -> MockEyesDriver | ST7789EyesDriver:
         return MockEyesDriver()
     try:
         base_assets = Path(settings.eyes_assets_dir)
-        left_assets = Path(settings.eyes_left_assets_dir) if settings.eyes_left_assets_dir else None
-        right_assets = Path(settings.eyes_right_assets_dir) if settings.eyes_right_assets_dir else None
+        left_assets = Path(settings.eyes_left_assets_dir) if settings.eyes_left_assets_dir else base_assets / "left"
+        right_assets = Path(settings.eyes_right_assets_dir) if settings.eyes_right_assets_dir else base_assets / "right"
         return ST7789EyesDriver(
             ST7789EyeConfig(
                 assets_dir=base_assets,
