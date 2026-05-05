@@ -109,6 +109,22 @@ class Settings:
             "yes",
             "on",
         }
+        default_profile_data_dir = orchestrator_root / "data" / "profiles"
+        self.profile_data_dir = (
+            os.getenv("PROFILE_DATA_DIR", str(default_profile_data_dir)).strip()
+            or str(default_profile_data_dir)
+        )
+        self.profile_context_max_chars = max(100, int(os.getenv("PROFILE_CONTEXT_MAX_CHARS", "800")))
+        self.profile_summarize_every_turns = max(1, int(os.getenv("PROFILE_SUMMARIZE_EVERY_TURNS", "5")))
+        self.profile_summary_provider = (
+            os.getenv("PROFILE_SUMMARY_PROVIDER", "rules").strip().lower() or "rules"
+        )
+        self.profile_memory_enabled = os.getenv("PROFILE_MEMORY_ENABLED", "true").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
         self.system_prompt = os.getenv(
             "LLM_SYSTEM_PROMPT",
             (

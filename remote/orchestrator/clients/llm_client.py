@@ -46,6 +46,7 @@ class LLMClient:
         mode_policy: ModePolicy,
         rag_route: RagRoute,
         rag_context: str | None = None,
+        user_profile_context: str | None = None,
     ) -> LLMResult:
         service_url = f"{self.api_base}/chat/completions" if self.api_base else None
         log_event(
@@ -58,10 +59,16 @@ class LLMClient:
             mock_enabled=self.use_mock or settings.llm_provider == "mock",
         )
         started = perf_counter()
-        system_prompt = self._build_system_prompt(mode_policy, rag_route, rag_context)
+        system_prompt = self._build_system_prompt(
+            mode_policy,
+            rag_route,
+            rag_context,
+            user_profile_context=user_profile_context,
+        )
         self._log_prompt_built(
             mode_policy=mode_policy,
             rag_context=rag_context,
+            user_profile_context=user_profile_context,
             system_prompt=system_prompt,
         )
         if self.use_mock or not self.api_base or settings.llm_provider == "mock":
@@ -124,7 +131,14 @@ class LLMClient:
             self._log_result(result)
             return result
 
-    def _build_system_prompt(self, mode_policy: ModePolicy, rag_route: RagRoute, rag_context: str | None) -> str:
+    def _build_system_prompt(
+        self,
+        mode_policy: ModePolicy,
+        rag_route: RagRoute,
+        rag_context: str | None,
+        *,
+        user_profile_context: str | None = None,
+    ) -> str:
         parts = [
             settings.system_prompt,
             mode_policy.system_instruction,
@@ -155,6 +169,13 @@ class LLMClient:
         ])
         if rag_context:
             parts.append(f"Optional retrieved context:\n{rag_context}")
+        if user_profile_context:
+            parts.append(
+                "User profile context:\n"
+                f"{user_profile_context}\n"
+                "Use this naturally. Do not expose internal databases, profile files, or memory systems. "
+                "Do not over-mention memory."
+            )
         return "\n".join(parts)
 
     def _mock_result(
@@ -198,6 +219,7 @@ class LLMClient:
         *,
         mode_policy: ModePolicy,
         rag_context: str | None,
+        user_profile_context: str | None,
         system_prompt: str,
     ) -> None:
         prompt_sections = [
@@ -214,6 +236,8 @@ class LLMClient:
         ])
         if rag_context:
             prompt_sections.append("rag_context")
+        if user_profile_context:
+            prompt_sections.append("user_profile_context")
         log_event(
             "llm_prompt_built",
             mode=mode_policy.mode_id,
@@ -223,6 +247,8 @@ class LLMClient:
             output_constraints_chars=len(mode_policy.output_constraints or ""),
             rag_context_used=bool(rag_context),
             rag_context_chars=len(rag_context or ""),
+            profile_context_used=bool(user_profile_context),
+            profile_context_chars=len(user_profile_context or ""),
             speech_style=mode_policy.speech_style,
             prompt_chars=len(system_prompt),
             prompt_sections=prompt_sections,

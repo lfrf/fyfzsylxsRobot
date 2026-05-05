@@ -1,5 +1,8 @@
 from .contracts.schemas import (
     EmotionResult,
+    FaceBoxSchema,
+    FaceIdentitySchema,
+    FaceObservationSchema,
     ModeInfo,
     ModeSwitchResult,
     RobotAction,
@@ -10,11 +13,15 @@ from .contracts.schemas import (
     RobotState,
     SUPPORTED_ROBOT_MODES,
     TTSResult,
+    UserProfileBriefSchema,
     VisionContext,
 )
 
 __all__ = [
     "EmotionResult",
+    "FaceBoxSchema",
+    "FaceIdentitySchema",
+    "FaceObservationSchema",
     "ModeInfo",
     "ModeSwitchResult",
     "RobotAction",
@@ -25,5 +32,6 @@ __all__ = [
     "RobotState",
     "SUPPORTED_ROBOT_MODES",
     "TTSResult",
+    "UserProfileBriefSchema",
     "VisionContext",
 ]

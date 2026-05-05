@@ -38,6 +38,7 @@ class AccompanyModeChain(BaseModeChain):
                 mode_policy=context.mode_policy,
                 rag_route=context.rag_route,
                 rag_context=context.rag_context,
+                user_profile_context=context.metadata.get("profile_context"),
             )
             debug_info["llm_source"] = llm_result.source
 
@@ -83,4 +84,3 @@ class AccompanyModeChain(BaseModeChain):
                 handled=False,
                 debug=debug_info,
             )
-

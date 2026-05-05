@@ -235,6 +235,45 @@ class RobotFaceState(BaseModel):
     tracking_state: str = Field(default="mock")
 
 
+class FaceBoxSchema(BaseModel):
+    x: float | None = Field(default=None, ge=0.0)
+    y: float | None = Field(default=None, ge=0.0)
+    w: float | None = Field(default=None, ge=0.0)
+    h: float | None = Field(default=None, ge=0.0)
+    unit: str = Field(default="normalized")
+
+
+class FaceIdentitySchema(BaseModel):
+    face_detected: bool = False
+    face_id: str | None = None
+    user_id: str | None = None
+    is_known: bool = False
+    match_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    display_name: str | None = None
+    bbox: FaceBoxSchema | None = None
+    source: str | None = None
+    embedding_model: str | None = None
+    seen_count: int | None = Field(default=None, ge=0)
+    last_seen_at: str | None = None
+
+
+class FaceObservationSchema(BaseModel):
+    face_id: str | None = None
+    user_id: str | None = None
+    is_primary: bool = False
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    bbox: FaceBoxSchema | None = None
+    source: str | None = None
+
+
+class UserProfileBriefSchema(BaseModel):
+    user_id: str | None = None
+    display_name: str | None = None
+    profile_summary: str | None = None
+    preferred_mode: str | None = None
+    source: str | None = None
+
+
 class RobotInput(BaseModel):
     type: str = Field(default="audio_base64")
     audio_base64: str = Field(..., min_length=1)
@@ -250,6 +289,8 @@ class VisionContext(BaseModel):
     latest: RobotFaceState | None = None
     recent: list[RobotFaceState] = Field(default_factory=list)
     image_frames: list[VideoFrameSchema] = Field(default_factory=list)
+    face_identity: FaceIdentitySchema | None = None
+    face_observations: list[FaceObservationSchema] = Field(default_factory=list)
 
 
 class RobotState(BaseModel):

@@ -21,6 +21,7 @@ from services.rag_router import RagRouter, rag_router
 from services.response_policy_service import ResponsePolicyService, response_policy_service
 from services.robot_action_service import RobotActionService, robot_action_service
 from services.games.game_state_service import game_state_service
+from services.profile import UserProfileService, user_profile_service
 
 
 class RobotChatService:
@@ -36,6 +37,7 @@ class RobotChatService:
         actions: RobotActionService | None = None,
         response_policy: ResponsePolicyService | None = None,
         mode_chain_router_instance: ModeChainRouter | None = None,
+        profile_service: UserProfileService | None = None,
     ) -> None:
         self.modes = modes or mode_manager
         self.rag = rag or rag_router
@@ -46,6 +48,7 @@ class RobotChatService:
         self.actions = actions or robot_action_service
         self.response_policy = response_policy or response_policy_service
         self.mode_chain_router = mode_chain_router_instance or mode_chain_router
+        self.profile_service = profile_service or user_profile_service
 
     def handle_chat_turn(self, request: RobotChatRequest) -> RobotChatResponse:
         log_session_id = self._request_log_session_id(request)
@@ -75,6 +78,11 @@ class RobotChatService:
         asr_result = self.asr.transcribe(request)
         asr_text = asr_result.text
         current_mode = self.modes.get_session_mode(request.session_id, request.mode)
+        identity = self.profile_service.resolve_identity(request)
+        profile_context_result = self.profile_service.build_profile_context(
+            user_id=identity.user_id,
+            mode_id=current_mode,
+        )
 
         # ===== GAME MODE LOGIC (highest priority for exits) =====
         # Check for game exit intent (highest priority) - return to care mode
@@ -94,6 +102,14 @@ class RobotChatService:
                     turn_id=request.turn_id,
                     mode=policy.mode_id,
                     speech_style=policy.speech_style,
+                )
+                memory_result = self._record_profile_turn(
+                    identity=identity,
+                    request=request,
+                    mode_id=policy.mode_id,
+                    asr_text=asr_text,
+                    reply_text=reply_text,
+                    emotion=emotion,
                 )
                 response = RobotChatResponse(
                     success=True,
@@ -133,6 +149,11 @@ class RobotChatService:
                         display_name=policy.display_name,
                         active_rag_namespace=rag_route.namespace,
                         llm_skipped="game_exit",
+                        profile_debug=self._profile_debug(
+                            identity=identity,
+                            profile_context_result=profile_context_result,
+                            memory_result=memory_result,
+                        ),
                     ),
                 )
                 self._log_response_ready(
@@ -176,6 +197,14 @@ class RobotChatService:
                 mode=policy.mode_id,
                 speech_style=policy.speech_style,
             )
+            memory_result = self._record_profile_turn(
+                identity=identity,
+                request=request,
+                mode_id=policy.mode_id,
+                asr_text=asr_text,
+                reply_text=reply_text,
+                emotion=emotion,
+            )
             response = RobotChatResponse(
                 success=True,
                 session_id=request.session_id,
@@ -214,6 +243,11 @@ class RobotChatService:
                     display_name=policy.display_name,
                     active_rag_namespace=rag_route.namespace,
                     llm_skipped="mode_switch",
+                    profile_debug=self._profile_debug(
+                        identity=identity,
+                        profile_context_result=profile_context_result,
+                        memory_result=memory_result,
+                    ),
                 ),
             )
             self._log_response_ready(
@@ -241,6 +275,14 @@ class RobotChatService:
                 turn_id=request.turn_id,
                 mode="game",
                 speech_style=policy.speech_style,
+            )
+            memory_result = self._record_profile_turn(
+                identity=identity,
+                request=request,
+                mode_id=policy.mode_id,
+                asr_text=asr_text,
+                reply_text=reply_text,
+                emotion=emotion,
             )
             response = RobotChatResponse(
                 success=True,
@@ -278,6 +320,11 @@ class RobotChatService:
                     display_name="游戏模式",
                     active_rag_namespace="game",
                     llm_skipped="game_start",
+                    profile_debug=self._profile_debug(
+                        identity=identity,
+                        profile_context_result=profile_context_result,
+                        memory_result=memory_result,
+                    ),
                 ),
             )
             self._log_response_ready(
@@ -323,6 +370,13 @@ class RobotChatService:
             rag_route=rag_route,
             rag_context=rag_context,
             emotion_label=emotion.label,
+            vision_context=request.vision_context,
+            robot_state=request.robot_state,
+            metadata={
+                "identity": self._model_dump(identity),
+                "profile": self._model_dump(identity.profile),
+                "profile_context": profile_context_result.context,
+            },
         )
         chain_result = mode_chain.handle_turn(
             context=chain_context,
@@ -374,6 +428,7 @@ class RobotChatService:
                 mode_policy=policy,
                 rag_route=rag_route,
                 rag_context=rag_context,
+                user_profile_context=profile_context_result.context,
             )
             reply_text = llm_result.reply_text
             response_policy_result = self.response_policy.apply(
@@ -399,6 +454,14 @@ class RobotChatService:
             turn_id=request.turn_id,
             mode=policy.mode_id,
             speech_style=policy.speech_style,
+        )
+        memory_result = self._record_profile_turn(
+            identity=identity,
+            request=request,
+            mode_id=policy.mode_id,
+            asr_text=asr_text,
+            reply_text=reply_text,
+            emotion=emotion,
         )
         response = RobotChatResponse(
             success=True,
@@ -445,6 +508,11 @@ class RobotChatService:
                 response_policy_original_chars=response_policy_original_chars,
                 response_policy_final_chars=response_policy_final_chars,
                 llm_skipped=llm_source if llm_result is None else None,
+                profile_debug=self._profile_debug(
+                    identity=identity,
+                    profile_context_result=profile_context_result,
+                    memory_result=memory_result,
+                ),
             ),
         )
         self._log_response_ready(
@@ -464,6 +532,48 @@ class RobotChatService:
         if any(token in asr_text for token in ("开心", "高兴", "太好了")):
             return EmotionResult(label="happy", confidence=0.65, valence="positive", arousal="medium")
         return EmotionResult(label="neutral", confidence=0.5)
+
+    def _record_profile_turn(
+        self,
+        *,
+        identity,
+        request: RobotChatRequest,
+        mode_id: str,
+        asr_text: str,
+        reply_text: str,
+        emotion: EmotionResult,
+    ):
+        return self.profile_service.record_turn(
+            user_id=identity.user_id,
+            session_id=request.session_id,
+            turn_id=request.turn_id,
+            mode_id=mode_id,
+            asr_text=asr_text,
+            reply_text=reply_text,
+            emotion_label=emotion.label if emotion else None,
+            face_id=identity.face_id,
+            request_options=request.request_options,
+        )
+
+    def _profile_debug(self, *, identity, profile_context_result, memory_result=None) -> dict:
+        return {
+            "used": bool(identity and identity.user_id),
+            "user_id": getattr(identity, "user_id", None),
+            "identity_source": getattr(identity, "identity_source", None),
+            "face_id": getattr(identity, "face_id", None),
+            "profile_context_chars": getattr(profile_context_result, "chars", 0) or 0,
+            "memory_written": bool(getattr(memory_result, "written", False)),
+            "summary_updated": bool(getattr(memory_result, "summary_updated", False)),
+        }
+
+    def _model_dump(self, model) -> dict:
+        if model is None:
+            return {}
+        if hasattr(model, "model_dump"):
+            return model.model_dump()
+        if hasattr(model, "dict"):
+            return model.dict()
+        return dict(model)
 
     def _safe_llm_source(self, llm_result, fallback: str) -> str:
         if llm_result is None:
@@ -498,6 +608,7 @@ class RobotChatService:
         response_policy_rules: list[str] | None = None,
         response_policy_original_chars: int = 0,
         response_policy_final_chars: int = 0,
+        profile_debug: dict | None = None,
     ) -> dict:
         llm_source = llm_skipped or (llm_result.source if llm_result else None)
         llm_latency = None if llm_result is None else llm_result.latency_ms
@@ -553,6 +664,15 @@ class RobotChatService:
                 "original_chars": response_policy_original_chars,
                 "final_chars": response_policy_final_chars,
                 "rules_applied": response_policy_rules or [],
+            },
+            "profile": profile_debug or {
+                "used": False,
+                "user_id": None,
+                "identity_source": None,
+                "face_id": None,
+                "profile_context_chars": 0,
+                "memory_written": False,
+                "summary_updated": False,
             },
         }
 
