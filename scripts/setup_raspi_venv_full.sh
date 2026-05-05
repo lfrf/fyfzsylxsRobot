@@ -22,8 +22,8 @@ if [[ "$RECREATE" == "1" && -d "$VENV_DIR" ]]; then
 fi
 
 if [[ ! -d "$VENV_DIR" ]]; then
-  log "creating venv: $VENV_DIR"
-  "$PYTHON_BIN" -m venv "$VENV_DIR"
+  log "creating venv with system site packages: $VENV_DIR"
+  "$PYTHON_BIN" -m venv --system-site-packages "$VENV_DIR"
 fi
 
 # shellcheck disable=SC1091
