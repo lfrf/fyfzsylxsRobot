@@ -151,7 +151,7 @@ def main() -> None:
                     print(f"[camera-probe] failed to save {file_path}")
 
             if args.upload_url and args.upload_every > 0 and frame_count % args.upload_every == 0:
-                image_base64, jpeg_size = _encode_jpeg_base64(frame)
+                image_base64 = _encode_jpeg_base64(frame)
                 pending_batch.append(
                     {
                         "session_id": args.session_id,
