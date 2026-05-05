@@ -638,6 +638,24 @@ export ROBOT_DEBUG_TRACE=true
 export PYTHONPATH="$A22_CODE/shared:$A22_CODE/remote/vision-service:${PYTHONPATH:-}"
 
 python -m uvicorn app:app --host 127.0.0.1 --port 20000 --log-level debug
+
+
+确认过可以执行的指令
+source /root/autodl-tmp/a22/code/fyfzsylxsRobot/scripts/env_robot.sh
+source "$A22_ENV_ROOT/vision-service/bin/activate"
+cd "$A22_CODE/remote/vision-service"
+
+export VISION_SERVICE_PORT=20000
+export FACE_RECOGNITION_PROVIDER=insightface
+export INSIGHTFACE_MODEL_NAME=buffalo_l
+export INSIGHTFACE_DET_SIZE=640,640
+export INSIGHTFACE_CTX_ID=0
+export FACE_STORE_RAW_IMAGES=false
+export VISION_WARMUP_ENABLED=false
+export FER_WARMUP_ENABLED=false
+
+python -m uvicorn app:app --host 127.0.0.1 --port 20000 --log-level debug
+
 ```
 
 检查：
