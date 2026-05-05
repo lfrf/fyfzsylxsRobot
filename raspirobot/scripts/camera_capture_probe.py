@@ -59,12 +59,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _encode_jpeg_base64(frame) -> tuple[str, int]:
+def _encode_jpeg_base64(frame) -> str:
     ok, buf = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
     if not ok:
         raise RuntimeError("Failed to encode frame as JPEG")
     jpeg_bytes = buf.tobytes()
-    return base64.b64encode(jpeg_bytes).decode("ascii"), len(jpeg_bytes)
+    return base64.b64encode(jpeg_bytes).decode("ascii")
 
 
 def main() -> None:
@@ -154,13 +154,15 @@ def main() -> None:
                 image_base64, jpeg_size = _encode_jpeg_base64(frame)
                 pending_batch.append(
                     {
+                        "session_id": args.session_id,
+                        "turn_id": args.turn_id,
+                        "stream_id": args.stream_id,
                         "frame_id": frame_count,
                         "timestamp_ms": timestamp_ms,
                         "width": w,
                         "height": h,
                         "mime_type": "image/jpeg",
                         "image_base64": image_base64,
-                        "jpeg_size": jpeg_size,
                     }
                 )
 
@@ -173,7 +175,10 @@ def main() -> None:
                         "frames": pending_batch,
                     }
                     response = uploader.post(args.upload_url, json=payload)
-                    response.raise_for_status()
+                    if response.status_code >= 400:
+                        print(f"[camera-probe] upload failed status={response.status_code}")
+                        print("[camera-probe] upload response text=" + response.text)
+                        response.raise_for_status()
                     uploaded_count += len(pending_batch)
                     print(
                         "[camera-probe] uploaded batch size=%d status=%d"
@@ -204,6 +209,27 @@ def main() -> None:
         camera.stop()
         if args.preview:
             cv2.destroyAllWindows()
+        if uploader is not None and pending_batch:
+            payload = {
+                "session_id": args.session_id,
+                "turn_id": args.turn_id,
+                "stream_id": args.stream_id,
+                "frames": pending_batch,
+            }
+            response = uploader.post(args.upload_url, json=payload)
+            if response.status_code >= 400:
+                print(f"[camera-probe] upload failed status={response.status_code}")
+                print("[camera-probe] upload response text=" + response.text)
+                response.raise_for_status()
+            uploaded_count += len(pending_batch)
+            print(
+                "[camera-probe] uploaded final batch size=%d status=%d"
+                % (len(pending_batch), response.status_code)
+            )
+            try:
+                print("[camera-probe] upload response=" + json.dumps(response.json(), ensure_ascii=False))
+            except Exception:
+                print("[camera-probe] upload response text=" + response.text)
         elapsed = time.time() - start_ts
         print(
             "[camera-probe] stopped frames=%d saved=%d uploaded=%d elapsed=%.2fs"
