@@ -1,0 +1,309 @@
+麦克风运行测试
+arecord -D plughw:3,0 -f S16_LE -r 16000 -c 2 -d 8 -vv mic3_stereo.wav
+
+ssh建立隧道
+ssh -N \
+  -o ExitOnForwardFailure=yes \
+  -o ServerAliveInterval=30 \
+  -o ServerAliveCountMax=3 \
+  -L 127.0.0.1:29000:127.0.0.1:19000 \
+  -p 45217 root@connect.bjb1.seetacloud.com
+
+
+T6WSBaOnr8KX
+T6WSBaOnr8KX
+
+
+Remote侧：
+
+qwen server
+tmux new-session -d -s qwen "bash -lc '
+set -euo pipefail
+source /root/autodl-tmp/a22/env.sh
+source \"$A22_ENV_ROOT/qwen-server/bin/activate\"
+cd \"$A22_CODE/remote/qwen-server\"
+
+export CUDA_VISIBLE_DEVICES=\"$QWEN_CUDA_VISIBLE_DEVICES\"
+
+python -m vllm.entrypoints.openai.api_server \
+  --host 127.0.0.1 \
+  --port 8000 \
+  --model \"$QWEN_MODEL_PATH\" \
+  --served-model-name \"$QWEN_MODEL_NAME\" \
+  --dtype auto \
+  --gpu-memory-utilization \"$QWEN_GPU_MEMORY_UTILIZATION\" \
+  --max-model-len \"$QWEN_MAX_MODEL_LEN\" \
+  --max-num-seqs \"$QWEN_MAX_NUM_SEQS\" \
+  --trust-remote-code
+'"
+
+ASR+TTS：
+tmux new-session -d -s speech "bash -lc '
+set -euo pipefail
+source /root/autodl-tmp/a22/env.sh
+source \"$A22_ENV_ROOT/speech-service/bin/activate\"
+cd \"$A22_CODE/remote/speech-service\"
+
+export ASR_PROVIDER=qwen3_asr
+export ASR_MODEL=/root/autodl-tmp/a22/models/Qwen3-ASR-1.7B
+export ASR_DEVICE=cuda:0
+
+export TTS_PROVIDER=cosyvoice
+export TTS_MODEL=/root/autodl-tmp/a22/models/CosyVoice-300M-Instruct
+export TTS_MODE=cosyvoice_300m_instruct
+export TTS_DEVICE=cuda:0
+
+export ROBOT_LOG_LEVEL=INFO
+export ROBOT_DEBUG_TRACE=true
+
+python -m uvicorn app:app --host 127.0.0.1 --port 19100
+'"
+
+Orchestrator：
+tmux new-session -d -s orchestrator "bash -lc '
+set -euo pipefail
+source /root/autodl-tmp/a22/env.sh
+source \"$A22_ENV_ROOT/orchestrator/bin/activate\"
+cd \"$A22_CODE\"
+
+export SPEECH_SERVICE_BASE=http://127.0.0.1:19100
+export TTS_SERVICE_BASE=http://127.0.0.1:19100
+
+export LLM_PROVIDER=qwen
+export LLM_API_BASE=http://127.0.0.1:8000/v1
+export LLM_MODEL=Qwen2.5-7B-Instruct
+export LLM_API_KEY=EMPTY
+
+export ROBOT_CHAT_USE_MOCK_ASR=falsessh -N \
+  -o ExitOnForwardFailure=yes \
+  -o ServerAliveInterval=30 \
+  -o ServerAliveCountMax=3 \
+  -L 127.0.0.1:29000:127.0.0.1:19000 \
+  -p 45217 root@connect.bjb1.seetacloud.com
+
+export ROBOT_CHAT_USE_MOCK_LLM=false
+export ROBOT_CHAT_USE_MOCK_TTS=false
+
+export ROBOT_LOG_LEVEL=INFO
+export ROBOT_DEBUG_TRACE=true
+
+export PYTHONPATH=\"$A22_CODE/shared:$A22_CODE/remote/orchestrator\"
+
+python -m uvicorn app:app \
+  --app-dir remote/orchestrator \
+  --host 127.0.0.1 \
+  --port 19000
+'"
+
+
+
+
+本地主循环
+
+cd /home/pi/Desktop/code/fyfzsylxsRobot
+
+source /home/pi/Desktop/code/fyfzsylxsRobot/raspirobot/.venv/bin/activate
+
+mkdir -p /home/pi/Desktop/code/fyfzsylxsRobot/tmp/wav
+
+export ROBOT_REMOTE_BASE_URL=http://127.0.0.1:29000
+
+export ROBOT_AUDIO_WORK_DIR=/home/pi/Desktop/code/fyfzsylxsRobot/tmp/wav
+export ROBOT_AUDIO_CAPTURE_DEVICE=plughw:2,0
+export ROBOT_AUDIO_PLAYBACK_DEVICE=plughw:2,0
+export ROBOT_AUDIO_SAMPLE_RATE=16000
+export ROBOT_AUDIO_CHANNELS=2
+
+# ===== 音频预处理配置（新增）=====
+export ROBOT_AUDIO_PREPROCESS_ENABLED=true
+export ROBOT_AUDIO_ENABLE_NOISE_GATE=true
+export ROBOT_AUDIO_ENABLE_TRIM=true
+export ROBOT_AUDIO_NOISE_GATE_RATIO=2.0
+export ROBOT_AUDIO_POST_SPEECH_PADDING_MS=150
+export ROBOT_AUDIO_MIN_SPEECH_MS=400
+export ROBOT_AUDIO_SAVE_DEBUG_WAV=true
+
+export ROBOT_LOG_LEVEL=INFO
+export ROBOT_DEBUG_TRACE=true
+
+python -m raspirobot.main live \
+  --face-track \
+  --face-track-detector auto \
+  --face-track-actuation-range 270 \
+  --face-track-center-pan 135 --face-track-center-tilt 135 \
+  --face-track-pan-min-angle 0 --face-track-pan-max-angle 270 \
+  --face-track-tilt-min-angle 35 --face-track-tilt-max-angle 235
+
+
+cd /home/pi/Desktop/code/fyfzsylxsRobot
+
+source /home/pi/Desktop/code/fyfzsylxsRobot/raspirobot/.venv/bin/activate
+
+mkdir -p /home/pi/Desktop/code/fyfzsylxsRobot/tmp/wav
+
+export ROBOT_REMOTE_BASE_URL=http://127.0.0.1:29000
+
+export ROBOT_AUDIO_WORK_DIR=/home/pi/Desktop/code/fyfzsylxsRobot/tmp/wav
+export ROBOT_AUDIO_CAPTURE_DEVICE=plughw:2,0
+export ROBOT_AUDIO_PLAYBACK_DEVICE=plughw:2,0
+export ROBOT_AUDIO_SAMPLE_RATE=16000
+export ROBOT_AUDIO_CHANNELS=2
+
+# ===== 音频预处理配置（新增）=====
+export ROBOT_AUDIO_PREPROCESS_ENABLED=true
+export ROBOT_AUDIO_ENABLE_NOISE_GATE=true
+export ROBOT_AUDIO_ENABLE_TRIM=true
+export ROBOT_AUDIO_NOISE_GATE_RATIO=2.0
+export ROBOT_AUDIO_POST_SPEECH_PADDING_MS=150
+export ROBOT_AUDIO_MIN_SPEECH_MS=400
+export ROBOT_AUDIO_SAVE_DEBUG_WAV=true
+
+export ROBOT_LOG_LEVEL=INFO
+export ROBOT_DEBUG_TRACE=true
+
+python -m raspirobot.main live \
+  --face-track \
+  --face-track-detector auto \
+  --face-track-actuation-range 270 \
+  --face-track-center-pan 135 --face-track-center-tilt 135 \
+  --face-track-pan-min-angle 0 --face-track-pan-max-angle 270 \
+  --face-track-tilt-min-angle 35 --face-track-tilt-max-angle 235
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+cat > /tmp/robot_text_test.py <<'PY'
+import json
+import sys
+import urllib.request
+import urllib.error
+
+API_URL = "http://127.0.0.1:19000/v1/robot/chat_turn"
+
+
+def post_turn(session_id: str, turn_id: str, mode: str, text: str):
+    print()
+    print("=" * 70)
+    print(f"SESSION={session_id} | TURN={turn_id} | MODE={mode}")
+    print(f"USER: {text}")
+    print("=" * 70)
+
+    payload = {
+        "session_id": session_id,
+        "turn_id": turn_id,
+        "mode": mode,
+        "input": {
+            "type": "audio_base64",
+            "audio_base64": "dummy-audio-for-text-test",
+            "audio_format": "wav",
+            "sample_rate": 16000,
+            "channels": 1,
+            "text_hint": text,
+        },
+    }
+
+    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    req = urllib.request.Request(
+        API_URL,
+        data=body,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=180) as resp:
+            raw = resp.read().decode("utf-8", errors="replace")
+            status = resp.status
+    except urllib.error.HTTPError as e:
+        raw = e.read().decode("utf-8", errors="replace")
+        print("HTTP_STATUS:", e.code)
+        print("RAW_RESPONSE:")
+        print(raw)
+        return None
+    except Exception as e:
+        print("REQUEST_FAILED:", repr(e))
+        return None
+
+    print("HTTP_STATUS:", status)
+
+    try:
+        data = json.loads(raw)
+    except Exception as e:
+        print("JSON_PARSE_FAILED:", repr(e))
+        print("RAW_RESPONSE:")
+        print(raw)
+        return None
+
+    debug = data.get("debug") or {}
+
+    print("success:", data.get("success"))
+    print("mode:", (data.get("mode") or {}).get("mode_id"), "/", (data.get("mode") or {}).get("display_name"))
+    print("mode_changed:", data.get("mode_changed"))
+    print("asr_text:", data.get("asr_text"))
+    print("reply_text:", data.get("reply_text"))
+    print("tts.audio_url:", (data.get("tts") or {}).get("audio_url"))
+    print("robot_action:", data.get("robot_action"))
+
+    print("sources:", debug.get("sources"))
+    print("mode_chain:", debug.get("mode_chain"))
+    print("response_policy:", debug.get("response_policy"))
+    print("rag_context_used:", debug.get("rag_context_used"))
+    print("rag_matched_files:", debug.get("rag_matched_files"))
+
+    return data
+
+
+def run_all():
+    print("\n===== 1. Care mode =====")
+    post_turn("text-care-test", "t1", "accompany", "切换为关怀模式")
+    post_turn("text-care-test", "t2", "care", "我今天有点累")
+    post_turn("text-care-test", "t3", "care", "我头晕胸口痛")
+
+    print("\n===== 2. Accompany mode =====")
+    post_turn("text-accompany-test", "t1", "care", "切换为陪伴模式")
+    post_turn("text-accompany-test", "t2", "accompany", "我今天有点无聊")
+    post_turn("text-accompany-test", "t3", "accompany", "今天感觉有点烦")
+
+    print("\n===== 3. Learning mode =====")
+    post_turn("text-learning-test", "t1", "care", "切换为学习模式")
+    post_turn("text-learning-test", "t2", "learning", "帮我制定今天的学习计划")
+    post_turn("text-learning-test", "t3", "learning", "考考我嵌入式")
+
+    print("\n===== 4. Game mode: riddle =====")
+    post_turn("text-game-riddle-test", "t1", "accompany", "我们来开始游戏吧")
+    post_turn("text-game-riddle-test", "t2", "game", "A")
+    post_turn("text-game-riddle-test", "t3", "game", "铅笔")
+    post_turn("text-game-riddle-test", "t4", "game", "不玩了")
+    post_turn("text-game-riddle-test", "t5", "accompany", "我今天有点无聊")
+
+    print("\n===== 5. Game mode: word chain =====")
+    post_turn("text-game-word-test", "t1", "accompany", "开始游戏")
+    post_turn("text-game-word-test", "t2", "game", "B")
+    post_turn("text-game-word-test", "t3", "game", "空调")
+    post_turn("text-game-word-test", "t4", "game", "切换为学习模式")
+    post_turn("text-game-word-test", "t5", "learning", "考考我")
+
+
+if __name__ == "__main__":
+    if len(sys.argv) == 1:
+        run_all()
+    else:
+        # 用法：
+        # python3 /tmp/robot_text_test.py session turn mode "文本"
+        if len(sys.argv) != 5:
+            print('Usage: python3 /tmp/robot_text_test.py <session_id> <turn_id> <mode> "<text>"')
+            sys.exit(1)
+        post_turn(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4])
+PY
