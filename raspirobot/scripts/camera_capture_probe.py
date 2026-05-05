@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+import base64
+import json
 import time
 from pathlib import Path
 
@@ -12,12 +14,25 @@ except Exception as exc:  # pragma: no cover - runtime dependency
 else:
     _CV2_IMPORT_ERROR = None
 
+try:
+    import httpx
+except Exception as exc:  # pragma: no cover - runtime dependency
+    httpx = None  # type: ignore[assignment]
+    _HTTPX_IMPORT_ERROR = exc
+else:
+    _HTTPX_IMPORT_ERROR = None
+
 from raspirobot.hardware.pan_tilt_face_tracker import CameraCapture, CameraConfig
 
 
 def _require_cv2() -> None:
     if cv2 is None:
         raise RuntimeError("opencv-python is required. Install: pip install opencv-python") from _CV2_IMPORT_ERROR
+
+
+def _require_httpx() -> None:
+    if httpx is None:
+        raise RuntimeError("httpx is required. Install: pip install httpx") from _HTTPX_IMPORT_ERROR
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -34,7 +49,22 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--save-every", type=int, default=30, help="Save one frame every N captured frames")
     parser.add_argument("--preview", action="store_true", help="Show a preview window")
     parser.add_argument("--interval-ms", type=int, default=0, help="Sleep between frames in milliseconds")
+    parser.add_argument("--upload-url", type=str, default="", help="Optional HTTP endpoint for single-frame upload test")
+    parser.add_argument("--session-id", type=str, default="demo-session-001")
+    parser.add_argument("--turn-id", type=str, default="turn-0001")
+    parser.add_argument("--stream-id", type=str, default="video-001")
+    parser.add_argument("--upload-every", type=int, default=1, help="Upload every N frames when --upload-url is set")
+    parser.add_argument("--upload-timeout", type=float, default=10.0, help="HTTP timeout seconds for upload")
+    parser.add_argument("--upload-batch-size", type=int, default=1, help="Frames per upload request; 1 means single-frame test")
     return parser
+
+
+def _encode_jpeg_base64(frame) -> tuple[str, int]:
+    ok, buf = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
+    if not ok:
+        raise RuntimeError("Failed to encode frame as JPEG")
+    jpeg_bytes = buf.tobytes()
+    return base64.b64encode(jpeg_bytes).decode("ascii"), len(jpeg_bytes)
 
 
 def main() -> None:
@@ -44,6 +74,11 @@ def main() -> None:
     save_dir = Path(args.save_dir).expanduser().resolve() if args.save_dir else None
     if save_dir is not None:
         save_dir.mkdir(parents=True, exist_ok=True)
+
+    uploader = None
+    if args.upload_url:
+        _require_httpx()
+        uploader = httpx.Client(timeout=args.upload_timeout)
 
     camera_cfg = CameraConfig(
         width=args.camera_width,
@@ -67,6 +102,18 @@ def main() -> None:
             camera_cfg.vflip,
         )
     )
+    if args.upload_url:
+        print(
+            "[camera-probe] upload url=%s session_id=%s turn_id=%s stream_id=%s upload_every=%d batch_size=%d"
+            % (
+                args.upload_url,
+                args.session_id,
+                args.turn_id,
+                args.stream_id,
+                args.upload_every,
+                args.upload_batch_size,
+            )
+        )
 
     camera.start()
     print("[camera-probe] camera started")
@@ -74,6 +121,8 @@ def main() -> None:
     start_ts = time.time()
     frame_count = 0
     saved_count = 0
+    uploaded_count = 0
+    pending_batch: list[dict[str, object]] = []
 
     try:
         while True:
@@ -84,6 +133,7 @@ def main() -> None:
 
             frame_count += 1
             now_ts = time.time()
+            timestamp_ms = int(now_ts * 1000)
             fps = frame_count / max(now_ts - start_ts, 1e-6)
             h, w = frame.shape[:2]
             print(
@@ -100,6 +150,41 @@ def main() -> None:
                 else:
                     print(f"[camera-probe] failed to save {file_path}")
 
+            if args.upload_url and args.upload_every > 0 and frame_count % args.upload_every == 0:
+                image_base64, jpeg_size = _encode_jpeg_base64(frame)
+                pending_batch.append(
+                    {
+                        "frame_id": frame_count,
+                        "timestamp_ms": timestamp_ms,
+                        "width": w,
+                        "height": h,
+                        "mime_type": "image/jpeg",
+                        "image_base64": image_base64,
+                        "jpeg_size": jpeg_size,
+                    }
+                )
+
+                should_flush = len(pending_batch) >= max(1, args.upload_batch_size)
+                if should_flush:
+                    payload = {
+                        "session_id": args.session_id,
+                        "turn_id": args.turn_id,
+                        "stream_id": args.stream_id,
+                        "frames": pending_batch,
+                    }
+                    response = uploader.post(args.upload_url, json=payload)
+                    response.raise_for_status()
+                    uploaded_count += len(pending_batch)
+                    print(
+                        "[camera-probe] uploaded batch size=%d status=%d"
+                        % (len(pending_batch), response.status_code)
+                    )
+                    try:
+                        print("[camera-probe] upload response=" + json.dumps(response.json(), ensure_ascii=False))
+                    except Exception:
+                        print("[camera-probe] upload response text=" + response.text)
+                    pending_batch = []
+
             if args.preview:
                 cv2.imshow("camera-probe", frame)
                 key = cv2.waitKey(1) & 0xFF
@@ -114,13 +199,15 @@ def main() -> None:
             if args.interval_ms > 0:
                 time.sleep(args.interval_ms / 1000.0)
     finally:
+        if uploader is not None:
+            uploader.close()
         camera.stop()
         if args.preview:
             cv2.destroyAllWindows()
         elapsed = time.time() - start_ts
         print(
-            "[camera-probe] stopped frames=%d saved=%d elapsed=%.2fs"
-            % (frame_count, saved_count, elapsed)
+            "[camera-probe] stopped frames=%d saved=%d uploaded=%d elapsed=%.2fs"
+            % (frame_count, saved_count, uploaded_count, elapsed)
         )
 
 
