@@ -204,11 +204,6 @@ def main() -> None:
             if args.interval_ms > 0:
                 time.sleep(args.interval_ms / 1000.0)
     finally:
-        if uploader is not None:
-            uploader.close()
-        camera.stop()
-        if args.preview:
-            cv2.destroyAllWindows()
         if uploader is not None and pending_batch:
             payload = {
                 "session_id": args.session_id,
@@ -230,6 +225,11 @@ def main() -> None:
                 print("[camera-probe] upload response=" + json.dumps(response.json(), ensure_ascii=False))
             except Exception:
                 print("[camera-probe] upload response text=" + response.text)
+        if uploader is not None:
+            uploader.close()
+        camera.stop()
+        if args.preview:
+            cv2.destroyAllWindows()
         elapsed = time.time() - start_ts
         print(
             "[camera-probe] stopped frames=%d saved=%d uploaded=%d elapsed=%.2fs"
