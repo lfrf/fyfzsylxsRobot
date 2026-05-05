@@ -64,6 +64,8 @@ Remote qwen-server :8000
 Remote TTS service :19200
         ↓ audio proxy
 Remote orchestrator /v1/robot/media/tts/...
+        ↓ optional vision/profile context
+Remote vision-service :20000
         ↓ SSH tunnel
 Raspberry Pi audio player
 ```
@@ -75,6 +77,7 @@ Raspberry Pi audio player
 | qwen-server | 8000 | `.uv_envs/qwen-server` | Qwen2.5-7B-Instruct，OpenAI-compatible API |
 | ASR service | 19100 | `.uv_envs/speech-service` | Qwen3-ASR，提供 `/asr/transcribe` |
 | TTS service | 19200 | `.uv_envs/tts-service` | CosyVoice，提供 `/tts/synthesize`，不使用 avatar 环境 |
+| vision-service | 20000 | `.uv_envs/vision-service` | `/extract` 与 `/v1/vision/identity/extract`，视频特征与人脸身份 |
 | orchestrator | 19000 | `.uv_envs/orchestrator` | `/v1/robot/chat_turn` 统一入口 |
 | Pi tunnel | 29000 | 树莓派本地 | 转发到远程 orchestrator 19000 |
 
@@ -161,10 +164,39 @@ mkdir -p "$TMP_DIR"
 # ===== Service URLs =====
 export SPEECH_SERVICE_BASE=${SPEECH_SERVICE_BASE:-http://127.0.0.1:19100}
 export TTS_SERVICE_BASE=${TTS_SERVICE_BASE:-http://127.0.0.1:19200}
+export VISION_SERVICE_PORT=${VISION_SERVICE_PORT:-20000}
+export VISION_SERVICE_BASE=${VISION_SERVICE_BASE:-http://127.0.0.1:$VISION_SERVICE_PORT}
+export VISION_SERVICE_ENABLED=${VISION_SERVICE_ENABLED:-true}
 export LLM_PROVIDER=${LLM_PROVIDER:-qwen}
 export LLM_API_BASE=${LLM_API_BASE:-http://127.0.0.1:8000/v1}
 export LLM_MODEL=${LLM_MODEL:-Qwen2.5-7B-Instruct}
 export LLM_API_KEY=${LLM_API_KEY:-EMPTY}
+
+# ===== User profile / long-term memory =====
+export PROFILE_DATA_DIR=${PROFILE_DATA_DIR:-$A22_CODE/remote/orchestrator/data/profiles}
+export PROFILE_CONTEXT_MAX_CHARS=${PROFILE_CONTEXT_MAX_CHARS:-800}
+export PROFILE_SUMMARIZE_EVERY_TURNS=${PROFILE_SUMMARIZE_EVERY_TURNS:-6}
+export PROFILE_SUMMARY_PROVIDER=${PROFILE_SUMMARY_PROVIDER:-rule}
+export PROFILE_MEMORY_ENABLED=${PROFILE_MEMORY_ENABLED:-true}
+mkdir -p "$PROFILE_DATA_DIR"
+
+# ===== Vision service / face identity =====
+export VISION_MODEL=${VISION_MODEL:-$A22_MODEL_ROOT/Qwen2.5-VL-7B-Instruct}
+export VISION_DEVICE=${VISION_DEVICE:-cuda:0}
+export VISION_EXTRACTOR_MODE=${VISION_EXTRACTOR_MODE:-qwen2_5_vl}
+export VISION_DTYPE=${VISION_DTYPE:-float16}
+export VISION_WARMUP_ENABLED=${VISION_WARMUP_ENABLED:-false}
+
+# Demo 阶段默认 mock；启用 InsightFace 时改 FACE_RECOGNITION_PROVIDER=insightface。
+export FACE_RECOGNITION_PROVIDER=${FACE_RECOGNITION_PROVIDER:-mock}
+export FACE_DB_DIR=${FACE_DB_DIR:-$A22_CODE/remote/vision-service/data/faces}
+export FACE_MATCH_THRESHOLD=${FACE_MATCH_THRESHOLD:-0.6}
+export FACE_CREATE_UNKNOWN=${FACE_CREATE_UNKNOWN:-true}
+export FACE_STORE_RAW_IMAGES=${FACE_STORE_RAW_IMAGES:-false}
+export INSIGHTFACE_MODEL_NAME=${INSIGHTFACE_MODEL_NAME:-buffalo_l}
+export INSIGHTFACE_DET_SIZE=${INSIGHTFACE_DET_SIZE:-640,640}
+export INSIGHTFACE_CTX_ID=${INSIGHTFACE_CTX_ID:--1}
+mkdir -p "$FACE_DB_DIR"
 
 # ===== Robot path switches =====
 export ROBOT_CHAT_USE_MOCK_ASR=${ROBOT_CHAT_USE_MOCK_ASR:-false}
@@ -177,7 +209,7 @@ export ROBOT_DEBUG_TRACE=${ROBOT_DEBUG_TRACE:-true}
 export ROBOT_LOG_JSON=${ROBOT_LOG_JSON:-false}
 
 # ===== Python path helpers =====
-export PYTHONPATH="$A22_CODE/shared:$A22_CODE/remote/orchestrator:$A22_CODE/remote/speech-service:$TTS_REPO_PATH:${PYTHONPATH:-}"
+export PYTHONPATH="$A22_CODE/shared:$A22_CODE/remote/orchestrator:$A22_CODE/remote/speech-service:$A22_CODE/remote/vision-service:$TTS_REPO_PATH:${PYTHONPATH:-}"
 EOF_ENV
 
 ln -sf /root/autodl-tmp/a22/code/fyfzsylxsRobot/scripts/env_robot.sh \
@@ -377,10 +409,55 @@ PY
 
 ---
 
+### 4.5 Vision service 环境：`vision-service`
+
+vision-service 负责视频特征、表情识别预留，以及本阶段新增的 `/v1/vision/identity/extract` 人脸身份接口。当前你希望它在 `20000` 端口接收视频数据。
+
+默认先用 `FACE_RECOGNITION_PROVIDER=mock`，这样不需要 InsightFace 也能跑通 face_id、profile 和 LLM 注入链路。
+
+```bash
+source /root/autodl-tmp/a22/code/fyfzsylxsRobot/scripts/env_robot.sh
+
+if [ ! -d "$A22_ENV_ROOT/vision-service" ]; then
+  uv venv "$A22_ENV_ROOT/vision-service" --python 3.11
+fi
+
+source "$A22_ENV_ROOT/vision-service/bin/activate"
+uv pip install -U pip
+cd "$A22_CODE/remote/vision-service"
+
+if [ -f requirements.txt ]; then
+  uv pip install -r requirements.txt
+else
+  uv pip install fastapi uvicorn pydantic pillow opencv-python-headless numpy
+fi
+
+python - <<'PY'
+import sys
+print(sys.executable)
+from app import app
+print('vision-service import ok')
+PY
+```
+
+如需启用真实人脸识别，再额外安装并切换 provider：
+
+```bash
+source "$A22_ENV_ROOT/vision-service/bin/activate"
+uv pip install insightface onnxruntime opencv-python-headless numpy
+
+export FACE_RECOGNITION_PROVIDER=insightface
+export INSIGHTFACE_MODEL_NAME=buffalo_l
+export INSIGHTFACE_DET_SIZE=640,640
+export INSIGHTFACE_CTX_ID=-1
+```
+
+---
+
 ## 5. 启动远程服务
 
-建议打开四个远程终端窗口，分别前台启动：`qwen`、`asr`、`tts`、`orchestrator`。
-前台启动的好处是日志会直接打印在当前终端，便于定位 ASR / LLM / TTS 哪一步失败。
+建议打开五个远程终端窗口，分别前台启动：`qwen`、`asr`、`tts`、`vision`、`orchestrator`。
+前台启动的好处是日志会直接打印在当前终端，便于定位 ASR / LLM / TTS / Vision 哪一步失败。
 
 ### 5.0 清理旧端口进程（可选）
 
@@ -388,6 +465,7 @@ PY
 pkill -f "vllm.entrypoints.openai.api_server.*--port 8000" || true
 pkill -f "uvicorn app:app.*--port 19100" || true
 pkill -f "uvicorn app:app.*--port 19200" || true
+pkill -f "uvicorn app:app.*--port 20000" || true
 pkill -f "uvicorn app:app.*--port 19000" || true
 ```
 
@@ -520,7 +598,73 @@ SPEECH_ENABLE_TTS=true
 
 ---
 
-### 5.4 终端 4：启动 orchestrator，端口 19000
+### 5.4 终端 4：启动 vision-service，端口 20000
+
+```bash
+cd /root/autodl-tmp/a22/code/fyfzsylxsRobot
+
+pkill -f "uvicorn app:app.*--port 20000" || true
+
+set -euo pipefail
+source /root/autodl-tmp/a22/code/fyfzsylxsRobot/scripts/env_robot.sh
+source "$A22_ENV_ROOT/vision-service/bin/activate"
+
+cd "$A22_CODE/remote/vision-service"
+
+export TMP_DIR="$A22_TMP_ROOT/vision"
+mkdir -p "$TMP_DIR" "$FACE_DB_DIR"
+
+export VISION_SERVICE_PORT=20000
+export VISION_EXTRACTOR_MODE=qwen2_5_vl
+export VISION_MODEL="$A22_MODEL_ROOT/Qwen2.5-VL-7B-Instruct"
+export VISION_DEVICE=cuda:0
+export VISION_DTYPE=float16
+
+# Demo 阶段先避免启动时加载大视觉模型；需要 /extract 真模型时再改 true。
+export VISION_WARMUP_ENABLED=false
+
+# 人脸身份识别默认 mock。启用真实识别时改 insightface。
+export FACE_RECOGNITION_PROVIDER=insightface
+export FACE_DB_DIR="$A22_CODE/remote/vision-service/data/faces"
+export FACE_MATCH_THRESHOLD=0.6
+export FACE_CREATE_UNKNOWN=true
+export FACE_STORE_RAW_IMAGES=false
+
+# 表情识别如暂时不用，可关闭 warmup，减少启动压力。
+export FER_WARMUP_ENABLED=false
+
+export ROBOT_LOG_LEVEL=INFO
+export ROBOT_DEBUG_TRACE=true
+export PYTHONPATH="$A22_CODE/shared:$A22_CODE/remote/vision-service:${PYTHONPATH:-}"
+
+python -m uvicorn app:app --host 127.0.0.1 --port 20000 --log-level debug
+```
+
+检查：
+
+```bash
+curl http://127.0.0.1:20000/health
+```
+
+测试 mock face identity：
+
+```bash
+IMG_B64=$(printf "robotmatch-demo-face" | base64 -w 0)
+
+curl -X POST http://127.0.0.1:20000/v1/vision/identity/extract \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"session_id\": \"demo-session-001\",
+    \"turn_id\": \"vision-turn-001\",
+    \"image_base64\": \"$IMG_B64\"
+  }"
+```
+
+重复请求同一段 `image_base64`，应返回同一个 `face_id`，第二次 `is_known=true`，`seen_count` 增加。
+
+---
+
+### 5.5 终端 5：启动 orchestrator，端口 19000
 
 ```bash
 set -euo pipefail
@@ -530,6 +674,14 @@ cd "$A22_CODE"
 
 export SPEECH_SERVICE_BASE=http://127.0.0.1:19100
 export TTS_SERVICE_BASE=http://127.0.0.1:19200
+export VISION_SERVICE_ENABLED=true
+export VISION_SERVICE_BASE=http://127.0.0.1:20000
+
+export PROFILE_DATA_DIR="$A22_CODE/remote/orchestrator/data/profiles"
+export PROFILE_MEMORY_ENABLED=true
+export PROFILE_CONTEXT_MAX_CHARS=800
+export PROFILE_SUMMARIZE_EVERY_TURNS=6
+export PROFILE_SUMMARY_PROVIDER=rule
 
 export LLM_PROVIDER=qwen
 export LLM_API_BASE=http://127.0.0.1:8000/v1
@@ -564,12 +716,13 @@ curl http://127.0.0.1:19000/health
 curl http://127.0.0.1:8000/v1/models
 curl http://127.0.0.1:19100/health
 curl http://127.0.0.1:19200/health
+curl http://127.0.0.1:20000/health
 curl http://127.0.0.1:19000/health
 ```
 
 查看日志：
 
-四个服务都以前台方式运行，日志会直接显示在对应终端窗口中。
+五个服务都以前台方式运行，日志会直接显示在对应终端窗口中。
 
 杀掉服务：
 
@@ -577,6 +730,7 @@ curl http://127.0.0.1:19000/health
 pkill -f "vllm.entrypoints.openai.api_server.*--port 8000" || true
 pkill -f "uvicorn app:app.*--port 19100" || true
 pkill -f "uvicorn app:app.*--port 19200" || true
+pkill -f "uvicorn app:app.*--port 20000" || true
 pkill -f "uvicorn app:app.*--port 19000" || true
 ```
 
@@ -640,7 +794,88 @@ debug.sources.llm=qwen_vllm
 debug.fallback.llm=false
 ```
 
-### 7.3 测试 TTS 音频链接是否可下载
+### 7.3 测试用户画像与 face_id 链路
+
+先用 mock 图片请求 vision-service，拿到 `face_id`：
+
+```bash
+IMG_B64=$(printf "robotmatch-demo-face" | base64 -w 0)
+
+curl -X POST http://127.0.0.1:20000/v1/vision/identity/extract \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"session_id\": \"demo-session-001\",
+    \"turn_id\": \"vision-turn-001\",
+    \"image_base64\": \"$IMG_B64\"
+  }"
+```
+
+再把返回的 `face_id` 写入 robot chat：
+
+```bash
+curl -X POST http://127.0.0.1:19000/v1/robot/chat_turn \
+  -H "Content-Type: application/json" \
+  -d '{
+    "session_id": "demo-session-001",
+    "turn_id": "turn-profile-face-001",
+    "mode": "care",
+    "input": {
+      "type": "audio_base64",
+      "audio_base64": "UklGRiQAAABXQVZFZm10IBAAAAABAAEA",
+      "audio_format": "wav",
+      "sample_rate": 16000,
+      "channels": 1,
+      "text_hint": "我今天有点累"
+    },
+    "request_options": {
+      "face_id": "替换为vision-service返回的face_id",
+      "force_profile_summarize": true
+    }
+  }'
+```
+
+也可以不依赖 vision-service，直接用 `mock_user_id` 测画像写入：
+
+```bash
+curl -X POST http://127.0.0.1:19000/v1/robot/chat_turn \
+  -H "Content-Type: application/json" \
+  -d '{
+    "session_id": "demo-session-001",
+    "turn_id": "turn-profile-001",
+    "mode": "care",
+    "input": {
+      "type": "audio_base64",
+      "audio_base64": "UklGRiQAAABXQVZFZm10IBAAAAABAAEA",
+      "audio_format": "wav",
+      "sample_rate": 16000,
+      "channels": 1,
+      "text_hint": "我今天有点累"
+    },
+    "request_options": {
+      "mock_user_id": "user_test_001",
+      "mock_display_name": "小明",
+      "force_profile_summarize": true
+    }
+  }'
+```
+
+检查：
+
+```bash
+ls -lh "$PROFILE_DATA_DIR/snapshots"
+ls -lh "$PROFILE_DATA_DIR/memories"
+tail -n 5 "$PROFILE_DATA_DIR/memories/user_test_001.jsonl"
+```
+
+响应里应看到：
+
+```text
+debug.profile.used=true
+debug.profile.memory_written=true
+debug.profile.summary_updated=true
+```
+
+### 7.4 测试 TTS 音频链接是否可下载
 
 把 7.1 或 7.2 返回里的 `tts.audio_url` 复制出来，例如：
 
@@ -887,7 +1122,23 @@ tts_result source=fallback...
 audio_url=mock://...
 ```
 
-### 11.6 Pi 录不到声音
+### 11.6 vision-service 不通
+
+```bash
+curl http://127.0.0.1:20000/health
+```
+
+如果 `/v1/vision/identity/extract` 不通，先确认：
+
+```bash
+echo "$VISION_SERVICE_BASE"
+echo "$FACE_RECOGNITION_PROVIDER"
+ls -lh "$FACE_DB_DIR"
+```
+
+默认 mock provider 不需要 InsightFace。如果设置了 `FACE_RECOGNITION_PROVIDER=insightface`，缺少 `insightface`、`onnxruntime`、`opencv-python-headless` 都会导致真实识别不可用。
+
+### 11.7 Pi 录不到声音
 
 ```bash
 arecord -l
