@@ -342,6 +342,39 @@ class _ST7789Display:
             return buf
 
 
+class _LegacyGPIOLines:
+    def __init__(self, gpio_module: Any, gpio_chip: str, gpio_pins: set[int], consumer: str) -> None:
+        self._gpiod = gpio_module
+        self._chip = gpio_module.Chip(gpio_chip)
+        self._lines: dict[int, Any] = {}
+        for pin in sorted(gpio_pins):
+            line = self._chip.get_line(pin)
+            line.request(consumer=consumer, type=self._gpiod.LINE_REQ_DIR_OUT, default_vals=[0])
+            self._lines[pin] = line
+
+    def set_value(self, pin: int, value: Any) -> None:
+        line = self._lines[pin]
+        if hasattr(self._gpiod, "line") and hasattr(self._gpiod.line, "Value"):
+            if value == self._gpiod.line.Value.ACTIVE:
+                line.set_value(1)
+                return
+            if value == self._gpiod.line.Value.INACTIVE:
+                line.set_value(0)
+                return
+        line.set_value(1 if value else 0)
+
+    def close(self) -> None:
+        for line in self._lines.values():
+            try:
+                line.release()
+            except Exception:
+                pass
+        try:
+            self._chip.close()
+        except Exception:
+            pass
+
+
 class ST7789EyesDriver:
     """双眼 ST7789V 驱动。
 
