@@ -40,10 +40,15 @@ async def extract_face_identity_from_cache(request: VideoCacheQueryRequest) -> C
         cache_data = response.json()
 
     frames = cache_data.get("frames") or []
+    # frame_id from video-cache-service is int; VideoFrameSchema expects str
+    normalized_frames = [
+        {**frame, "frame_id": str(frame["frame_id"])} if isinstance(frame.get("frame_id"), int) else frame
+        for frame in frames
+    ]
     face_request = FaceIdentityRequest(
         session_id=request.session_id,
         turn_id=request.turn_id,
-        video_frames=frames,
+        video_frames=normalized_frames,
         video_meta=cache_data.get("video_meta"),
     )
     identity_result = face_identity_service.extract_identity(face_request)
