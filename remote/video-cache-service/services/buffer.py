@@ -56,5 +56,10 @@ class VideoBuffer:
         with self._lock:
             return list(self._frames.keys())
 
+    def query_frames(self, *, session_id: str, turn_id: str | int, stream_id: str) -> list[VideoFrameItem]:
+        key = (str(session_id), turn_id, str(stream_id))
+        with self._lock:
+            return list(self._frames.get(key, deque()))
+
 
 video_buffer = VideoBuffer()

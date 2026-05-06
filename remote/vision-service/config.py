@@ -29,6 +29,7 @@ class Settings:
             or "/root/autodl-tmp/a22/models/Qwen2.5-VL-7B-Instruct"
         )
         self.vision_device = os.getenv("VISION_DEVICE", "cuda:0").strip() or "cuda:0"
+        self.video_cache_base_url = os.getenv("VIDEO_CACHE_BASE_URL", "http://127.0.0.1:20000").strip() or "http://127.0.0.1:20000"
         self.frame_input_mode = os.getenv("VISION_FRAME_INPUT_MODE", "event_window_keyframes").strip().lower() or "event_window_keyframes"
         self.vision_dtype = os.getenv("VISION_DTYPE", "float16").strip().lower() or "float16"
         self.vision_max_new_tokens = max(32, int(os.getenv("VISION_MAX_NEW_TOKENS", "192")))
