@@ -8,7 +8,7 @@ from typing import Any
 
 from PIL import Image, ImageOps, ImageSequence
 
-IMAGE_SUFFIXES = (".png", ".jpg", ".jpeg", ".bmp", ".webp")
+IMAGE_SUFFIXES = (".png", ".jpg", ".jpeg", ".bmp", ".webp", ".gif")
 
 # ST7789V 初始化序列（不含软件复位）
 # MADCTL=0x00: 从左到右、从上到下扫描，与 SPI 写入方向一致，最小化撕裂
@@ -243,7 +243,15 @@ class _ST7789Display:
                 p for p in asset.iterdir()
                 if p.is_file() and p.suffix.lower() in IMAGE_SUFFIXES
             )
-            return [self._load_image(f) for f in files] if files else [self._blank]
+            if not files:
+                return [self._blank]
+            frames: list[bytearray] = []
+            for f in files:
+                if f.suffix.lower() == ".gif":
+                    frames.extend(self._load_gif(f))
+                else:
+                    frames.append(self._load_image(f))
+            return frames if frames else [self._blank]
 
         suffix = asset.suffix.lower()
         if suffix == ".gif":
