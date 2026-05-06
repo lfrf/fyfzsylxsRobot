@@ -42,10 +42,16 @@ class VideoQueryResponse(BaseModel):
 @router.get("/query", response_model=VideoQueryResponse)
 async def query_video(
     session_id: str = Query(..., min_length=1),
-    turn_id: str | int = Query(...),
+    turn_id: str = Query(..., min_length=1),
     stream_id: str = Query(..., min_length=1),
 ) -> VideoQueryResponse:
+    # Try numeric turn_id as well, in case frames were stored with int key
     frames = video_buffer.query_frames(session_id=session_id, turn_id=turn_id, stream_id=stream_id)
+    if not frames:
+        try:
+            frames = video_buffer.query_frames(session_id=session_id, turn_id=int(turn_id), stream_id=stream_id)
+        except (ValueError, TypeError):
+            pass
     if frames:
         first_ts = min(frame.timestamp_ms for frame in frames)
         last_ts = max(frame.timestamp_ms for frame in frames)
