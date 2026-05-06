@@ -55,6 +55,111 @@ continuous microphone listening
 
 OLED、舵机、摄像头、人脸跟踪和唤醒词仍是接口/mock。RAG 仍是 namespace 路由 stub。
 
+## 视频链路与眼睛屏
+
+V1 之外，项目目前已经补上并验证了两条新的本地/远端硬件链路：视频流上传链路，以及 ST7789 眼睛屏测试链路。
+
+### 视频流传输链路
+
+视频流的目标是把树莓派摄像头采集到的原始帧上传到远端视频缓存服务，供后续的人脸识别、用户画像和 LLM 组装使用。
+
+当前已接入的链路如下：
+
+```text
+Raspberry Pi camera_capture_probe
+→ SSH tunnel
+→ remote/video-cache-service
+→ GET /v1/video/query
+→ remote/vision-service from-cache identity extract
+```
+
+树莓派端上传的每帧数据包含：
+
+- `session_id`
+- `turn_id`
+- `stream_id`
+- `frame_id`
+- `timestamp_ms`
+- `width`
+- `height`
+- `mime_type`
+- `image_base64`
+
+视频缓存服务当前提供：
+
+- `POST /v1/video/ingest`
+- `GET /v1/video/query`
+
+`GET /v1/video/query` 会返回这一轮缓存到的原始帧及 `video_meta`，便于后续视觉模块按 `session_id / turn_id / stream_id` 读取。
+
+### 树莓派视频上传测试
+
+树莓派视频上传测试脚本已可用：
+
+```bash
+cd ~/Desktop/code/fyfzsylxsRobot
+source .venv/bin/activate
+python -m raspirobot.scripts.camera_capture_probe \
+  --frames 20 \
+  --upload-url http://127.0.0.1:29001/v1/video/ingest \
+  --session-id demo-session-001 \
+  --turn-id turn-0001 \
+  --stream-id video-001 \
+  --upload-every 1 \
+  --upload-batch-size 1
+```
+
+对应的 SSH 隧道示例（按当前平台端口配置）：
+
+```bash
+ssh -N \
+  -o ExitOnForwardFailure=yes \
+  -o ServerAliveInterval=30 \
+  -o ServerAliveCountMax=6 \
+  -o PreferredAuthentications=password \
+  -o PubkeyAuthentication=no \
+  -L 127.0.0.1:29001:127.0.0.1:20000 \
+  -p 34979 root@connect.bjb1.seetacloud.com
+```
+
+### ST7789 眼睛屏显示测试
+
+当前项目的眼睛屏资源目录已经整理为：
+
+- `raspirobot/assets/eyes/left`
+- `raspirobot/assets/eyes/right`
+- `raspirobot/assets/eyes/neutral`
+
+右眼表情资源已确认包含：
+
+- `blink`
+- `comfort`
+- `happy`
+- `listening`
+- `neutral`
+- `sleep`
+- `thinking`
+
+已验证的树莓派测试命令如下：
+
+```bash
+cd ~/Desktop/code/fyfzsylxsRobot
+export ROBOT_EYES_PROVIDER=st7789
+export ROBOT_EYES_ASSETS_DIR=raspirobot/assets/eyes
+export ROBOT_EYES_LEFT_ASSETS_DIR=raspirobot/assets/eyes/left
+export ROBOT_EYES_RIGHT_ASSETS_DIR=raspirobot/assets/eyes/right
+export ROBOT_EYES_RIGHT_ENABLED=true
+export ROBOT_EYES_SPI_PORT=0
+export ROBOT_EYES_RIGHT_SPI_PORT=1
+export ROBOT_EYES_RIGHT_CS=0
+export ROBOT_EYES_RST_GPIO=22
+export ROBOT_EYES_LEFT_DC_GPIO=25
+export ROBOT_EYES_RIGHT_DC_GPIO=24
+export ROBOT_EYES_LEFT_ROTATION=270
+export ROBOT_EYES_RIGHT_ROTATION=90
+python -m raspirobot.scripts.st7789_eyes_demo --expressions neutral --hold-seconds 10 --loops 1
+```
+
 ## 目录结构
 
 ```text
