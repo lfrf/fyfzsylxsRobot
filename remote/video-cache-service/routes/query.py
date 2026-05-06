@@ -73,5 +73,15 @@ async def query_video(
         turn_id=turn_id,
         stream_id=stream_id,
         video_meta=meta,
-        frames=[VideoFrameOut(**frame.model_dump()) for frame in frames],
+        frames=[VideoFrameOut(
+            session_id=frame.session_id,
+            turn_id=frame.turn_id,
+            stream_id=frame.stream_id,
+            frame_id=frame.frame_id,
+            timestamp_ms=frame.timestamp_ms,
+            width=frame.width,
+            height=frame.height,
+            mime_type=frame.mime_type,
+            image_base64=frame.image_base64,
+        ) for frame in frames],
     )
