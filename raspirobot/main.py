@@ -25,7 +25,7 @@ from raspirobot.hardware import MockEyesDriver, MockHeadDriver, ST7789EyeConfig,
 from raspirobot.remote import MockRemoteClient, RemoteClient, RemoteClientProtocol, RobotPayloadBuilder
 from raspirobot.session import SessionManager, TurnLogger
 from raspirobot.utils import ensure_dir
-from raspirobot.vision import MockVisionContextProvider
+from raspirobot.vision import MockVisionContextProvider, RemoteVisionConfig, RemoteVisionContextProvider
 from shared.logging_utils import get_log_file_path, get_log_session_id, log_event, start_log_session
 
 logger = logging.getLogger(__name__)
@@ -115,8 +115,37 @@ def build_eyes_driver(settings: Settings) -> MockEyesDriver | ST7789EyesDriver:
             )
         )
     except Exception as exc:
+        import traceback
+
+        traceback.print_exc()
         logger.warning("failed_to_init_st7789_eyes; fallback_to_mock: %s", exc)
         return MockEyesDriver()
+
+
+def build_vision_provider(settings: Settings):
+    """
+    根据环境变量决定使用真实视频链路还是 mock。
+    启用条件：ROBOT_VISION_REMOTE_ENABLED=true
+    相关变量：
+      ROBOT_VISION_INGEST_URL      默认 http://127.0.0.1:29001/v1/video/ingest
+      ROBOT_VISION_FROM_CACHE_URL  默认 http://127.0.0.1:29002/v1/vision/identity/from-cache
+      ROBOT_VISION_STREAM_ID       默认 video-main
+    """
+    import os
+    enabled = os.getenv("ROBOT_VISION_REMOTE_ENABLED", "false").strip().lower() in {"1", "true", "yes"}
+    if not enabled:
+        return MockVisionContextProvider(), None
+
+    config = RemoteVisionConfig(
+        ingest_url=os.getenv("ROBOT_VISION_INGEST_URL", "http://127.0.0.1:29001/v1/video/ingest"),
+        from_cache_url=os.getenv("ROBOT_VISION_FROM_CACHE_URL", "http://127.0.0.1:29002/v1/vision/identity/from-cache"),
+        session_id=settings.session_id,
+        stream_id=os.getenv("ROBOT_VISION_STREAM_ID", "video-main"),
+        upload_every_n_frames=int(os.getenv("ROBOT_VISION_UPLOAD_EVERY", "3")),
+        capture_interval_s=float(os.getenv("ROBOT_VISION_CAPTURE_INTERVAL_S", "0.2")),
+    )
+    provider = RemoteVisionContextProvider(config)
+    return provider, provider  # (vision_context_provider, lifecycle_handle)
 
 
 def build_runtime(
@@ -137,10 +166,11 @@ def build_runtime(
         audio=None,
         remote_base_url=getattr(remote, "base_url", None),
     )
+    vision_provider, vision_lifecycle = build_vision_provider(settings)
     payload_builder = RobotPayloadBuilder(
         session_id=settings.session_id,
         mode_id=settings.default_mode,
-        vision_context_provider=MockVisionContextProvider(),
+        vision_context_provider=vision_provider,
     )
     audio_preprocessor = build_audio_preprocessor(settings)
     turn_manager = TurnManager(
@@ -290,11 +320,18 @@ def run_live_loop_with_optional_face_tracking(args: argparse.Namespace) -> None:
     runtime = build_runtime(input_provider=build_live_input_provider(settings), settings=settings)
     runner_thread = _start_face_tracking_for_live(args)
 
+    # 启动视觉 provider（如果是 RemoteVisionContextProvider）
+    vision_provider = runtime.turn_manager.payload_builder.vision_context_provider
+    if hasattr(vision_provider, "start"):
+        vision_provider.start()
+
     try:
         runtime.run_forever()
     except KeyboardInterrupt:
         print("[live] interrupted by user")
     finally:
+        if hasattr(vision_provider, "stop"):
+            vision_provider.stop()
         if runner_thread is not None:
             runner, worker = runner_thread
             print("[live] stopping face tracking...")
