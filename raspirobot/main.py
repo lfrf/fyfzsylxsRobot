@@ -202,6 +202,7 @@ def build_runtime(
     settings: Settings | None = None,
     wake_word_provider=None,
     work_idle_timeout_seconds: float = 10.0,
+    face_tracking_lifecycle=None,
 ) -> RaspiRobotRuntime:
     settings = settings or load_settings()
     work_dir = ensure_dir(settings.audio_work_dir)
@@ -246,6 +247,7 @@ def build_runtime(
         post_playback_cooldown_ms=settings.audio_post_playback_cooldown_ms,
         wake_word_provider=wake_word_provider,
         work_idle_timeout_seconds=work_idle_timeout_seconds,
+        face_tracking_lifecycle=face_tracking_lifecycle,
         eyes_driver=eyes,
     )
 
@@ -377,6 +379,32 @@ def _start_face_tracking_for_live(args: argparse.Namespace, frame_sink: object |
     return runner, thread
 
 
+class FaceTrackingLifecycle:
+    def __init__(self, args: argparse.Namespace, *, frame_sink: object | None = None) -> None:
+        self.args = args
+        self.frame_sink = frame_sink
+        self._runner_thread: tuple[Any, threading.Thread] | None = None
+
+    def start(self) -> None:
+        if self._runner_thread is not None:
+            runner, worker = self._runner_thread
+            if worker.is_alive():
+                return
+            self._runner_thread = None
+
+        self._runner_thread = _start_face_tracking_for_live(self.args, frame_sink=self.frame_sink)
+
+    def stop(self) -> None:
+        if self._runner_thread is None:
+            return
+
+        runner, worker = self._runner_thread
+        print("[live] stopping face tracking...")
+        runner.request_stop()
+        worker.join(timeout=3.0)
+        self._runner_thread = None
+
+
 def run_live_loop_with_optional_face_tracking(args: argparse.Namespace) -> None:
     settings = load_settings()
     start_raspi_runtime_log("live_audio_loop", settings)
@@ -402,7 +430,12 @@ def run_live_loop_with_optional_face_tracking(args: argparse.Namespace) -> None:
 
     # frame_sink 传给人脸追踪，让它每帧注入给视频上传模块
     frame_sink = vision_provider if hasattr(vision_provider, "inject_frame") else None
-    runner_thread = _start_face_tracking_for_live(args, frame_sink=frame_sink)
+    face_tracking_lifecycle = None
+    if getattr(args, "face_track", False):
+        face_tracking_lifecycle = FaceTrackingLifecycle(args, frame_sink=frame_sink)
+        runtime.face_tracking_lifecycle = face_tracking_lifecycle
+        if wake_word_provider is None:
+            face_tracking_lifecycle.start()
 
     try:
         runtime.run_forever()
@@ -411,13 +444,10 @@ def run_live_loop_with_optional_face_tracking(args: argparse.Namespace) -> None:
     finally:
         if wake_word_provider is not None:
             wake_word_provider.stop()
+        if face_tracking_lifecycle is not None:
+            face_tracking_lifecycle.stop()
         if hasattr(vision_provider, "stop"):
             vision_provider.stop()
-        if runner_thread is not None:
-            runner, worker = runner_thread
-            print("[live] stopping face tracking...")
-            runner.request_stop()
-            worker.join(timeout=3.0)
 
 
 def start_raspi_runtime_log(runtime_name: str, settings: Settings) -> str:

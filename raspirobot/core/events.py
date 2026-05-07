@@ -7,6 +7,7 @@ from typing import Any
 
 class RuntimeEventType(str, Enum):
     SPEECH_STARTED = "SpeechStarted"
+    SPEECH_ENDED = "SpeechEnded"
     UTTERANCE_READY = "UtteranceReady"
     REMOTE_REQUEST_STARTED = "RemoteRequestStarted"
     REMOTE_RESULT_READY = "RemoteResultReady"

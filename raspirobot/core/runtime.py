@@ -32,6 +32,7 @@ class RaspiRobotRuntime:
         post_playback_cooldown_ms: int = 0,
         wake_word_provider=None,
         work_idle_timeout_seconds: float = 10.0,
+        face_tracking_lifecycle=None,
         eyes_driver=None,
     ) -> None:
         self.listener = listener
@@ -42,6 +43,7 @@ class RaspiRobotRuntime:
         self.post_playback_cooldown_ms = post_playback_cooldown_ms
         self.wake_word_provider = wake_word_provider
         self.work_idle_timeout_seconds = work_idle_timeout_seconds
+        self.face_tracking_lifecycle = face_tracking_lifecycle
         self.eyes_driver = eyes_driver
         self._ensure_initial_state()
 
@@ -52,6 +54,7 @@ class RaspiRobotRuntime:
             if self.wake_word_provider is not None and self.wake_word_provider.poll():
                 log_event("wake_word_triggered")
                 self._stop_wake_word_provider()
+                self._start_face_tracking()
                 self.state_machine.transition(RobotEvent.WAKE_WORD_DETECTED)
                 self.state_machine.transition(RobotEvent.WAKE_ACK_DONE)
                 self._set_eyes("listening")
@@ -159,6 +162,7 @@ class RaspiRobotRuntime:
                 log_event("eyes_set_expression_failed", expression=expression, error=str(exc))
 
     def _enter_standby(self) -> None:
+        self._stop_face_tracking()
         self._set_eyes("sleep")
         self._start_wake_word_provider()
 
@@ -177,6 +181,22 @@ class RaspiRobotRuntime:
             self.wake_word_provider.stop()
         except Exception as exc:
             log_event("wake_word_stop_failed", error=str(exc), level="error")
+
+    def _start_face_tracking(self) -> None:
+        if self.face_tracking_lifecycle is None:
+            return
+        try:
+            self.face_tracking_lifecycle.start()
+        except Exception as exc:
+            log_event("face_tracking_start_failed", error=str(exc), level="error")
+
+    def _stop_face_tracking(self) -> None:
+        if self.face_tracking_lifecycle is None:
+            return
+        try:
+            self.face_tracking_lifecycle.stop()
+        except Exception as exc:
+            log_event("face_tracking_stop_failed", error=str(exc), level="error")
 
     def _mark_remote_result_ready(self, response) -> None:
         self.event_bus.publish(
