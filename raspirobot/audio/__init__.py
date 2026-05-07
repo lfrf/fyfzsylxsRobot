@@ -13,6 +13,7 @@ from .player import AudioPlayer, MockAudioPlayer
 from .recorder import AudioRecorder, MockAudioRecorder, WavRecorder
 from .vad import EnergyVAD, EnergyVADConfig
 from .wake_word import MockWakeWordProvider, WakeWordProvider
+from .wake_word_sherpa import SherpaOnnxWakeWordConfig, SherpaOnnxWakeWordProvider
 from .wav_utils import WavInfo, read_wav_info, write_wav
 
 __all__ = [
@@ -33,6 +34,8 @@ __all__ = [
     "MockAudioRecorder",
     "MockWakeWordProvider",
     "PlaybackResult",
+    "SherpaOnnxWakeWordConfig",
+    "SherpaOnnxWakeWordProvider",
     "Utterance",
     "WavInfo",
     "WavRecorder",

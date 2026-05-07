@@ -8,6 +8,7 @@ from shared.logging_utils import log_event
 
 class RobotRuntimeState(str, Enum):
     IDLE = "IDLE"
+    STANDBY = "STANDBY"          # 待机：唤醒词监听中，OLED 显示 sleep
     WAKE_DETECTED = "WAKE_DETECTED"
     LISTENING = "LISTENING"
     RECORDING = "RECORDING"
@@ -31,6 +32,7 @@ class RobotEvent(str, Enum):
     UTTERANCE_REJECTED = "UtteranceRejected"
     SYSTEM_ERROR = "SystemError"
     RECOVERY_DONE = "RecoveryDone"
+    STANDBY_TIMEOUT = "StandbyTimeout"   # 唤醒后超时无语音，回到待机
 
 
 BUSY_STATES = {
@@ -67,12 +69,21 @@ class RobotStateMachine:
             self._log_transition(event, from_state, turn_id=turn_id)
             return self.state
 
+        if event == RobotEvent.STANDBY_TIMEOUT:
+            self.active_turn_id = None
+            self.remote_request_in_progress = False
+            self.state = RobotRuntimeState.STANDBY
+            self._log_transition(event, from_state, turn_id=turn_id)
+            return self.state
+
         if event == RobotEvent.NEW_SPEECH_INPUT and self.state in BUSY_STATES:
             self.busy_hint_requested = True
             self._log_transition(event, from_state, turn_id=turn_id, busy_hint_requested=True)
             return self.state
 
         if self.state == RobotRuntimeState.IDLE and event == RobotEvent.WAKE_WORD_DETECTED:
+            self.state = RobotRuntimeState.WAKE_DETECTED
+        elif self.state == RobotRuntimeState.STANDBY and event == RobotEvent.WAKE_WORD_DETECTED:
             self.state = RobotRuntimeState.WAKE_DETECTED
         elif self.state == RobotRuntimeState.WAKE_DETECTED and event == RobotEvent.WAKE_ACK_DONE:
             self.state = RobotRuntimeState.LISTENING

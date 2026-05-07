@@ -148,7 +148,39 @@ def build_vision_provider(settings: Settings):
     return provider, provider  # (vision_context_provider, lifecycle_handle)
 
 
-def build_runtime(
+def build_wake_word_provider(settings: Settings):
+    """
+    根据环境变量决定是否启用唤醒词引擎。
+    启用条件：ROBOT_WAKE_WORD_ENABLED=true
+    相关变量：
+      ROBOT_WAKE_WORD_MODEL_DIR   默认 models/sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20
+      ROBOT_WAKE_WORD_KEYWORDS    默认 models/sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20/keywords.txt
+      ROBOT_WAKE_WORD_TIMEOUT_S   唤醒后无语音超时秒数，默认 10
+    """
+    import os
+    enabled = os.getenv("ROBOT_WAKE_WORD_ENABLED", "false").strip().lower() in {"1", "true", "yes"}
+    if not enabled:
+        return None, 10.0
+
+    from raspirobot.audio.wake_word_sherpa import SherpaOnnxWakeWordConfig, SherpaOnnxWakeWordProvider
+    model_dir = os.getenv(
+        "ROBOT_WAKE_WORD_MODEL_DIR",
+        "models/sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20",
+    )
+    keywords_file = os.getenv("ROBOT_WAKE_WORD_KEYWORDS", "")
+    timeout_s = float(os.getenv("ROBOT_WAKE_WORD_TIMEOUT_S", "10"))
+    capture_device = settings.audio_capture_device or "plughw:CARD=Lite,DEV=0"
+
+    config = SherpaOnnxWakeWordConfig(
+        model_dir=model_dir,
+        keywords_file=keywords_file,
+        capture_device=capture_device,
+    )
+    provider = SherpaOnnxWakeWordProvider(config)
+    return provider, timeout_s
+
+
+
     *,
     input_provider: AudioInputProvider,
     remote_client: RemoteClientProtocol | None = None,
@@ -160,8 +192,9 @@ def build_runtime(
     session = SessionManager(session_id=settings.session_id, mode_id=settings.default_mode)
     output = audio_output or build_output_provider(settings)
     remote = remote_client or RemoteClient()
+    eyes = build_eyes_driver(settings)
     dispatcher = DefaultRobotActionDispatcher(
-        eyes=build_eyes_driver(settings),
+        eyes=eyes,
         head=MockHeadDriver(),
         audio=None,
         remote_base_url=getattr(remote, "base_url", None),
@@ -195,8 +228,8 @@ def build_runtime(
         state_machine=RobotStateMachine(mode_id=settings.default_mode),
         loop_sleep_seconds=settings.live_loop_sleep_seconds,
         post_playback_cooldown_ms=settings.audio_post_playback_cooldown_ms,
+        eyes_driver=eyes,
     )
-
 
 def run_file_once(wav_path: str, *, use_mock_remote: bool = True, mock_playback: bool = True) -> None:
     settings = load_settings()
@@ -318,7 +351,17 @@ def _start_face_tracking_for_live(args: argparse.Namespace, frame_sink: object |
 def run_live_loop_with_optional_face_tracking(args: argparse.Namespace) -> None:
     settings = load_settings()
     start_raspi_runtime_log("live_audio_loop", settings)
+
+    wake_word_provider, standby_timeout_s = build_wake_word_provider(settings)
     runtime = build_runtime(input_provider=build_live_input_provider(settings), settings=settings)
+
+    # 把唤醒词引擎和超时注入 runtime
+    if wake_word_provider is not None:
+        runtime.wake_word_provider = wake_word_provider
+        runtime.standby_timeout_seconds = standby_timeout_s
+        runtime._ensure_initial_state()  # 重新初始化状态（进入 STANDBY）
+        wake_word_provider.start()
+        logger.info("wake_word_provider started, standby_timeout=%.1fs", standby_timeout_s)
 
     # 启动视觉 provider（如果是 RemoteVisionContextProvider）
     vision_provider = runtime.turn_manager.payload_builder.vision_context_provider
@@ -338,6 +381,8 @@ def run_live_loop_with_optional_face_tracking(args: argparse.Namespace) -> None:
     except KeyboardInterrupt:
         print("[live] interrupted by user")
     finally:
+        if wake_word_provider is not None:
+            wake_word_provider.stop()
         if hasattr(vision_provider, "stop"):
             vision_provider.stop()
         if runner_thread is not None:
