@@ -82,13 +82,20 @@ class RemoteVisionContextProvider:
         则不开摄像头，只启动上传线程消费注入的帧。
         """
         if self._running:
+            logger.info("remote_vision_provider_start_skipped: already running")
             return
+        logger.info(
+            "remote_vision_provider_start_attempt shared_camera_mode=%s",
+            self._shared_camera_mode,
+        )
         try:
             self._init_http()
             if not self._shared_camera_mode:
+                logger.info("remote_vision_provider_init_camera_start")
                 self._init_camera()
+                logger.info("remote_vision_provider_init_camera_done")
         except Exception as exc:
-            logger.warning("remote_vision_provider_start_failed: %s", exc)
+            logger.warning("remote_vision_provider_start_failed: %s", exc, exc_info=True)
             return
         self._running = True
         self._thread = threading.Thread(

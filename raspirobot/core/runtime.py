@@ -59,8 +59,10 @@ class RaspiRobotRuntime:
             if self.wake_word_provider is not None and self.wake_word_provider.poll():
                 log_event("wake_word_triggered")
                 self._stop_wake_word_provider()
-                self._start_vision_provider(shared_camera_mode=False)
-                self._start_identity_watcher(shared_camera_mode=False)
+                # 如果启用了人脸追踪，使用共享摄像头模式，避免摄像头冲突
+                shared_camera = self.face_tracking_lifecycle is not None
+                self._start_vision_provider(shared_camera_mode=shared_camera)
+                self._start_identity_watcher(shared_camera_mode=shared_camera)
                 self.state_machine.transition(RobotEvent.WAKE_WORD_DETECTED)
                 self.state_machine.transition(RobotEvent.WAKE_ACK_DONE)
                 self._set_eyes("listening")
