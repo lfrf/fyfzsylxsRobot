@@ -180,7 +180,7 @@ def build_wake_word_provider(settings: Settings):
     return provider, timeout_s
 
 
-
+def build_runtime(
     *,
     input_provider: AudioInputProvider,
     remote_client: RemoteClientProtocol | None = None,
