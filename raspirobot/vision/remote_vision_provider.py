@@ -81,8 +81,13 @@ class RemoteVisionContextProvider:
         如果已通过 set_shared_camera_mode(True) 启用帧注入模式，
         则不开摄像头，只启动上传线程消费注入的帧。
         """
+        logger.info(
+            "remote_vision_provider_start_called _running=%s shared_camera_mode=%s",
+            self._running,
+            self._shared_camera_mode,
+        )
         if self._running:
-            logger.info("remote_vision_provider_start_skipped: already running")
+            logger.warning("remote_vision_provider_start_skipped: already running")
             return
         logger.info(
             "remote_vision_provider_start_attempt shared_camera_mode=%s",
@@ -120,10 +125,15 @@ class RemoteVisionContextProvider:
             self._injected_frame = frame
 
     def stop(self) -> None:
+        logger.info("remote_vision_provider_stop_called _running=%s", self._running)
         self._running = False
         if self._thread is not None:
+            logger.info("remote_vision_provider_joining_thread")
             self._thread.join(timeout=3.0)
+            if self._thread.is_alive():
+                logger.warning("remote_vision_provider_thread_still_alive_after_join")
             self._thread = None
+            logger.info("remote_vision_provider_thread_stopped")
         if self._camera is not None:
             try:
                 self._camera.stop()
@@ -138,6 +148,7 @@ class RemoteVisionContextProvider:
             self._http_client = None
         with self._injected_frame_lock:
             self._injected_frame = None
+        logger.info("remote_vision_provider_stopped")
 
     # ------------------------------------------------------------------
     # VisionContextProvider 协议
