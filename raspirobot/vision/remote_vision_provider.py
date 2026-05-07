@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from shared.contracts.schemas import FaceBoxSchema, FaceIdentitySchema, FaceObservationSchema, VisionContext
+from shared.logging_utils import log_event
 
 logger = logging.getLogger(__name__)
 
@@ -81,26 +82,26 @@ class RemoteVisionContextProvider:
         如果已通过 set_shared_camera_mode(True) 启用帧注入模式，
         则不开摄像头，只启动上传线程消费注入的帧。
         """
-        logger.info(
-            "remote_vision_provider_start_called _running=%s shared_camera_mode=%s",
-            self._running,
-            self._shared_camera_mode,
+        log_event(
+            "remote_vision_provider_start_called",
+            _running=self._running,
+            shared_camera_mode=self._shared_camera_mode,
         )
         if self._running:
-            logger.warning("remote_vision_provider_start_skipped: already running")
+            log_event("remote_vision_provider_start_skipped", reason="already_running", level="warning")
             return
-        logger.info(
-            "remote_vision_provider_start_attempt shared_camera_mode=%s",
-            self._shared_camera_mode,
+        log_event(
+            "remote_vision_provider_start_attempt",
+            shared_camera_mode=self._shared_camera_mode,
         )
         try:
             self._init_http()
             if not self._shared_camera_mode:
-                logger.info("remote_vision_provider_init_camera_start")
+                log_event("remote_vision_provider_init_camera_start")
                 self._init_camera()
-                logger.info("remote_vision_provider_init_camera_done")
+                log_event("remote_vision_provider_init_camera_done")
         except Exception as exc:
-            logger.warning("remote_vision_provider_start_failed: %s", exc, exc_info=True)
+            log_event("remote_vision_provider_start_failed", error=str(exc), level="error")
             return
         self._running = True
         self._thread = threading.Thread(
@@ -109,10 +110,10 @@ class RemoteVisionContextProvider:
             name="remote-vision-capture",
         )
         self._thread.start()
-        logger.info(
-            "remote_vision_provider_started mode=%s ingest_url=%s",
-            "shared_camera" if self._shared_camera_mode else "own_camera",
-            self.config.ingest_url,
+        log_event(
+            "remote_vision_provider_started",
+            mode="shared_camera" if self._shared_camera_mode else "own_camera",
+            ingest_url=self.config.ingest_url,
         )
 
     def set_shared_camera_mode(self, enabled: bool) -> None:
@@ -125,15 +126,15 @@ class RemoteVisionContextProvider:
             self._injected_frame = frame
 
     def stop(self) -> None:
-        logger.info("remote_vision_provider_stop_called _running=%s", self._running)
+        log_event("remote_vision_provider_stop_called", _running=self._running)
         self._running = False
         if self._thread is not None:
-            logger.info("remote_vision_provider_joining_thread")
+            log_event("remote_vision_provider_joining_thread")
             self._thread.join(timeout=3.0)
             if self._thread.is_alive():
-                logger.warning("remote_vision_provider_thread_still_alive_after_join")
+                log_event("remote_vision_provider_thread_still_alive_after_join", level="warning")
             self._thread = None
-            logger.info("remote_vision_provider_thread_stopped")
+            log_event("remote_vision_provider_thread_stopped")
         if self._camera is not None:
             try:
                 self._camera.stop()
@@ -148,7 +149,7 @@ class RemoteVisionContextProvider:
             self._http_client = None
         with self._injected_frame_lock:
             self._injected_frame = None
-        logger.info("remote_vision_provider_stopped")
+        log_event("remote_vision_provider_stopped")
 
     # ------------------------------------------------------------------
     # VisionContextProvider 协议
@@ -181,11 +182,11 @@ class RemoteVisionContextProvider:
         try:
             self._camera.start()
         except Exception as exc:
-            logger.error("remote_vision_camera_start_failed: %s", exc)
+            log_event("remote_vision_camera_start_failed", error=str(exc), level="error")
             self._running = False
             return
 
-        logger.info("remote_vision_capture_loop_started")
+        log_event("remote_vision_capture_loop_started")
         while self._running:
             try:
                 frame = self._camera.read()
@@ -202,11 +203,11 @@ class RemoteVisionContextProvider:
                     self._upload_frame(frame, frame_id=frame_count, turn_id=turn_id)
 
             except Exception as exc:
-                logger.warning("remote_vision_capture_error: %s", exc)
+                log_event("remote_vision_capture_error", error=str(exc), level="warning")
 
             time.sleep(self.config.capture_interval_s)
 
-        logger.info("remote_vision_capture_loop_stopped")
+        log_event("remote_vision_capture_loop_stopped")
 
     # ------------------------------------------------------------------
     # 内部：帧注入模式的上传循环
@@ -214,7 +215,7 @@ class RemoteVisionContextProvider:
 
     def _inject_loop(self) -> None:
         """消费外部注入的帧并上传，不自己读摄像头。"""
-        logger.info("remote_vision_inject_loop_started")
+        log_event("remote_vision_inject_loop_started")
         while self._running:
             with self._injected_frame_lock:
                 frame = self._injected_frame
@@ -230,7 +231,7 @@ class RemoteVisionContextProvider:
 
             time.sleep(self.config.capture_interval_s)
 
-        logger.info("remote_vision_inject_loop_stopped")
+        log_event("remote_vision_inject_loop_stopped")
 
     def _upload_frame(self, frame, *, frame_id: int, turn_id: str) -> None:
         try:
