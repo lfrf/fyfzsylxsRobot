@@ -226,7 +226,7 @@ def run_live_loop() -> None:
     runtime.run_forever()
 
 
-def _start_face_tracking_for_live(args: argparse.Namespace) -> tuple[Any, threading.Thread] | None:
+def _start_face_tracking_for_live(args: argparse.Namespace, frame_sink: object | None = None) -> tuple[Any, threading.Thread] | None:
     if not getattr(args, "face_track", False):
         return None
 
@@ -303,6 +303,7 @@ def _start_face_tracking_for_live(args: argparse.Namespace) -> tuple[Any, thread
             detector=detector,
             config=tracker_cfg,
             show_window=args.face_track_window,
+            frame_sink=frame_sink,
         )
     except Exception as exc:  # pragma: no cover - depends on hardware runtime
         print(f"[live] face tracking disabled: startup failed: {exc}")
@@ -318,12 +319,19 @@ def run_live_loop_with_optional_face_tracking(args: argparse.Namespace) -> None:
     settings = load_settings()
     start_raspi_runtime_log("live_audio_loop", settings)
     runtime = build_runtime(input_provider=build_live_input_provider(settings), settings=settings)
-    runner_thread = _start_face_tracking_for_live(args)
 
     # 启动视觉 provider（如果是 RemoteVisionContextProvider）
     vision_provider = runtime.turn_manager.payload_builder.vision_context_provider
     if hasattr(vision_provider, "start"):
+        # 如果同时启用了人脸追踪，切换为帧注入模式，避免摄像头冲突
+        if getattr(args, "face_track", False) and hasattr(vision_provider, "set_shared_camera_mode"):
+            vision_provider.set_shared_camera_mode(True)
+            logger.info("remote_vision_provider: shared_camera_mode enabled (face tracking will inject frames)")
         vision_provider.start()
+
+    # frame_sink 传给人脸追踪，让它每帧注入给视频上传模块
+    frame_sink = vision_provider if hasattr(vision_provider, "inject_frame") else None
+    runner_thread = _start_face_tracking_for_live(args, frame_sink=frame_sink)
 
     try:
         runtime.run_forever()

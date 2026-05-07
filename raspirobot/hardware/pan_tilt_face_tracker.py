@@ -422,6 +422,7 @@ class FaceTrackingPanTiltRunner:
         detector: FaceDetector,
         config: TrackerConfig,
         show_window: bool = True,
+        frame_sink: object | None = None,
     ) -> None:
         self.servo = servo
         self.camera = camera
@@ -429,6 +430,8 @@ class FaceTrackingPanTiltRunner:
         self.config = config
         self.show_window = show_window
         self._stop_event = threading.Event()
+        # frame_sink: 实现了 inject_frame(frame) 的对象，用于共享摄像头帧
+        self._frame_sink = frame_sink
 
     def request_stop(self) -> None:
         self._stop_event.set()
@@ -449,6 +452,13 @@ class FaceTrackingPanTiltRunner:
                 frame = self.camera.read()
                 if frame is None:
                     continue
+
+                # 共享帧给视频上传模块（如 RemoteVisionContextProvider）
+                if self._frame_sink is not None:
+                    try:
+                        self._frame_sink.inject_frame(frame)
+                    except Exception:
+                        pass
 
                 h, w = frame.shape[:2]
                 if target_x <= 0.0 and target_y <= 0.0:
