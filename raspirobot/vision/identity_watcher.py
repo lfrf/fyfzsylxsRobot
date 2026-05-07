@@ -196,12 +196,25 @@ class IdentityWatcher:
 
     def _restart_provider(self, *, shared_camera_mode: bool) -> None:
         with self._provider_lock:
+            log_event(
+                "identity_watcher_restart_provider_start",
+                shared_camera_mode=shared_camera_mode,
+                has_stop=hasattr(self.vision_provider, "stop"),
+                has_set_shared=hasattr(self.vision_provider, "set_shared_camera_mode"),
+                has_start=hasattr(self.vision_provider, "start"),
+                provider_type=type(self.vision_provider).__name__,
+            )
             if hasattr(self.vision_provider, "stop"):
                 self.vision_provider.stop()
+                log_event("identity_watcher_provider_stopped")
             if hasattr(self.vision_provider, "set_shared_camera_mode"):
                 self.vision_provider.set_shared_camera_mode(shared_camera_mode)
+                log_event("identity_watcher_provider_shared_mode_set", shared_camera_mode=shared_camera_mode)
             if hasattr(self.vision_provider, "start"):
                 self.vision_provider.start()
+                log_event("identity_watcher_provider_started")
+            else:
+                log_event("identity_watcher_provider_no_start_method", level="warning")
 
     def _stop_provider(self) -> None:
         with self._provider_lock:
