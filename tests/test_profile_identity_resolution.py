@@ -46,6 +46,8 @@ def test_anonymous_session_fallback(tmp_path) -> None:
 
     identity = service.resolve_identity(request)
 
-    assert identity.user_id == "anonymous_session-xyz"
-    assert identity.identity_source == "anonymous_session"
+    assert identity.user_id is None
+    assert identity.identity_source == "no_face"
     assert identity.is_anonymous is True
+    assert identity.persisted is False
+    assert service.store._load_users_index() == {"users": {}}

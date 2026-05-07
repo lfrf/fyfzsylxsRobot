@@ -47,6 +47,7 @@ class UserProfileService:
                 face_id=None,
                 display_name=profile.display_name,
                 is_anonymous=False,
+                persisted=True,
                 profile=profile,
             )
             self._log_identity(identity)
@@ -65,26 +66,33 @@ class UserProfileService:
                 face_id=safe_identifier(face_id, fallback="face"),
                 display_name=profile.display_name,
                 is_anonymous=False,
+                persisted=True,
                 profile=profile,
             )
             self._log_identity(identity)
             return identity
 
-        session_id = safe_identifier(getattr(request, "session_id", None), fallback="session")
-        anonymous_user_id = f"anonymous_{session_id}"
-        profile = self.store.ensure_user(anonymous_user_id, display_name=mock_display_name or "匿名用户")
         identity = IdentityResolution(
-            user_id=profile.user_id,
-            identity_source="anonymous_session",
+            user_id=None,
+            identity_source="no_face",
             face_id=None,
-            display_name=profile.display_name,
+            display_name=None,
             is_anonymous=True,
-            profile=profile,
+            persisted=False,
+            profile=None,
         )
         self._log_identity(identity)
         return identity
 
-    def build_profile_context(self, *, user_id: str, mode_id: str | None = None) -> ProfileContextResult:
+    def build_profile_context(self, *, user_id: str | None, mode_id: str | None = None) -> ProfileContextResult:
+        if not user_id:
+            log_event(
+                "profile_context_skipped",
+                reason="no_persistent_user",
+                mode_id=mode_id,
+            )
+            return ProfileContextResult(context="", chars=0, user_id=None)
+
         result = self.prompt_builder.build_for_user(user_id=user_id, mode_id=mode_id)
         log_event(
             "profile_context_built",
@@ -98,7 +106,7 @@ class UserProfileService:
     def record_turn(
         self,
         *,
-        user_id: str,
+        user_id: str | None,
         session_id: str,
         turn_id: str,
         mode_id: str,
@@ -110,6 +118,17 @@ class UserProfileService:
     ) -> MemoryWriteResult:
         if not settings.profile_memory_enabled:
             return MemoryWriteResult(written=False, summary_updated=False)
+        if not user_id:
+            log_event(
+                "profile_memory_write_skipped",
+                reason="no_persistent_user",
+                session_id=session_id,
+                turn_id=turn_id,
+                mode_id=mode_id,
+                face_id=face_id,
+            )
+            return MemoryWriteResult(written=False, summary_updated=False)
+
         try:
             event = MemoryEvent(
                 user_id=user_id,
@@ -188,6 +207,7 @@ class UserProfileService:
             face_id=identity.face_id,
             display_name=identity.display_name,
             is_anonymous=identity.is_anonymous,
+            persisted=identity.persisted,
         )
 
     def _event_tags(self, text: str, mode_id: str) -> list[str]:

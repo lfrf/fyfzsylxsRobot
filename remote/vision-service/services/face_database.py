@@ -73,21 +73,29 @@ class FaceDatabase:
     ) -> FaceMatch:
         threshold = settings.face_match_threshold if threshold is None else threshold
         create_unknown = settings.face_create_unknown if create_unknown is None else create_unknown
+        source = (source or "").strip().lower()
+        if not self._is_persistable_face(source=source, embedding=embedding, embedding_model=embedding_model):
+            return FaceMatch(record=None, confidence=None, created=False)
+
         normalized = _normalize_embedding(embedding)
 
         data = self._load()
         best_record: dict[str, Any] | None = None
         best_score: float | None = None
         for record in data.get("faces", []):
+            record_source = str(record.get("source") or "").strip().lower()
+            if record_source != source:
+                continue
             score = cosine_similarity(normalized, record.get("embedding") or [])
             if best_score is None or score > best_score:
                 best_record = record
                 best_score = score
 
         if best_record is not None and best_score is not None and best_score >= threshold:
-            best_record["seen_count"] = int(best_record.get("seen_count") or 0) + 1
+            new_count = int(best_record.get("visual_seen_count") or best_record.get("seen_count") or 0) + 1
+            best_record["seen_count"] = new_count
+            best_record["visual_seen_count"] = new_count
             best_record["last_seen_at"] = _now_iso()
-            best_record["source"] = source or best_record.get("source")
             if bbox:
                 best_record["last_bbox"] = bbox
             self._save(data)
@@ -101,6 +109,7 @@ class FaceDatabase:
             "user_id": None,
             "embedding": normalized,
             "seen_count": 1,
+            "visual_seen_count": 1,
             "created_at": _now_iso(),
             "last_seen_at": _now_iso(),
             "source": source,
@@ -110,6 +119,23 @@ class FaceDatabase:
         data.setdefault("faces", []).append(record)
         self._save(data)
         return FaceMatch(record=record, confidence=best_score, created=True)
+
+    def _is_persistable_face(
+        self,
+        *,
+        source: str,
+        embedding: list[float],
+        embedding_model: str | None,
+    ) -> bool:
+        if source == "mock" and not settings.face_store_mock_records:
+            return False
+        if source != "insightface":
+            return bool(source == "mock" and settings.face_store_mock_records)
+        if not embedding:
+            return False
+        if not (embedding_model or "").strip():
+            return False
+        return True
 
     def _load(self) -> dict[str, Any]:
         if not self.db_path.exists():
