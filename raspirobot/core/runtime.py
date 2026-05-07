@@ -148,6 +148,13 @@ class RaspiRobotRuntime:
         if self.wake_word_provider is not None:
             # 有唤醒词引擎：进入 STANDBY 待机
             if self.state_machine.state == RobotRuntimeState.IDLE:
+                log_event(
+                    "state_transition",
+                    transition_event="InitialStandby",
+                    from_state=RobotRuntimeState.IDLE.value,
+                    to_state=RobotRuntimeState.STANDBY.value,
+                    mode_id=self.state_machine.mode_id,
+                )
                 self.state_machine.state = RobotRuntimeState.STANDBY
                 self._enter_standby()
                 log_event("wake_word_standby_mode_enabled")

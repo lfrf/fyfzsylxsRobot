@@ -13,7 +13,8 @@ mkdir -p /home/pi/Desktop/code/fyfzsylxsRobot/tmp/wav
 export ROBOT_WAKE_WORD_ENABLED=true
 export ROBOT_WAKE_WORD_MODEL_DIR=models/sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20
 export ROBOT_WAKE_WORD_KEYWORDS=models/sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20/keywords.txt
-export ROBOT_WAKE_WORD_TIMEOUT_S=10
+export ROBOT_WAKE_WORD_DEVICE=1
+export ROBOT_WORK_IDLE_TIMEOUT_S=10
 
 # ========================================
 # 语音链路
@@ -65,6 +66,19 @@ export ROBOT_EYES_RIGHT_ROTATION=270
 export ROBOT_VISION_REMOTE_ENABLED=true
 export ROBOT_VISION_INGEST_URL=http://127.0.0.1:29001/v1/video/ingest
 export ROBOT_VISION_FROM_CACHE_URL=http://127.0.0.1:29002/v1/vision/identity/from-cache
+export ROBOT_VISION_STREAM_ID=video-main
+export ROBOT_VISION_UPLOAD_EVERY=3
+export ROBOT_VISION_CAPTURE_INTERVAL_S=0.2
+
+# ========================================
+# 身份识别配置
+# ========================================
+export ROBOT_IDENTITY_WATCHER_ENABLED=true
+export ROBOT_IDENTITY_WATCHER_POLL_INTERVAL_S=1.0
+export ROBOT_IDENTITY_WATCHER_CONTEXT_SECONDS=2.0
+export ROBOT_IDENTITY_RESOLVE_TIMEOUT_S=5.0
+export ROBOT_IDENTITY_PERSISTABLE_FACE_SOURCES=insightface
+export ROBOT_IDENTITY_REQUIRE_EMBEDDING_MODEL=true
 
 # ========================================
 # 日志
@@ -76,22 +90,32 @@ export ROBOT_DEBUG_TRACE=true
 # 启动信息
 # ========================================
 echo "========================================"
-echo "  RobotMatch 机器人启动（带唤醒词）"
+echo "  RobotMatch 机器人启动（完整功能）"
 echo "========================================"
 echo ""
 echo "✅ 唤醒词: 你好星仔 / 你好小星"
+echo "✅ 唤醒词模型: $ROBOT_WAKE_WORD_MODEL_DIR"
+echo "✅ 工作超时: ${ROBOT_WORK_IDLE_TIMEOUT_S}秒"
 echo "✅ 远程服务: $ROBOT_REMOTE_BASE_URL"
 echo "✅ 麦克风: $ROBOT_AUDIO_CAPTURE_DEVICE"
 echo "✅ 扬声器: $ROBOT_AUDIO_PLAYBACK_DEVICE"
 echo "✅ 眼睛屏: ST7789 双屏"
+echo "✅ 人脸识别: 已启用"
 echo "✅ 人脸追踪: 已启用"
 echo "✅ 视频上传: 已启用"
 echo ""
 echo "工作流程："
-echo "  1. 待机状态 → 说唤醒词"
-echo "  2. 唤醒确认 → 开始监听"
-echo "  3. 说话 → 处理 → 回复"
-echo "  4. 10秒无语音 → 返回待机"
+echo "  1. STANDBY (待机) → 说唤醒词 '你好小星'"
+echo "  2. WAKE_DETECTED → 播放确认音"
+echo "  3. LISTENING (监听) → 启动人脸识别"
+echo "  4. 检测到人脸 → 启动人脸追踪"
+echo "  5. 用户说话 → 处理 → 回复"
+echo "  6. ${ROBOT_WORK_IDLE_TIMEOUT_S}秒无语音 → 返回 STANDBY"
+echo ""
+echo "人脸检测逻辑："
+echo "  • 唤醒时有人 → 直接启动追踪"
+echo "  • 唤醒时无人 → 正常对话（无追踪）"
+echo "  • 对话中出现人 → 动态启动追踪"
 echo ""
 echo "按 Ctrl+C 停止"
 echo "========================================"
