@@ -33,6 +33,7 @@ class RaspiRobotRuntime:
         wake_word_provider=None,
         work_idle_timeout_seconds: float = 10.0,
         face_tracking_lifecycle=None,
+        identity_watcher=None,
         eyes_driver=None,
     ) -> None:
         self.listener = listener
@@ -44,7 +45,9 @@ class RaspiRobotRuntime:
         self.wake_word_provider = wake_word_provider
         self.work_idle_timeout_seconds = work_idle_timeout_seconds
         self.face_tracking_lifecycle = face_tracking_lifecycle
+        self.identity_watcher = identity_watcher
         self.eyes_driver = eyes_driver
+        self._tracking_face_id: str | None = None
         self._ensure_initial_state()
 
     def run_once(self) -> RuntimeLoopResult:
@@ -54,7 +57,7 @@ class RaspiRobotRuntime:
             if self.wake_word_provider is not None and self.wake_word_provider.poll():
                 log_event("wake_word_triggered")
                 self._stop_wake_word_provider()
-                self._start_face_tracking()
+                self._start_identity_watcher(shared_camera_mode=False)
                 self.state_machine.transition(RobotEvent.WAKE_WORD_DETECTED)
                 self.state_machine.transition(RobotEvent.WAKE_ACK_DONE)
                 self._set_eyes("listening")
@@ -162,9 +165,42 @@ class RaspiRobotRuntime:
                 log_event("eyes_set_expression_failed", expression=expression, error=str(exc))
 
     def _enter_standby(self) -> None:
+        self._clear_active_face_identity()
+        self._stop_identity_watcher()
         self._stop_face_tracking()
         self._set_eyes("sleep")
         self._start_wake_word_provider()
+
+    def handle_identity_resolved(self, face_identity, result) -> None:
+        face_id = str(getattr(result, "face_id", None) or getattr(face_identity, "face_id", "") or "").strip()
+        if not face_id:
+            return
+        if self.state_machine.state == RobotRuntimeState.STANDBY:
+            return
+        if self._tracking_face_id == face_id:
+            return
+        self._set_active_face_identity(face_id)
+
+        switched_to_shared_camera = False
+        if self.identity_watcher is not None and self.face_tracking_lifecycle is not None:
+            try:
+                self.identity_watcher.switch_to_shared_camera()
+                switched_to_shared_camera = True
+            except Exception as exc:
+                log_event("identity_watcher_shared_camera_switch_failed", face_id=face_id, error=str(exc), level="error")
+        if self._start_face_tracking():
+            self._tracking_face_id = face_id
+            log_event(
+                "face_tracking_enabled_after_identity",
+                face_id=face_id,
+                user_id=getattr(result, "user_id", None),
+                persisted=bool(getattr(result, "persisted", False)),
+            )
+        elif switched_to_shared_camera and self.identity_watcher is not None:
+            try:
+                self.identity_watcher.switch_to_own_camera()
+            except Exception as exc:
+                log_event("identity_watcher_own_camera_restore_failed", face_id=face_id, error=str(exc), level="error")
 
     def _start_wake_word_provider(self) -> None:
         if self.wake_word_provider is None:
@@ -182,21 +218,55 @@ class RaspiRobotRuntime:
         except Exception as exc:
             log_event("wake_word_stop_failed", error=str(exc), level="error")
 
-    def _start_face_tracking(self) -> None:
+    def _start_face_tracking(self) -> bool:
         if self.face_tracking_lifecycle is None:
-            return
+            return False
         try:
-            self.face_tracking_lifecycle.start()
+            started = self.face_tracking_lifecycle.start()
+            if started is False:
+                log_event("face_tracking_start_skipped_or_failed", level="warning")
+                return False
+            return True
         except Exception as exc:
             log_event("face_tracking_start_failed", error=str(exc), level="error")
+            return False
 
     def _stop_face_tracking(self) -> None:
         if self.face_tracking_lifecycle is None:
             return
         try:
             self.face_tracking_lifecycle.stop()
+            self._tracking_face_id = None
         except Exception as exc:
             log_event("face_tracking_stop_failed", error=str(exc), level="error")
+
+    def _start_identity_watcher(self, *, shared_camera_mode: bool) -> None:
+        if self.identity_watcher is None:
+            return
+        try:
+            self.identity_watcher.start(shared_camera_mode=shared_camera_mode)
+        except Exception as exc:
+            log_event("identity_watcher_start_failed", error=str(exc), level="error")
+
+    def _stop_identity_watcher(self) -> None:
+        if self.identity_watcher is None:
+            return
+        try:
+            self.identity_watcher.stop()
+        except Exception as exc:
+            log_event("identity_watcher_stop_failed", error=str(exc), level="error")
+
+    def _set_active_face_identity(self, face_id: str) -> None:
+        try:
+            self.turn_manager.payload_builder.request_options["face_id"] = face_id
+        except Exception as exc:
+            log_event("active_face_identity_set_failed", face_id=face_id, error=str(exc), level="warning")
+
+    def _clear_active_face_identity(self) -> None:
+        try:
+            self.turn_manager.payload_builder.request_options.pop("face_id", None)
+        except Exception as exc:
+            log_event("active_face_identity_clear_failed", error=str(exc), level="warning")
 
     def _mark_remote_result_ready(self, response) -> None:
         self.event_bus.publish(

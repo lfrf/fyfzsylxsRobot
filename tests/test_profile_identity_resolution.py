@@ -37,7 +37,45 @@ def test_face_id_creates_user_mapping(tmp_path) -> None:
 
     assert identity.identity_source == "face_id"
     assert identity.face_id == "face_abc"
+    assert identity.display_name is None
     assert service.store.get_user_id_for_face("face_abc") == identity.user_id
+
+
+def test_background_face_resolution_creates_unnamed_profile(tmp_path) -> None:
+    service = _service(tmp_path)
+
+    identity = service.resolve_face_identity(face_id="face_late_001", source="raspi_identity_watcher")
+
+    assert identity.identity_source == "raspi_identity_watcher"
+    assert identity.face_id == "face_late_001"
+    assert identity.user_id == "user_face_late_001"
+    assert identity.display_name is None
+    assert identity.persisted is True
+    profile = service.store.get_profile(identity.user_id)
+    assert profile is not None
+    assert profile.display_name == ""
+
+
+def test_vision_mock_face_identity_is_ignored(tmp_path) -> None:
+    service = _service(tmp_path)
+    request = SimpleNamespace(
+        session_id="session-1",
+        request_options={},
+        vision_context=SimpleNamespace(
+            face_identity={
+                "face_detected": True,
+                "face_id": "face_mock_001",
+                "source": "mock",
+                "embedding_model": "mock-sha256-v1",
+            }
+        ),
+    )
+
+    identity = service.resolve_identity(request)
+
+    assert identity.user_id is None
+    assert identity.identity_source == "no_face"
+    assert service.store._load_users_index() == {"users": {}}
 
 
 def test_anonymous_session_fallback(tmp_path) -> None:

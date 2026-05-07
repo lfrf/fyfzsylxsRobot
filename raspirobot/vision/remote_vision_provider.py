@@ -115,16 +115,21 @@ class RemoteVisionContextProvider:
         self._running = False
         if self._thread is not None:
             self._thread.join(timeout=3.0)
+            self._thread = None
         if self._camera is not None:
             try:
                 self._camera.stop()
             except Exception:
                 pass
+            self._camera = None
         if self._http_client is not None:
             try:
                 self._http_client.close()
             except Exception:
                 pass
+            self._http_client = None
+        with self._injected_frame_lock:
+            self._injected_frame = None
 
     # ------------------------------------------------------------------
     # VisionContextProvider 协议

@@ -28,6 +28,14 @@ def test_profile_api_get_and_summarize(tmp_path, monkeypatch) -> None:
     assert by_face.status_code == 200
     assert by_face.json()["profile"]["user_id"] == "user_api_001"
 
+    resolved = client.post(
+        "/v1/profiles/resolve-face",
+        json={"session_id": "session-api", "face_id": "face_api_late", "source": "raspi_identity_watcher"},
+    )
+    assert resolved.status_code == 200
+    assert resolved.json()["identity"]["user_id"] == "user_face_api_late"
+    assert resolved.json()["identity"]["display_name"] is None
+
     summarized = client.post("/v1/profiles/user_api_001/summarize")
     assert summarized.status_code == 200
     assert "summary" in summarized.json()

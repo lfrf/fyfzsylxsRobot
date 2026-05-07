@@ -54,11 +54,13 @@ class ProfileStore:
         if profile is None:
             profile = UserProfile(
                 user_id=safe_user_id,
-                display_name=display_name or "未命名用户",
+                display_name=display_name or "",
                 created_at=now,
             )
         elif display_name:
             profile.display_name = display_name
+        elif profile.display_name == "未命名用户":
+            profile.display_name = ""
 
         profile.last_seen_at = now
         profile.seen_count += 1
@@ -146,8 +148,9 @@ class ProfileStore:
 
     def _render_profile_markdown(self, profile: UserProfile) -> str:
         facts = ", ".join(f"{item.key}:{item.value}" for item in profile.facts[:8])
+        title = profile.display_name or profile.user_id
         return "\n".join([
-            f"# {profile.display_name}",
+            f"# {title}",
             "",
             f"- user_id: {profile.user_id}",
             f"- face_ids: {', '.join(profile.face_ids)}",

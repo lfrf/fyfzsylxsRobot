@@ -25,7 +25,13 @@ from raspirobot.hardware import MockEyesDriver, MockHeadDriver, ST7789EyeConfig,
 from raspirobot.remote import MockRemoteClient, RemoteClient, RemoteClientProtocol, RobotPayloadBuilder
 from raspirobot.session import SessionManager, TurnLogger
 from raspirobot.utils import ensure_dir
-from raspirobot.vision import MockVisionContextProvider, RemoteVisionConfig, RemoteVisionContextProvider
+from raspirobot.vision import (
+    IdentityWatcher,
+    IdentityWatcherConfig,
+    MockVisionContextProvider,
+    RemoteVisionConfig,
+    RemoteVisionContextProvider,
+)
 from shared.logging_utils import get_log_file_path, get_log_session_id, log_event, start_log_session
 
 logger = logging.getLogger(__name__)
@@ -180,6 +186,42 @@ def build_wake_word_provider(settings: Settings):
     )
     provider = SherpaOnnxWakeWordProvider(config)
     return provider, timeout_s
+
+
+def build_identity_watcher(settings: Settings, vision_provider: object, *, on_identity_resolved):
+    import os
+
+    remote_vision_enabled = os.getenv("ROBOT_VISION_REMOTE_ENABLED", "false").strip().lower() in {"1", "true", "yes"}
+    enabled_default = "true" if remote_vision_enabled else "false"
+    enabled = os.getenv("ROBOT_IDENTITY_WATCHER_ENABLED", enabled_default).strip().lower() in {"1", "true", "yes"}
+    if not enabled or not hasattr(vision_provider, "get_context"):
+        return None
+
+    sources = tuple(
+        item.strip().lower()
+        for item in os.getenv("ROBOT_IDENTITY_PERSISTABLE_FACE_SOURCES", "insightface").split(",")
+        if item.strip()
+    )
+    resolve_url = os.getenv("ROBOT_PROFILE_RESOLVE_FACE_URL", "").strip()
+    if not resolve_url:
+        resolve_url = f"{settings.remote_base_url}/v1/profiles/resolve-face"
+    require_embedding_model = (
+        os.getenv("ROBOT_IDENTITY_REQUIRE_EMBEDDING_MODEL", "true").strip().lower() in {"1", "true", "yes"}
+    )
+
+    return IdentityWatcher(
+        vision_provider=vision_provider,
+        config=IdentityWatcherConfig(
+            resolve_url=resolve_url,
+            session_id=settings.session_id,
+            poll_interval_s=float(os.getenv("ROBOT_IDENTITY_WATCHER_POLL_INTERVAL_S", "1.0")),
+            context_seconds=float(os.getenv("ROBOT_IDENTITY_WATCHER_CONTEXT_SECONDS", "2.0")),
+            resolve_timeout_s=float(os.getenv("ROBOT_IDENTITY_RESOLVE_TIMEOUT_S", "5.0")),
+            persistable_sources=sources or ("insightface",),
+            require_embedding_model=require_embedding_model,
+        ),
+        on_identity_resolved=on_identity_resolved,
+    )
 
 
 def _parse_sounddevice_device(raw: str | None):
@@ -385,14 +427,15 @@ class FaceTrackingLifecycle:
         self.frame_sink = frame_sink
         self._runner_thread: tuple[Any, threading.Thread] | None = None
 
-    def start(self) -> None:
+    def start(self) -> bool:
         if self._runner_thread is not None:
             runner, worker = self._runner_thread
             if worker.is_alive():
-                return
+                return True
             self._runner_thread = None
 
         self._runner_thread = _start_face_tracking_for_live(self.args, frame_sink=self.frame_sink)
+        return self.is_running()
 
     def stop(self) -> None:
         if self._runner_thread is None:
@@ -403,6 +446,12 @@ class FaceTrackingLifecycle:
         runner.request_stop()
         worker.join(timeout=3.0)
         self._runner_thread = None
+
+    def is_running(self) -> bool:
+        if self._runner_thread is None:
+            return False
+        _runner, worker = self._runner_thread
+        return worker.is_alive()
 
 
 def run_live_loop_with_optional_face_tracking(args: argparse.Namespace) -> None:
@@ -421,20 +470,33 @@ def run_live_loop_with_optional_face_tracking(args: argparse.Namespace) -> None:
 
     # 启动视觉 provider（如果是 RemoteVisionContextProvider）
     vision_provider = runtime.turn_manager.payload_builder.vision_context_provider
-    if hasattr(vision_provider, "start"):
-        # 如果同时启用了人脸追踪，切换为帧注入模式，避免摄像头冲突
-        if getattr(args, "face_track", False) and hasattr(vision_provider, "set_shared_camera_mode"):
-            vision_provider.set_shared_camera_mode(True)
-            logger.info("remote_vision_provider: shared_camera_mode enabled (face tracking will inject frames)")
-        vision_provider.start()
-
     # frame_sink 传给人脸追踪，让它每帧注入给视频上传模块
     frame_sink = vision_provider if hasattr(vision_provider, "inject_frame") else None
     face_tracking_lifecycle = None
     if getattr(args, "face_track", False):
         face_tracking_lifecycle = FaceTrackingLifecycle(args, frame_sink=frame_sink)
         runtime.face_tracking_lifecycle = face_tracking_lifecycle
-        if wake_word_provider is None:
+
+    identity_watcher = build_identity_watcher(
+        settings,
+        vision_provider,
+        on_identity_resolved=runtime.handle_identity_resolved,
+    )
+    runtime.identity_watcher = identity_watcher
+    if wake_word_provider is not None and face_tracking_lifecycle is not None and identity_watcher is None:
+        log_event(
+            "face_tracking_delayed_until_identity_but_watcher_disabled",
+            reason="identity_watcher_not_available",
+            level="warning",
+        )
+
+    if wake_word_provider is None:
+        if hasattr(vision_provider, "start"):
+            if face_tracking_lifecycle is not None and hasattr(vision_provider, "set_shared_camera_mode"):
+                vision_provider.set_shared_camera_mode(True)
+                logger.info("remote_vision_provider: shared_camera_mode enabled (face tracking will inject frames)")
+            vision_provider.start()
+        if face_tracking_lifecycle is not None:
             face_tracking_lifecycle.start()
 
     try:
@@ -444,9 +506,11 @@ def run_live_loop_with_optional_face_tracking(args: argparse.Namespace) -> None:
     finally:
         if wake_word_provider is not None:
             wake_word_provider.stop()
+        if identity_watcher is not None:
+            identity_watcher.stop()
         if face_tracking_lifecycle is not None:
             face_tracking_lifecycle.stop()
-        if hasattr(vision_provider, "stop"):
+        if identity_watcher is None and hasattr(vision_provider, "stop"):
             vision_provider.stop()
 
 
