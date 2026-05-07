@@ -10,9 +10,38 @@ __pycache__/
 .venv/
 **/.venv/
 
-# Local runtime data
+# Local runtime logs
 logs/
-data/
+remote/**/logs/
+*.log
+
+# Root-level local runtime data
+# 只忽略仓库根目录下的 data，不再忽略 remote/**/data
+/data/
+
+# Allow remote service runtime data to be tracked
+# 用于同步 face_id / user_id / profile / memory / snapshot 等开发数据
+!remote/
+!remote/**/
+!remote/**/data/
+!remote/**/data/**
+
+# Explicitly allow vision face database
+!remote/vision-service/data/
+!remote/vision-service/data/faces/
+!remote/vision-service/data/faces/**
+!remote/vision-service/data/faces/faces.json
+
+# Explicitly allow orchestrator profile database
+!remote/orchestrator/data/
+!remote/orchestrator/data/profiles/
+!remote/orchestrator/data/profiles/**
+!remote/orchestrator/data/profiles/users.json
+!remote/orchestrator/data/profiles/face_user_map.json
+!remote/orchestrator/data/profiles/memories/
+!remote/orchestrator/data/profiles/memories/**
+!remote/orchestrator/data/profiles/snapshots/
+!remote/orchestrator/data/profiles/snapshots/**
 
 # Env files
 .env

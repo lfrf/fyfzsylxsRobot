@@ -1,0 +1,22 @@
+{
+  "users": {
+    "anonymous_demo-session-001": {
+      "display_name": "匿名用户",
+      "last_seen_at": "2026-05-07T10:29:30Z",
+      "snapshot": "/root/autodl-tmp/a22/code/fyfzsylxsRobot/remote/orchestrator/data/profiles/snapshots/anonymous_demo-session-001.json",
+      "user_id": "anonymous_demo-session-001"
+    },
+    "user_face_1483cf4840cf": {
+      "display_name": "未命名用户",
+      "last_seen_at": "2026-05-07T08:54:46Z",
+      "snapshot": "/root/autodl-tmp/a22/code/fyfzsylxsRobot/remote/orchestrator/data/profiles/snapshots/user_face_1483cf4840cf.json",
+      "user_id": "user_face_1483cf4840cf"
+    },
+    "user_face_32fcef632317": {
+      "display_name": "未命名用户",
+      "last_seen_at": "2026-05-07T10:29:57Z",
+      "snapshot": "/root/autodl-tmp/a22/code/fyfzsylxsRobot/remote/orchestrator/data/profiles/snapshots/user_face_32fcef632317.json",
+      "user_id": "user_face_32fcef632317"
+    }
+  }
+}
