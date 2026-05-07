@@ -36,6 +36,13 @@ def test_profile_api_get_and_summarize(tmp_path, monkeypatch) -> None:
     assert resolved.json()["identity"]["user_id"] == "user_face_api_late"
     assert resolved.json()["identity"]["display_name"] is None
 
+    renamed = client.post(
+        "/v1/profiles/user_face_api_late/display-name",
+        json={"display_name": "小星用户"},
+    )
+    assert renamed.status_code == 200
+    assert renamed.json()["identity"]["display_name"] == "小星用户"
+
     summarized = client.post("/v1/profiles/user_api_001/summarize")
     assert summarized.status_code == 200
     assert "summary" in summarized.json()

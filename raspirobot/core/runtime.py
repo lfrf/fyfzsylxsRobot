@@ -34,6 +34,7 @@ class RaspiRobotRuntime:
         work_idle_timeout_seconds: float = 10.0,
         face_tracking_lifecycle=None,
         identity_watcher=None,
+        vision_lifecycle=None,
         eyes_driver=None,
     ) -> None:
         self.listener = listener
@@ -46,6 +47,7 @@ class RaspiRobotRuntime:
         self.work_idle_timeout_seconds = work_idle_timeout_seconds
         self.face_tracking_lifecycle = face_tracking_lifecycle
         self.identity_watcher = identity_watcher
+        self.vision_lifecycle = vision_lifecycle
         self.eyes_driver = eyes_driver
         self._tracking_face_id: str | None = None
         self._ensure_initial_state()
@@ -57,6 +59,7 @@ class RaspiRobotRuntime:
             if self.wake_word_provider is not None and self.wake_word_provider.poll():
                 log_event("wake_word_triggered")
                 self._stop_wake_word_provider()
+                self._start_vision_provider(shared_camera_mode=False)
                 self._start_identity_watcher(shared_camera_mode=False)
                 self.state_machine.transition(RobotEvent.WAKE_WORD_DETECTED)
                 self.state_machine.transition(RobotEvent.WAKE_ACK_DONE)
@@ -168,6 +171,7 @@ class RaspiRobotRuntime:
         self._clear_active_face_identity()
         self._stop_identity_watcher()
         self._stop_face_tracking()
+        self._stop_vision_provider()
         self._set_eyes("sleep")
         self._start_wake_word_provider()
 
@@ -184,10 +188,10 @@ class RaspiRobotRuntime:
         switched_to_shared_camera = False
         if self.identity_watcher is not None and self.face_tracking_lifecycle is not None:
             try:
-                self.identity_watcher.switch_to_shared_camera()
+                self._start_vision_provider(shared_camera_mode=True)
                 switched_to_shared_camera = True
             except Exception as exc:
-                log_event("identity_watcher_shared_camera_switch_failed", face_id=face_id, error=str(exc), level="error")
+                log_event("vision_shared_camera_switch_failed", face_id=face_id, error=str(exc), level="error")
         if self._start_face_tracking():
             self._tracking_face_id = face_id
             log_event(
@@ -198,9 +202,9 @@ class RaspiRobotRuntime:
             )
         elif switched_to_shared_camera and self.identity_watcher is not None:
             try:
-                self.identity_watcher.switch_to_own_camera()
+                self._start_vision_provider(shared_camera_mode=False)
             except Exception as exc:
-                log_event("identity_watcher_own_camera_restore_failed", face_id=face_id, error=str(exc), level="error")
+                log_event("vision_own_camera_restore_failed", face_id=face_id, error=str(exc), level="error")
 
     def _start_wake_word_provider(self) -> None:
         if self.wake_word_provider is None:
@@ -255,6 +259,32 @@ class RaspiRobotRuntime:
             self.identity_watcher.stop()
         except Exception as exc:
             log_event("identity_watcher_stop_failed", error=str(exc), level="error")
+
+    def _start_vision_provider(self, *, shared_camera_mode: bool) -> None:
+        if self.vision_lifecycle is None:
+            return
+        try:
+            if hasattr(self.vision_lifecycle, "stop"):
+                self.vision_lifecycle.stop()
+            if hasattr(self.vision_lifecycle, "set_shared_camera_mode"):
+                self.vision_lifecycle.set_shared_camera_mode(shared_camera_mode)
+            if hasattr(self.vision_lifecycle, "start"):
+                self.vision_lifecycle.start()
+            log_event(
+                "vision_provider_started_for_work_mode",
+                shared_camera_mode=shared_camera_mode,
+            )
+        except Exception as exc:
+            log_event("vision_provider_start_failed", shared_camera_mode=shared_camera_mode, error=str(exc), level="error")
+
+    def _stop_vision_provider(self) -> None:
+        if self.vision_lifecycle is None:
+            return
+        try:
+            self.vision_lifecycle.stop()
+            log_event("vision_provider_stopped_for_standby")
+        except Exception as exc:
+            log_event("vision_provider_stop_failed", error=str(exc), level="error")
 
     def _set_active_face_identity(self, face_id: str) -> None:
         try:

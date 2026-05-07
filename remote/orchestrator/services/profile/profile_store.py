@@ -82,6 +82,17 @@ class ProfileStore:
         self.map_face_to_user(safe_face_id, profile.user_id)
         return profile
 
+    def update_display_name(self, user_id: str, display_name: str) -> UserProfile | None:
+        profile = self.get_profile(user_id)
+        if profile is None:
+            return None
+        clean_name = str(display_name or "").strip()
+        if not clean_name:
+            return profile
+        profile.display_name = clean_name[:24]
+        self.save_profile(profile)
+        return profile
+
     def save_profile(self, profile: UserProfile) -> None:
         self.ensure_dirs()
         self._write_json_atomic(self.snapshot_json_path(profile.user_id), _model_dump(profile))

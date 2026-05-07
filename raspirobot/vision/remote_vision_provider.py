@@ -46,6 +46,7 @@ class RemoteVisionConfig:
     # HTTP 超时
     upload_timeout_s: float = 5.0
     from_cache_timeout_s: float = 10.0
+    context_turn_id: str = "identity-probe"
 
 
 class RemoteVisionContextProvider:
@@ -140,11 +141,7 @@ class RemoteVisionContextProvider:
         每次 TurnManager 构建 payload 时调用。
         用当前 turn_id 向 vision-service 请求 from-cache 识别结果。
         """
-        with self._lock:
-            turn_id = f"turn-{self._turn_id_counter:04d}"
-            self._turn_id_counter += 1
-
-        face_identity = self._fetch_face_identity(turn_id)
+        face_identity = self._fetch_face_identity(self.config.context_turn_id)
         with self._lock:
             self._last_face_identity = face_identity
 
@@ -181,7 +178,7 @@ class RemoteVisionContextProvider:
                 with self._lock:
                     self._frame_count += 1
                     frame_count = self._frame_count
-                    turn_id = f"turn-{self._turn_id_counter:04d}"
+                    turn_id = self.config.context_turn_id
 
                 if frame_count % self.config.upload_every_n_frames == 0:
                     self._upload_frame(frame, frame_id=frame_count, turn_id=turn_id)
@@ -208,7 +205,7 @@ class RemoteVisionContextProvider:
                 with self._lock:
                     self._frame_count += 1
                     frame_count = self._frame_count
-                    turn_id = f"turn-{self._turn_id_counter:04d}"
+                    turn_id = self.config.context_turn_id
 
                 if frame_count % self.config.upload_every_n_frames == 0:
                     self._upload_frame(frame, frame_id=frame_count, turn_id=turn_id)

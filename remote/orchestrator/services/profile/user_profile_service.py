@@ -122,6 +122,42 @@ class UserProfileService:
         self._log_identity(identity)
         return identity
 
+    def update_display_name(self, *, user_id: str | None, display_name: str | None) -> IdentityResolution:
+        clean_user_id = self._clean(user_id)
+        clean_name = self._clean(display_name)
+        if not clean_user_id or not clean_name:
+            return IdentityResolution(
+                user_id=clean_user_id,
+                identity_source="display_name_update_failed",
+                display_name=None,
+                is_anonymous=clean_user_id is None,
+                persisted=False,
+                profile=None,
+            )
+
+        profile = self.store.update_display_name(clean_user_id, clean_name)
+        if profile is None:
+            return IdentityResolution(
+                user_id=clean_user_id,
+                identity_source="profile_not_found",
+                display_name=None,
+                is_anonymous=False,
+                persisted=False,
+                profile=None,
+            )
+
+        identity = IdentityResolution(
+            user_id=profile.user_id,
+            identity_source="display_name_update",
+            face_id=profile.face_ids[0] if profile.face_ids else None,
+            display_name=self._display_name_or_none(profile.display_name),
+            is_anonymous=False,
+            persisted=True,
+            profile=profile,
+        )
+        self._log_identity(identity)
+        return identity
+
     def build_profile_context(self, *, user_id: str | None, mode_id: str | None = None) -> ProfileContextResult:
         if not user_id:
             log_event(

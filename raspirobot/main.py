@@ -149,6 +149,7 @@ def build_vision_provider(settings: Settings):
         stream_id=os.getenv("ROBOT_VISION_STREAM_ID", "video-main"),
         upload_every_n_frames=int(os.getenv("ROBOT_VISION_UPLOAD_EVERY", "3")),
         capture_interval_s=float(os.getenv("ROBOT_VISION_CAPTURE_INTERVAL_S", "0.2")),
+        context_turn_id=os.getenv("ROBOT_VISION_CONTEXT_TURN_ID", "identity-probe"),
     )
     provider = RemoteVisionContextProvider(config)
     return provider, provider  # (vision_context_provider, lifecycle_handle)
@@ -219,6 +220,7 @@ def build_identity_watcher(settings: Settings, vision_provider: object, *, on_id
             resolve_timeout_s=float(os.getenv("ROBOT_IDENTITY_RESOLVE_TIMEOUT_S", "5.0")),
             persistable_sources=sources or ("insightface",),
             require_embedding_model=require_embedding_model,
+            manage_vision_provider=False,
         ),
         on_identity_resolved=on_identity_resolved,
     )
@@ -290,6 +292,7 @@ def build_runtime(
         wake_word_provider=wake_word_provider,
         work_idle_timeout_seconds=work_idle_timeout_seconds,
         face_tracking_lifecycle=face_tracking_lifecycle,
+        vision_lifecycle=vision_lifecycle,
         eyes_driver=eyes,
     )
 
@@ -510,7 +513,7 @@ def run_live_loop_with_optional_face_tracking(args: argparse.Namespace) -> None:
             identity_watcher.stop()
         if face_tracking_lifecycle is not None:
             face_tracking_lifecycle.stop()
-        if identity_watcher is None and hasattr(vision_provider, "stop"):
+        if hasattr(vision_provider, "stop"):
             vision_provider.stop()
 
 

@@ -15,6 +15,10 @@ class ResolveFaceProfileRequest(BaseModel):
     display_name: str | None = None
 
 
+class DisplayNameUpdateRequest(BaseModel):
+    display_name: str | None = None
+
+
 def _dump(model):
     if hasattr(model, "model_dump"):
         return model.model_dump()
@@ -46,6 +50,21 @@ async def resolve_face_profile(request: ResolveFaceProfileRequest) -> dict:
         "identity": _dump(identity),
         "profile": _dump(identity.profile),
         "session_id": request.session_id,
+        "storage_paths": profile_store.storage_paths(),
+    }
+
+
+@router.post("/{user_id}/display-name")
+async def update_profile_display_name(user_id: str, request: DisplayNameUpdateRequest) -> dict:
+    identity = user_profile_service.update_display_name(
+        user_id=user_id,
+        display_name=request.display_name,
+    )
+    if not identity.persisted:
+        raise HTTPException(status_code=404, detail=identity.identity_source)
+    return {
+        "identity": _dump(identity),
+        "profile": _dump(identity.profile),
         "storage_paths": profile_store.storage_paths(),
     }
 

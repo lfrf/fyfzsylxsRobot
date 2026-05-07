@@ -20,6 +20,7 @@ class IdentityWatcherConfig:
     resolve_timeout_s: float = 5.0
     persistable_sources: tuple[str, ...] = field(default_factory=lambda: ("insightface",))
     require_embedding_model: bool = True
+    manage_vision_provider: bool = True
 
 
 @dataclass(frozen=True)
@@ -59,7 +60,8 @@ class IdentityWatcher:
 
         self._resolved_face_ids.clear()
         self._stop_event.clear()
-        self._restart_provider(shared_camera_mode=shared_camera_mode)
+        if self.config.manage_vision_provider:
+            self._restart_provider(shared_camera_mode=shared_camera_mode)
         self._thread = threading.Thread(
             target=self._run_loop,
             daemon=True,
@@ -77,15 +79,20 @@ class IdentityWatcher:
         if self._thread is not None:
             self._thread.join(timeout=3.0)
             self._thread = None
-        self._stop_provider()
+        if self.config.manage_vision_provider:
+            self._stop_provider()
         self._resolved_face_ids.clear()
         log_event("identity_watcher_stopped")
 
     def switch_to_shared_camera(self) -> None:
+        if not self.config.manage_vision_provider:
+            return
         self._restart_provider(shared_camera_mode=True)
         log_event("identity_watcher_shared_camera_enabled")
 
     def switch_to_own_camera(self) -> None:
+        if not self.config.manage_vision_provider:
+            return
         self._restart_provider(shared_camera_mode=False)
         log_event("identity_watcher_own_camera_enabled")
 
@@ -114,7 +121,8 @@ class IdentityWatcher:
             return None
 
         result = self._resolve_face(face_identity)
-        self._resolved_face_ids.add(face_id)
+        if result.error is None:
+            self._resolved_face_ids.add(face_id)
         log_event(
             "identity_watcher_face_resolved",
             face_id=result.face_id,
