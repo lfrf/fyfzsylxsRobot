@@ -10,42 +10,42 @@
 
 ## 根本原因
 
-在 `raspirobot/main.py` 中存在两个相关的代码逻辑：
+### 原因 1: IdentityWatcher 未管理 vision_provider（已修复）
 
-### 1. Vision Provider 启动逻辑（第 495-502 行）
+在 `raspirobot/main.py` 中，`IdentityWatcher` 的 `manage_vision_provider=False`，导致 `vision_provider` 从未启动。
 
-```python
-if wake_word_provider is None:  # ← 只有在没有唤醒词时才启动
-    if hasattr(vision_provider, "start"):
-        if face_tracking_lifecycle is not None and hasattr(vision_provider, "set_shared_camera_mode"):
-            vision_provider.set_shared_camera_mode(True)
-            logger.info("remote_vision_provider: shared_camera_mode enabled (face tracking will inject frames)")
-        vision_provider.start()
-    if face_tracking_lifecycle is not None:
-        face_tracking_lifecycle.start()
-```
+**修复**：将 `manage_vision_provider` 改为 `True`（commit 9b8df7a）
 
-### 2. Identity Watcher 配置（第 213-225 行）
+### 原因 2: 摄像头冲突（已修复）
+
+当同时启用唤醒词和人脸追踪时：
+1. `IdentityWatcher` 启动 `vision_provider`（独立摄像头模式）
+2. 如果启用了人脸追踪，两者会竞争同一个摄像头
+3. `vision_provider` 初始化失败，无法捕获视频
+
+在 `raspirobot/core/runtime.py` 中，唤醒词检测后启动 `vision_provider` 时，总是使用 `shared_camera_mode=False`：
 
 ```python
-return IdentityWatcher(
-    vision_provider=vision_provider,
-    config=IdentityWatcherConfig(
-        ...
-        manage_vision_provider=False,  # ← 不管理 vision_provider 的启动
-    ),
-    on_identity_resolved=on_identity_resolved,
-)
+self._start_vision_provider(shared_camera_mode=False)  # ← 总是独立模式
+self._start_identity_watcher(shared_camera_mode=False)
 ```
 
-**问题**：
-- 当启用唤醒词时，`vision_provider.start()` 不会在 main.py 中被调用
-- `IdentityWatcher` 的 `manage_vision_provider=False`，所以它也不会启动 `vision_provider`
-- 结果：`RemoteVisionContextProvider` 的后台线程从未启动，摄像头不捕获画面
+但如果启用了人脸追踪，应该使用共享摄像头模式，避免冲突。
 
-## 解决方案
+**修复**：根据是否启用人脸追踪，动态设置 `shared_camera_mode`（commit 354f595）
 
-将 `IdentityWatcher` 的 `manage_vision_provider` 设置为 `True`，让它负责管理 `vision_provider` 的生命周期：
+```python
+# 如果启用了人脸追踪，使用共享摄像头模式，避免摄像头冲突
+shared_camera = self.face_tracking_lifecycle is not None
+self._start_vision_provider(shared_camera_mode=shared_camera)
+self._start_identity_watcher(shared_camera_mode=shared_camera)
+```
+
+## 解决方案总结
+
+### 修复 1: 让 IdentityWatcher 管理 vision_provider
+
+**文件**: `raspirobot/main.py`
 
 ```python
 return IdentityWatcher(
@@ -58,31 +58,47 @@ return IdentityWatcher(
 )
 ```
 
-这样，当 `IdentityWatcher.start()` 被调用时（在状态转换到 LISTENING 时），它会：
-1. 调用 `vision_provider.stop()`（如果已运行）
-2. 调用 `vision_provider.set_shared_camera_mode(shared_camera_mode)`
-3. 调用 `vision_provider.start()` - **启动后台捕获线程**
+### 修复 2: 根据人脸追踪状态设置共享摄像头模式
+
+**文件**: `raspirobot/core/runtime.py`
+
+```python
+# 如果启用了人脸追踪，使用共享摄像头模式，避免摄像头冲突
+shared_camera = self.face_tracking_lifecycle is not None
+self._start_vision_provider(shared_camera_mode=shared_camera)
+self._start_identity_watcher(shared_camera_mode=shared_camera)
+```
+
+### 修复 3: 添加详细的启动日志
+
+**文件**: `raspirobot/vision/remote_vision_provider.py`
+
+添加了详细的日志，便于诊断问题：
+- `remote_vision_provider_start_attempt`
+- `remote_vision_provider_init_camera_start`
+- `remote_vision_provider_init_camera_done`
+- `remote_vision_provider_start_failed` (with exc_info=True)
 
 ## 工作流程
 
 ### 修复前
 ```
 唤醒词检测 → LISTENING 状态
-  → IdentityWatcher.start() 被调用
-  → manage_vision_provider=False，不启动 vision_provider
-  → RemoteVisionContextProvider 的后台线程未运行
-  → 摄像头不捕获画面 ❌
+  → IdentityWatcher.start(shared_camera_mode=False)
+  → vision_provider.start() 尝试打开摄像头
+  → 如果人脸追踪已启动，摄像头被占用
+  → 初始化失败，无日志 ❌
 ```
 
 ### 修复后
 ```
 唤醒词检测 → LISTENING 状态
-  → IdentityWatcher.start() 被调用
-  → manage_vision_provider=True，启动 vision_provider ✅
-  → RemoteVisionContextProvider.start() 被调用
-  → 后台线程开始捕获和上传视频帧 ✅
-  → Vision Service 返回人脸识别结果 ✅
-  → 人脸追踪启动 ✅
+  → 检测到 face_tracking_lifecycle 存在
+  → IdentityWatcher.start(shared_camera_mode=True) ✅
+  → vision_provider.set_shared_camera_mode(True)
+  → vision_provider.start() 使用共享模式，不打开摄像头 ✅
+  → 等待人脸追踪注入帧 ✅
+  → 人脸识别成功 ✅
 ```
 
 ## 预期日志
@@ -92,42 +108,50 @@ return IdentityWatcher(
 ```
 event=wake_word_detected
 event=vision_provider_started_for_work_mode
-event=identity_watcher_started
-event=remote_vision_provider_started mode=own_camera  ← 新增
-event=remote_vision_capture_loop_started  ← 新增
+event=identity_watcher_started shared_camera_mode=True  ← 注意这里是 True
+event=remote_vision_provider_start_attempt shared_camera_mode=True  ← 新增
+event=remote_vision_provider_started mode=shared_camera  ← 新增，注意是 shared_camera
+event=remote_vision_inject_loop_started  ← 新增
 event=identity_watcher_face_resolved face_id=xxx  ← 新增
-event=face_tracking_started  ← 新增
+event=face_tracking_enabled_after_identity  ← 新增
 ```
 
 ## 测试步骤
 
-1. 在树莓派上重新启动机器人：
+1. 在树莓派上更新代码：
    ```bash
    cd /home/pi/Desktop/code/fyfzsylxsRobot
+   git pull
+   ```
+
+2. 重新启动机器人：
+   ```bash
    source .venv/bin/activate
    bash scripts/start_robot_with_wakeword.sh
    ```
 
-2. 说唤醒词："你好小星"
+3. 说唤醒词："你好小星"
 
-3. 出现在摄像头前
+4. 出现在摄像头前
 
-4. 检查日志中是否有：
-   - `remote_vision_provider_started`
-   - `remote_vision_capture_loop_started`
+5. 检查日志中是否有：
+   - `remote_vision_provider_start_attempt shared_camera_mode=True`
+   - `remote_vision_provider_started mode=shared_camera`
+   - `remote_vision_inject_loop_started`
    - `identity_watcher_face_resolved`
-   - `face_tracking_started`
+   - `face_tracking_enabled_after_identity`
 
 ## 相关文件
 
-- `raspirobot/main.py` - 主启动逻辑
+- `raspirobot/main.py` - 主启动逻辑，IdentityWatcher 配置
+- `raspirobot/core/runtime.py` - 运行时状态管理，唤醒词处理
 - `raspirobot/vision/identity_watcher.py` - 身份监视器
 - `raspirobot/vision/remote_vision_provider.py` - 远程视觉提供者
-- `raspirobot/core/runtime.py` - 运行时状态管理
 
-## 修复日期
+## 修复历史
 
-2026-05-07
+- **2026-05-07 (commit 9b8df7a)**: 修复 `manage_vision_provider=False` 问题
+- **2026-05-07 (commit 354f595)**: 修复摄像头冲突问题，添加详细日志
 
 ## 修复人员
 
