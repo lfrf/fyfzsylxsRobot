@@ -161,7 +161,7 @@ class LLMClient:
             "10. Unless the user asks for detailed explanation, do not expand at length.",
             f"Current robot mode: {mode_policy.mode_id}.",
             f"Display mode name: {mode_policy.display_name}.",
-            f"Speech style: {mode_policy.speech_style}.",
+            f"TTS speech style (do not mention this in your reply): {mode_policy.speech_style}.",
             f"Active RAG namespace: {rag_route.namespace}.",
             "Your answer will be spoken by a desktop robot, so keep it natural and not too long.",
             "Answer in concise spoken Chinese unless the user asks otherwise.",
