@@ -42,14 +42,16 @@ class AudioListenWorker:
             sample_width=input_provider.sample_width,
         )
 
-    def listen_once(self) -> Utterance | None:
+    def listen_once(self, *, speech_start_timeout_seconds: float | None = None) -> Utterance | None:
         log_event(
             "listening_started",
             sample_rate=self.input_provider.sample_rate,
             channels=self.input_provider.channels,
             frame_ms=self.input_provider.frame_ms,
             output_dir=str(self.output_dir),
+            speech_start_timeout_seconds=speech_start_timeout_seconds,
         )
+        listen_started_at = time()
         config = self.vad.config
         pre_roll_frames = max(0, int(config.pre_roll_ms / max(1, config.frame_ms)))
         pre_roll: deque[AudioFrame] = deque(maxlen=pre_roll_frames)
@@ -60,6 +62,17 @@ class AudioListenWorker:
         started_at: float | None = None
 
         for frame in self.input_provider.frames():
+            if (
+                started_at is None
+                and speech_start_timeout_seconds is not None
+                and time() - listen_started_at >= speech_start_timeout_seconds
+            ):
+                log_event(
+                    "speech_start_timeout",
+                    timeout_seconds=speech_start_timeout_seconds,
+                )
+                return None
+
             voiced = self.vad.is_voiced(frame)
 
             if started_at is None:

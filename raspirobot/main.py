@@ -155,7 +155,8 @@ def build_wake_word_provider(settings: Settings):
     相关变量：
       ROBOT_WAKE_WORD_MODEL_DIR   默认 models/sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20
       ROBOT_WAKE_WORD_KEYWORDS    默认 models/sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20/keywords.txt
-      ROBOT_WAKE_WORD_TIMEOUT_S   唤醒后无语音超时秒数，默认 10
+      ROBOT_WAKE_WORD_DEVICE      sounddevice 输入设备编号或名称，默认 1
+      ROBOT_WORK_IDLE_TIMEOUT_S   工作模式 LISTENING 无 SpeechStart 超时秒数，默认 10
     """
     import os
     enabled = os.getenv("ROBOT_WAKE_WORD_ENABLED", "false").strip().lower() in {"1", "true", "yes"}
@@ -168,16 +169,29 @@ def build_wake_word_provider(settings: Settings):
         "models/sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20",
     )
     keywords_file = os.getenv("ROBOT_WAKE_WORD_KEYWORDS", "")
-    timeout_s = float(os.getenv("ROBOT_WAKE_WORD_TIMEOUT_S", "10"))
-    capture_device = settings.audio_capture_device or "plughw:CARD=Lite,DEV=0"
+    timeout_s = float(os.getenv("ROBOT_WORK_IDLE_TIMEOUT_S", os.getenv("ROBOT_WAKE_WORD_TIMEOUT_S", "10")))
+    wake_device = _parse_sounddevice_device(os.getenv("ROBOT_WAKE_WORD_DEVICE", "1"))
 
     config = SherpaOnnxWakeWordConfig(
         model_dir=model_dir,
         keywords_file=keywords_file,
-        capture_device=capture_device,
+        expected_keyword="你好小星",
+        device=wake_device,
     )
     provider = SherpaOnnxWakeWordProvider(config)
     return provider, timeout_s
+
+
+def _parse_sounddevice_device(raw: str | None):
+    if raw is None:
+        return None
+    value = raw.strip()
+    if not value or value.lower() in {"none", "null", "default"}:
+        return None
+    try:
+        return int(value)
+    except ValueError:
+        return value
 
 
 def build_runtime(
@@ -186,6 +200,8 @@ def build_runtime(
     remote_client: RemoteClientProtocol | None = None,
     audio_output: AudioOutputProvider | None = None,
     settings: Settings | None = None,
+    wake_word_provider=None,
+    work_idle_timeout_seconds: float = 10.0,
 ) -> RaspiRobotRuntime:
     settings = settings or load_settings()
     work_dir = ensure_dir(settings.audio_work_dir)
@@ -228,8 +244,11 @@ def build_runtime(
         state_machine=RobotStateMachine(mode_id=settings.default_mode),
         loop_sleep_seconds=settings.live_loop_sleep_seconds,
         post_playback_cooldown_ms=settings.audio_post_playback_cooldown_ms,
+        wake_word_provider=wake_word_provider,
+        work_idle_timeout_seconds=work_idle_timeout_seconds,
         eyes_driver=eyes,
     )
+
 
 def run_file_once(wav_path: str, *, use_mock_remote: bool = True, mock_playback: bool = True) -> None:
     settings = load_settings()
@@ -255,8 +274,18 @@ def run_file_once(wav_path: str, *, use_mock_remote: bool = True, mock_playback:
 def run_live_loop() -> None:
     settings = load_settings()
     start_raspi_runtime_log("live_audio_loop", settings)
-    runtime = build_runtime(input_provider=build_live_input_provider(settings), settings=settings)
-    runtime.run_forever()
+    wake_word_provider, work_idle_timeout_s = build_wake_word_provider(settings)
+    runtime = build_runtime(
+        input_provider=build_live_input_provider(settings),
+        settings=settings,
+        wake_word_provider=wake_word_provider,
+        work_idle_timeout_seconds=work_idle_timeout_s,
+    )
+    try:
+        runtime.run_forever()
+    finally:
+        if wake_word_provider is not None:
+            wake_word_provider.stop()
 
 
 def _start_face_tracking_for_live(args: argparse.Namespace, frame_sink: object | None = None) -> tuple[Any, threading.Thread] | None:
@@ -352,16 +381,15 @@ def run_live_loop_with_optional_face_tracking(args: argparse.Namespace) -> None:
     settings = load_settings()
     start_raspi_runtime_log("live_audio_loop", settings)
 
-    wake_word_provider, standby_timeout_s = build_wake_word_provider(settings)
-    runtime = build_runtime(input_provider=build_live_input_provider(settings), settings=settings)
-
-    # 把唤醒词引擎和超时注入 runtime
+    wake_word_provider, work_idle_timeout_s = build_wake_word_provider(settings)
+    runtime = build_runtime(
+        input_provider=build_live_input_provider(settings),
+        settings=settings,
+        wake_word_provider=wake_word_provider,
+        work_idle_timeout_seconds=work_idle_timeout_s,
+    )
     if wake_word_provider is not None:
-        runtime.wake_word_provider = wake_word_provider
-        runtime.standby_timeout_seconds = standby_timeout_s
-        runtime._ensure_initial_state()  # 重新初始化状态（进入 STANDBY）
-        wake_word_provider.start()
-        logger.info("wake_word_provider started, standby_timeout=%.1fs", standby_timeout_s)
+        logger.info("wake_word_provider enabled, work_idle_timeout=%.1fs", work_idle_timeout_s)
 
     # 启动视觉 provider（如果是 RemoteVisionContextProvider）
     vision_provider = runtime.turn_manager.payload_builder.vision_context_provider

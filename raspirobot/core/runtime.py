@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from time import sleep, time
+from time import sleep
 
 from raspirobot.audio import AudioListenWorker
 from shared.logging_utils import log_event
@@ -31,7 +31,7 @@ class RaspiRobotRuntime:
         loop_sleep_seconds: float = 0.05,
         post_playback_cooldown_ms: int = 0,
         wake_word_provider=None,
-        standby_timeout_seconds: float = 10.0,
+        work_idle_timeout_seconds: float = 10.0,
         eyes_driver=None,
     ) -> None:
         self.listener = listener
@@ -41,48 +41,38 @@ class RaspiRobotRuntime:
         self.loop_sleep_seconds = loop_sleep_seconds
         self.post_playback_cooldown_ms = post_playback_cooldown_ms
         self.wake_word_provider = wake_word_provider
-        self.standby_timeout_seconds = standby_timeout_seconds
+        self.work_idle_timeout_seconds = work_idle_timeout_seconds
         self.eyes_driver = eyes_driver
-        self._listening_started_at: float | None = None
         self._ensure_initial_state()
 
     def run_once(self) -> RuntimeLoopResult:
         # 待机模式：等待唤醒词
         if self.state_machine.state == RobotRuntimeState.STANDBY:
+            self._start_wake_word_provider()
             if self.wake_word_provider is not None and self.wake_word_provider.poll():
                 log_event("wake_word_triggered")
+                self._stop_wake_word_provider()
                 self.state_machine.transition(RobotEvent.WAKE_WORD_DETECTED)
                 self.state_machine.transition(RobotEvent.WAKE_ACK_DONE)
-                self._listening_started_at = time()
                 self._set_eyes("listening")
             return RuntimeLoopResult(handled=False, state=self.state_machine.state)
-
-        # LISTENING 状态：检查是否超时回到待机
-        if self.state_machine.state == RobotRuntimeState.LISTENING:
-            if (
-                self.wake_word_provider is not None
-                and self._listening_started_at is not None
-                and time() - self._listening_started_at >= self.standby_timeout_seconds
-            ):
-                log_event(
-                    "standby_timeout",
-                    timeout_seconds=self.standby_timeout_seconds,
-                )
-                self._listening_started_at = None
-                self.state_machine.transition(RobotEvent.STANDBY_TIMEOUT)
-                self._set_eyes("sleep")
-                return RuntimeLoopResult(handled=False, state=self.state_machine.state)
 
         if not self.state_machine.can_accept_speech():
             self.state_machine.transition(RobotEvent.NEW_SPEECH_INPUT)
             return RuntimeLoopResult(handled=False, state=self.state_machine.state)
 
-        utterance = self.listener.listen_once()
+        self._stop_wake_word_provider()
+        speech_start_timeout = self.work_idle_timeout_seconds if self.wake_word_provider is not None else None
+        utterance = self.listener.listen_once(speech_start_timeout_seconds=speech_start_timeout)
         if utterance is None:
+            if self.wake_word_provider is not None:
+                log_event(
+                    "work_idle_timeout",
+                    timeout_seconds=self.work_idle_timeout_seconds,
+                )
+                self.state_machine.transition(RobotEvent.WORK_IDLE_TIMEOUT)
+                self._enter_standby()
             return RuntimeLoopResult(handled=False, state=self.state_machine.state)
-
-        # 收到语音，重置超时计时器
-        self._listening_started_at = time()
 
         self.event_bus.publish(RuntimeEvent(RuntimeEventType.SPEECH_STARTED))
         self.state_machine.transition(RobotEvent.SPEECH_START)
@@ -108,9 +98,6 @@ class RaspiRobotRuntime:
             self.event_bus.publish(RuntimeEvent(RuntimeEventType.ROBOT_ACTION_RECEIVED))
             self.event_bus.publish(RuntimeEvent(RuntimeEventType.PLAYBACK_DONE))
             self.state_machine.transition(RobotEvent.PLAYBACK_DONE)
-
-            # 对话完成后重置超时计时器（继续监听）
-            self._listening_started_at = time()
 
             # Apply post-playback cooldown if configured
             if self.post_playback_cooldown_ms > 0:
@@ -153,7 +140,7 @@ class RaspiRobotRuntime:
             # 有唤醒词引擎：进入 STANDBY 待机
             if self.state_machine.state == RobotRuntimeState.IDLE:
                 self.state_machine.state = RobotRuntimeState.STANDBY
-                self._set_eyes("sleep")
+                self._enter_standby()
                 log_event("wake_word_standby_mode_enabled")
         else:
             # 无唤醒词引擎：直接进入 LISTENING（原有行为）
@@ -170,6 +157,26 @@ class RaspiRobotRuntime:
                 self.eyes_driver.set_expression(expression)
             except Exception as exc:
                 log_event("eyes_set_expression_failed", expression=expression, error=str(exc))
+
+    def _enter_standby(self) -> None:
+        self._set_eyes("sleep")
+        self._start_wake_word_provider()
+
+    def _start_wake_word_provider(self) -> None:
+        if self.wake_word_provider is None:
+            return
+        try:
+            self.wake_word_provider.start()
+        except Exception as exc:
+            log_event("wake_word_start_failed", error=str(exc), level="error")
+
+    def _stop_wake_word_provider(self) -> None:
+        if self.wake_word_provider is None:
+            return
+        try:
+            self.wake_word_provider.stop()
+        except Exception as exc:
+            log_event("wake_word_stop_failed", error=str(exc), level="error")
 
     def _mark_remote_result_ready(self, response) -> None:
         self.event_bus.publish(

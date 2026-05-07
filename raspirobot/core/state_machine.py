@@ -32,7 +32,8 @@ class RobotEvent(str, Enum):
     UTTERANCE_REJECTED = "UtteranceRejected"
     SYSTEM_ERROR = "SystemError"
     RECOVERY_DONE = "RecoveryDone"
-    STANDBY_TIMEOUT = "StandbyTimeout"   # 唤醒后超时无语音，回到待机
+    WORK_IDLE_TIMEOUT = "WorkIdleTimeout"   # 工作模式 LISTENING 中 10s 无 SpeechStart，回待机
+    STANDBY_TIMEOUT = "StandbyTimeout"       # 兼容旧事件名，不在新主链路中主动使用
 
 
 BUSY_STATES = {
@@ -69,7 +70,7 @@ class RobotStateMachine:
             self._log_transition(event, from_state, turn_id=turn_id)
             return self.state
 
-        if event == RobotEvent.STANDBY_TIMEOUT:
+        if event in {RobotEvent.WORK_IDLE_TIMEOUT, RobotEvent.STANDBY_TIMEOUT}:
             self.active_turn_id = None
             self.remote_request_in_progress = False
             self.state = RobotRuntimeState.STANDBY
