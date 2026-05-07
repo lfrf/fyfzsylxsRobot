@@ -106,6 +106,7 @@ class SherpaOnnxWakeWordProvider:
             import sounddevice as sd
         except ImportError:
             logger.error("wake word dependencies missing. Run: pip install sherpa-onnx sounddevice numpy")
+            log_event("wake_word_dependencies_missing", level="error")
             self._running = False
             return
 
@@ -114,6 +115,7 @@ class SherpaOnnxWakeWordProvider:
             stream = keyword_spotter.create_stream()
         except Exception as exc:
             logger.error("wake_word_detector_init_failed: %s", exc)
+            log_event("wake_word_detector_init_failed", error=str(exc), level="error")
             self._running = False
             return
 

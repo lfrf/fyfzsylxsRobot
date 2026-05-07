@@ -84,6 +84,7 @@ class Settings:
         self.face_match_threshold = min(max(float(os.getenv("FACE_MATCH_THRESHOLD", "0.6")), 0.0), 1.0)
         self.face_create_unknown = _env_bool("FACE_CREATE_UNKNOWN", "true")
         self.face_store_raw_images = _env_bool("FACE_STORE_RAW_IMAGES", "false")
+        self.face_store_mock_records = _env_bool("FACE_STORE_MOCK_RECORDS", "false")
         self.insightface_model_name = (
             os.getenv("INSIGHTFACE_MODEL_NAME", os.getenv("FACE_INSIGHTFACE_MODEL", "buffalo_l")).strip()
             or "buffalo_l"

@@ -54,11 +54,13 @@ class ProfileStore:
         if profile is None:
             profile = UserProfile(
                 user_id=safe_user_id,
-                display_name=display_name or "未命名用户",
+                display_name=display_name or "",
                 created_at=now,
             )
         elif display_name:
             profile.display_name = display_name
+        elif profile.display_name == "未命名用户":
+            profile.display_name = ""
 
         profile.last_seen_at = now
         profile.seen_count += 1
@@ -78,6 +80,17 @@ class ProfileStore:
         user_id = f"user_{safe_face_id}"
         profile = self.ensure_user(user_id, display_name=display_name, face_id=safe_face_id)
         self.map_face_to_user(safe_face_id, profile.user_id)
+        return profile
+
+    def update_display_name(self, user_id: str, display_name: str) -> UserProfile | None:
+        profile = self.get_profile(user_id)
+        if profile is None:
+            return None
+        clean_name = str(display_name or "").strip()
+        if not clean_name:
+            return profile
+        profile.display_name = clean_name[:24]
+        self.save_profile(profile)
         return profile
 
     def save_profile(self, profile: UserProfile) -> None:
@@ -146,8 +159,9 @@ class ProfileStore:
 
     def _render_profile_markdown(self, profile: UserProfile) -> str:
         facts = ", ".join(f"{item.key}:{item.value}" for item in profile.facts[:8])
+        title = profile.display_name or profile.user_id
         return "\n".join([
-            f"# {profile.display_name}",
+            f"# {title}",
             "",
             f"- user_id: {profile.user_id}",
             f"- face_ids: {', '.join(profile.face_ids)}",

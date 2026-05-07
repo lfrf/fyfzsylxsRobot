@@ -15,7 +15,7 @@ def _use_vision_service(monkeypatch, tmp_path):
             monkeypatch.delitem(sys.modules, module_name, raising=False)
 
 
-def test_mock_identity_service_creates_then_matches_face(monkeypatch, tmp_path) -> None:
+def test_mock_identity_service_detects_but_does_not_persist_face(monkeypatch, tmp_path) -> None:
     _use_vision_service(monkeypatch, tmp_path)
 
     from models import FaceIdentityRequest
@@ -36,12 +36,14 @@ def test_mock_identity_service_creates_then_matches_face(monkeypatch, tmp_path) 
     assert first.face_identity is not None
     assert second.face_identity is not None
     assert first.face_identity.face_detected is True
-    assert first.face_identity.face_id == second.face_identity.face_id
+    assert first.face_identity.face_id is None
+    assert second.face_identity.face_id is None
     assert first.face_identity.is_known is False
-    assert second.face_identity.is_known is True
-    assert second.face_identity.seen_count == 2
+    assert second.face_identity.is_known is False
+    assert second.face_identity.seen_count is None
     assert second.face_observations[0].is_primary is True
     assert second.provider == "mock"
+    assert FaceDatabase(tmp_path / "faces").list_faces() == []
 
 
 def test_insightface_provider_is_lazy_and_skippable(monkeypatch, tmp_path) -> None:

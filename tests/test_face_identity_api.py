@@ -15,7 +15,7 @@ def _use_vision_service(monkeypatch, tmp_path):
             monkeypatch.delitem(sys.modules, module_name, raising=False)
 
 
-def test_face_identity_api_keeps_extract_route_and_returns_face_id(monkeypatch, tmp_path) -> None:
+def test_face_identity_api_keeps_extract_route_and_skips_mock_face_id(monkeypatch, tmp_path) -> None:
     _use_vision_service(monkeypatch, tmp_path)
 
     from fastapi.testclient import TestClient
@@ -39,7 +39,8 @@ def test_face_identity_api_keeps_extract_route_and_returns_face_id(monkeypatch, 
     first_payload = first.json()
     second_payload = second.json()
     assert first_payload["face_identity"]["face_detected"] is True
-    assert first_payload["face_identity"]["face_id"] == second_payload["face_identity"]["face_id"]
-    assert second_payload["face_identity"]["is_known"] is True
+    assert first_payload["face_identity"]["face_id"] is None
+    assert second_payload["face_identity"]["face_id"] is None
+    assert second_payload["face_identity"]["is_known"] is False
     assert second_payload["provider"] == "mock"
     assert any(route.path == "/extract" for route in app.routes)

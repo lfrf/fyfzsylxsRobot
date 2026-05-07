@@ -18,7 +18,8 @@ class ProfileBuilder:
     ) -> str:
         recent_events = recent_events or []
         lines: list[str] = ["当前用户画像："]
-        lines.append(f"- 用户昵称：{profile.display_name}")
+        if profile.display_name and profile.display_name != "未命名用户":
+            lines.append(f"- 用户昵称：{profile.display_name}")
         if profile.preferred_mode:
             lines.append(f"- 常用模式：{profile.preferred_mode}")
         if profile.profile_summary:

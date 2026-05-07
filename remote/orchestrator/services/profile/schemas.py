@@ -33,7 +33,7 @@ class UserFact(BaseModel):
 
 class UserProfile(BaseModel):
     user_id: str
-    display_name: str = Field(default="未命名用户")
+    display_name: str = Field(default="")
     aliases: list[str] = Field(default_factory=list)
     face_ids: list[str] = Field(default_factory=list)
     created_at: str = Field(default_factory=utc_now_iso)
@@ -75,11 +75,12 @@ class MemoryEvent(BaseModel):
 
 
 class IdentityResolution(BaseModel):
-    user_id: str
+    user_id: str | None = None
     identity_source: str
     face_id: str | None = None
     display_name: str | None = None
     is_anonymous: bool = False
+    persisted: bool = False
     profile: UserProfile | None = None
 
 

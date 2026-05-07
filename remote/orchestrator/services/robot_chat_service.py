@@ -557,10 +557,11 @@ class RobotChatService:
 
     def _profile_debug(self, *, identity, profile_context_result, memory_result=None) -> dict:
         return {
-            "used": bool(identity and identity.user_id),
+            "used": bool(identity and identity.user_id and getattr(identity, "persisted", False)),
             "user_id": getattr(identity, "user_id", None),
             "identity_source": getattr(identity, "identity_source", None),
             "face_id": getattr(identity, "face_id", None),
+            "persisted": bool(getattr(identity, "persisted", False)),
             "profile_context_chars": getattr(profile_context_result, "chars", 0) or 0,
             "memory_written": bool(getattr(memory_result, "written", False)),
             "summary_updated": bool(getattr(memory_result, "summary_updated", False)),
@@ -670,6 +671,7 @@ class RobotChatService:
                 "user_id": None,
                 "identity_source": None,
                 "face_id": None,
+                "persisted": False,
                 "profile_context_chars": 0,
                 "memory_written": False,
                 "summary_updated": False,
