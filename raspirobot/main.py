@@ -220,7 +220,7 @@ def build_identity_watcher(settings: Settings, vision_provider: object, *, on_id
             resolve_timeout_s=float(os.getenv("ROBOT_IDENTITY_RESOLVE_TIMEOUT_S", "5.0")),
             persistable_sources=sources or ("insightface",),
             require_embedding_model=require_embedding_model,
-            manage_vision_provider=True,  # 修复：让 IdentityWatcher 管理 vision_provider 的启动
+            manage_vision_provider=False,  # 由 runtime 统一管理 vision_lifecycle
         ),
         on_identity_resolved=on_identity_resolved,
     )

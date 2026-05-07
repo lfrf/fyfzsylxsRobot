@@ -10,11 +10,15 @@
 
 ## 根本原因
 
-### 原因 1: IdentityWatcher 未管理 vision_provider（已修复）
+### 原因 1: IdentityWatcher 未管理 vision_provider（已识别）
 
 在 `raspirobot/main.py` 中，`IdentityWatcher` 的 `manage_vision_provider=False`，导致 `vision_provider` 从未启动。
 
-**修复**：将 `manage_vision_provider` 改为 `True`（commit 9b8df7a）
+**初步修复**：将 `manage_vision_provider` 改为 `True`（commit 9b8df7a）
+
+**问题**：这导致了 `runtime` 和 `IdentityWatcher` 都尝试管理同一个 `vision_provider` 对象，造成重复启动和冲突。
+
+**最终修复**：采用方案A - 由 `runtime` 统一管理 `vision_lifecycle`，`IdentityWatcher` 不管理（`manage_vision_provider=False`）
 
 ### 原因 2: 摄像头冲突（已修复）
 
@@ -43,7 +47,9 @@ self._start_identity_watcher(shared_camera_mode=shared_camera)
 
 ## 解决方案总结
 
-### 修复 1: 让 IdentityWatcher 管理 vision_provider
+### 修复 1: 由 runtime 统一管理 vision_provider（方案A）
+
+**设计决策**：避免 `runtime` 和 `IdentityWatcher` 重复管理同一个对象，采用统一管理方案。
 
 **文件**: `raspirobot/main.py`
 
@@ -52,10 +58,25 @@ return IdentityWatcher(
     vision_provider=vision_provider,
     config=IdentityWatcherConfig(
         ...
-        manage_vision_provider=True,  # ✅ 修复：让 IdentityWatcher 管理 vision_provider
+        manage_vision_provider=False,  # ✅ 修复：由 runtime 统一管理 vision_lifecycle
     ),
     on_identity_resolved=on_identity_resolved,
 )
+```
+
+**文件**: `raspirobot/core/runtime.py`
+
+`runtime` 负责在唤醒词检测后启动 `vision_provider`：
+
+```python
+def run_once(self) -> RuntimeLoopResult:
+    if self.state_machine.state == RobotRuntimeState.STANDBY:
+        if self.wake_word_provider is not None and self.wake_word_provider.poll():
+            self._stop_wake_word_provider()
+            shared_camera = self.face_tracking_lifecycle is not None
+            self._start_vision_provider(shared_camera_mode=shared_camera)  # ← runtime 启动
+            self._start_identity_watcher(shared_camera_mode=shared_camera)
+            ...
 ```
 
 ### 修复 2: 根据人脸追踪状态设置共享摄像头模式
@@ -150,8 +171,10 @@ event=face_tracking_enabled_after_identity  ← 新增
 
 ## 修复历史
 
-- **2026-05-07 (commit 9b8df7a)**: 修复 `manage_vision_provider=False` 问题
+- **2026-05-07 (commit 9b8df7a)**: 初步修复：将 `manage_vision_provider` 改为 `True`
 - **2026-05-07 (commit 354f595)**: 修复摄像头冲突问题，添加详细日志
+- **2026-05-08 (commit 2786aff, dbf2c8f, 94fc312)**: 添加更详细的调试日志
+- **2026-05-08 (最新)**: 最终修复：采用方案A，由 `runtime` 统一管理 `vision_lifecycle`，`manage_vision_provider=False`
 
 ## 修复人员
 
