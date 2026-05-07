@@ -273,6 +273,12 @@ class RaspiRobotRuntime:
         if self.vision_lifecycle is None:
             return
         try:
+            log_event(
+                "runtime_start_vision_provider",
+                shared_camera_mode=shared_camera_mode,
+                provider_type=type(self.vision_lifecycle).__name__,
+                provider_id=id(self.vision_lifecycle),
+            )
             if hasattr(self.vision_lifecycle, "stop"):
                 self.vision_lifecycle.stop()
             if hasattr(self.vision_lifecycle, "set_shared_camera_mode"):

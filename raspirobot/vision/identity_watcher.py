@@ -203,14 +203,18 @@ class IdentityWatcher:
                 has_set_shared=hasattr(self.vision_provider, "set_shared_camera_mode"),
                 has_start=hasattr(self.vision_provider, "start"),
                 provider_type=type(self.vision_provider).__name__,
+                provider_id=id(self.vision_provider),
             )
             if hasattr(self.vision_provider, "stop"):
+                log_event("identity_watcher_calling_provider_stop")
                 self.vision_provider.stop()
                 log_event("identity_watcher_provider_stopped")
             if hasattr(self.vision_provider, "set_shared_camera_mode"):
+                log_event("identity_watcher_calling_provider_set_shared_mode", shared_camera_mode=shared_camera_mode)
                 self.vision_provider.set_shared_camera_mode(shared_camera_mode)
                 log_event("identity_watcher_provider_shared_mode_set", shared_camera_mode=shared_camera_mode)
             if hasattr(self.vision_provider, "start"):
+                log_event("identity_watcher_calling_provider_start")
                 self.vision_provider.start()
                 log_event("identity_watcher_provider_started")
             else:
