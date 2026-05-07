@@ -129,7 +129,7 @@ def load_settings() -> Settings:
         eyes_right_assets_dir=os.getenv("ROBOT_EYES_RIGHT_ASSETS_DIR", "").strip(),
         eyes_right_spi_port=int(os.getenv("ROBOT_EYES_RIGHT_SPI_PORT", "1")),
         eyes_left_rotation=int(os.getenv("ROBOT_EYES_LEFT_ROTATION", "270")),
-        eyes_right_rotation=int(os.getenv("ROBOT_EYES_RIGHT_ROTATION", "90")),
+        eyes_right_rotation=int(os.getenv("ROBOT_EYES_RIGHT_ROTATION", "270")),
         eyes_left_phase_offset_ms=int(os.getenv("ROBOT_EYES_LEFT_PHASE_OFFSET_MS", "0")),
         eyes_right_phase_offset_ms=int(os.getenv("ROBOT_EYES_RIGHT_PHASE_OFFSET_MS", "0")),
     )
