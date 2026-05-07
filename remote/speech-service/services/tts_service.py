@@ -128,12 +128,12 @@ class TTSService:
 
     def _style_to_instruction(self, speech_style: str) -> str:
         if speech_style == "care_gentle":
-            return "温和 舒缓"
+            return "用温和、清楚、稍慢的语气说话。"
         if speech_style == "game_playful":
-            return "轻松 活泼"
+            return "用轻松、有趣、有互动感的语气说话。"
         if speech_style == "learning_focused":
-            return "清晰 有条理"
-        return "自然 温暖"
+            return "用清晰、有条理、鼓励学习的语气说话。"
+        return "用自然、温暖的语气说话。"
 
     def _collect_samples(self, outputs) -> list[float]:
         samples: list[float] = []
