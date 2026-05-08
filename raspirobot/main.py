@@ -112,6 +112,11 @@ def build_eyes_driver(settings: Settings) -> MockEyesDriver | ST7789EyesDriver:
                 gpio_chip=settings.eyes_gpio_chip,
                 left_rotation=settings.eyes_left_rotation,
                 right_rotation=settings.eyes_right_rotation,
+                left_phase_offset_ms=settings.eyes_left_phase_offset_ms,
+                right_phase_offset_ms=settings.eyes_right_phase_offset_ms,
+                listening_random_expressions=settings.eyes_listening_random_expressions,
+                listening_random_min_seconds=settings.eyes_listening_random_min_seconds,
+                listening_random_max_seconds=settings.eyes_listening_random_max_seconds,
             )
         )
     except Exception as exc:

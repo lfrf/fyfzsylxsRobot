@@ -83,6 +83,9 @@ class Settings:
     eyes_right_rotation: int
     eyes_left_phase_offset_ms: int
     eyes_right_phase_offset_ms: int
+    eyes_listening_random_expressions: tuple[str, ...]
+    eyes_listening_random_min_seconds: float
+    eyes_listening_random_max_seconds: float
 
 
 def load_settings() -> Settings:
@@ -168,6 +171,12 @@ def load_settings() -> Settings:
         eyes_right_rotation=int(os.getenv("ROBOT_EYES_RIGHT_ROTATION", "270")),
         eyes_left_phase_offset_ms=int(os.getenv("ROBOT_EYES_LEFT_PHASE_OFFSET_MS", "0")),
         eyes_right_phase_offset_ms=int(os.getenv("ROBOT_EYES_RIGHT_PHASE_OFFSET_MS", "0")),
+        eyes_listening_random_expressions=_csv_env(
+            "ROBOT_EYES_LISTENING_RANDOM_EXPRESSIONS",
+            default=("listening", "thinking"),
+        ),
+        eyes_listening_random_min_seconds=float(os.getenv("ROBOT_EYES_LISTENING_RANDOM_MIN_SECONDS", "5")),
+        eyes_listening_random_max_seconds=float(os.getenv("ROBOT_EYES_LISTENING_RANDOM_MAX_SECONDS", "10")),
     )
 
 
@@ -205,3 +214,11 @@ def _bool_env(name: str, *, default: bool) -> bool:
         file=sys.stderr,
     )
     return default
+
+
+def _csv_env(name: str, *, default: tuple[str, ...]) -> tuple[str, ...]:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    values = tuple(item.strip() for item in raw.split(",") if item.strip())
+    return values or default

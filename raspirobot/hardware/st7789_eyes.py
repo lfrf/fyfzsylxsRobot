@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import random
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Event, Lock, Thread
@@ -45,6 +46,10 @@ class ST7789EyeConfig:
     left_phase_offset_ms: int = 0           # 正数=左眼动画延后，负数=提前
     right_phase_offset_ms: int = 0          # 正数=右眼动画延后，负数=提前
 
+    listening_random_expressions: tuple[str, ...] = ("listening", "thinking")
+    listening_random_min_seconds: float = 5.0
+    listening_random_max_seconds: float = 10.0
+
     def get_left_assets_dir(self) -> Path:
         return self.left_assets_dir or self.assets_dir
 
@@ -76,6 +81,74 @@ class _SharedAnimationClock:
                 self._expression_started_at[normalized] = started_at
         elapsed = max(0.0, now - started_at - (phase_offset_ms / 1000.0))
         return int(elapsed * self._fps) % frame_count
+
+
+class _ExpressionRandomizer:
+    def __init__(
+        self,
+        *,
+        trigger_expression: str,
+        candidate_expressions: tuple[str, ...],
+        min_seconds: float,
+        max_seconds: float,
+    ) -> None:
+        self._trigger_expression = self._normalize(trigger_expression)
+        self._candidates = self._normalize_candidates(candidate_expressions)
+        self._min_seconds = max(0.0, float(min_seconds))
+        self._max_seconds = max(0.0, float(max_seconds))
+        if self._max_seconds < self._min_seconds:
+            self._min_seconds, self._max_seconds = self._max_seconds, self._min_seconds
+        self._rng = random.Random()
+        self._lock = Lock()
+        self._requested_expression = "neutral"
+        self._effective_expression = "neutral"
+        self._switch_at = 0.0
+
+    def reset(self) -> None:
+        with self._lock:
+            self._switch_at = 0.0
+
+    def effective_expression(self, requested_expression: str, *, available: Any) -> str:
+        requested = self._normalize(requested_expression)
+        if requested != self._trigger_expression or not self._candidates:
+            return requested
+
+        now = monotonic()
+        with self._lock:
+            valid = [candidate for candidate in self._candidates if available(candidate)]
+            if not valid:
+                return requested
+            if requested != self._requested_expression:
+                self._requested_expression = requested
+                self._effective_expression = ""
+                self._switch_at = 0.0
+            if self._effective_expression in valid and now < self._switch_at:
+                return self._effective_expression
+
+            choices = valid
+            if len(valid) > 1 and self._effective_expression in valid:
+                choices = [candidate for candidate in valid if candidate != self._effective_expression]
+            self._effective_expression = self._rng.choice(choices)
+            self._switch_at = now + self._next_hold_seconds()
+            return self._effective_expression
+
+    def _next_hold_seconds(self) -> float:
+        if self._max_seconds <= self._min_seconds:
+            return self._min_seconds
+        return self._rng.uniform(self._min_seconds, self._max_seconds)
+
+    @classmethod
+    def _normalize_candidates(cls, expressions: tuple[str, ...]) -> tuple[str, ...]:
+        candidates: list[str] = []
+        for expression in expressions:
+            normalized = cls._normalize(expression)
+            if normalized and normalized not in candidates:
+                candidates.append(normalized)
+        return tuple(candidates)
+
+    @staticmethod
+    def _normalize(expression: str) -> str:
+        return (expression or "neutral").strip().lower() or "neutral"
 
 
 class _ST7789Display:
@@ -257,6 +330,9 @@ class _ST7789Display:
                 return candidate
         return None
 
+    def has_expression_asset(self, expression: str) -> bool:
+        return self._expression_asset(expression) is not None
+
     def _load_gif(self, path: Path) -> list[bytearray]:
         frames: list[bytearray] = []
         with Image.open(path) as image:
@@ -383,6 +459,14 @@ class ST7789EyesDriver:
         self._animation_clock = _SharedAnimationClock(config.fps)
         self._stop = Event()
         self._send_left_first = True
+        self._expression_lock = Lock()
+        self._requested_expression = "neutral"
+        self._randomizer = _ExpressionRandomizer(
+            trigger_expression="listening",
+            candidate_expressions=config.listening_random_expressions,
+            min_seconds=config.listening_random_min_seconds,
+            max_seconds=config.listening_random_max_seconds,
+        )
 
         self._left = _ST7789Display(
             spi_port=config.spi_port,
@@ -424,9 +508,12 @@ class ST7789EyesDriver:
         self._thread.start()
 
     def set_expression(self, expression: str) -> None:
-        self._left.set_expression(expression)
-        if self._right is not None:
-            self._right.set_expression(expression)
+        normalized = (expression or "neutral").strip().lower() or "neutral"
+        with self._expression_lock:
+            if normalized == self._requested_expression:
+                return
+            self._requested_expression = normalized
+        self._randomizer.reset()
 
     def close(self) -> None:
         self._stop.set()
@@ -439,6 +526,11 @@ class ST7789EyesDriver:
         frame_interval = 1.0 / max(1, self.config.fps)
         while not self._stop.is_set():
             started = monotonic()
+            effective_expression = self._effective_expression()
+            self._left.set_expression(effective_expression)
+            if self._right is not None:
+                self._right.set_expression(effective_expression)
+
             left_frame = self._left.next_frame()
             right_frame = self._right.next_frame() if self._right is not None else None
 
@@ -461,6 +553,21 @@ class ST7789EyesDriver:
                 sleep(frame_interval - elapsed)
 
     # ── 硬件初始化 ────────────────────────────────────────
+
+    def _effective_expression(self) -> str:
+        with self._expression_lock:
+            requested = self._requested_expression
+        return self._randomizer.effective_expression(
+            requested,
+            available=self._has_expression_asset,
+        )
+
+    def _has_expression_asset(self, expression: str) -> bool:
+        if not self._left.has_expression_asset(expression):
+            return False
+        if self._right is not None and not self._right.has_expression_asset(expression):
+            return False
+        return True
 
     def _hardware_reset(self) -> None:
         import time
