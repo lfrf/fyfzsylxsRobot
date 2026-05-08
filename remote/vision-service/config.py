@@ -84,6 +84,12 @@ class Settings:
         self.face_match_threshold = min(max(float(os.getenv("FACE_MATCH_THRESHOLD", "0.6")), 0.0), 1.0)
         self.face_create_unknown = _env_bool("FACE_CREATE_UNKNOWN", "true")
         self.face_store_raw_images = _env_bool("FACE_STORE_RAW_IMAGES", "false")
+        self.face_embedding_history_size = max(1, int(os.getenv("FACE_EMBEDDING_HISTORY_SIZE", "8")))
+        self.face_embedding_append_min_delta = min(
+            max(float(os.getenv("FACE_EMBEDDING_APPEND_MIN_DELTA", "0.02")), 0.0),
+            1.0,
+        )
+        self.face_match_log_top_k = max(1, int(os.getenv("FACE_MATCH_LOG_TOP_K", "3")))
         self.insightface_model_name = (
             os.getenv("INSIGHTFACE_MODEL_NAME", os.getenv("FACE_INSIGHTFACE_MODEL", "buffalo_l")).strip()
             or "buffalo_l"

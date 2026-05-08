@@ -29,4 +29,9 @@ async def health() -> HealthResponse:
         face_db_dir=settings.face_db_dir,
         face_db_path=str(Path(settings.face_db_dir) / "faces.json"),
         face_recognition_provider=settings.face_recognition_provider,
+        face_match_threshold=settings.face_match_threshold,
+        face_create_unknown=settings.face_create_unknown,
+        face_embedding_history_size=settings.face_embedding_history_size,
+        face_embedding_append_min_delta=settings.face_embedding_append_min_delta,
+        face_match_log_top_k=settings.face_match_log_top_k,
     )

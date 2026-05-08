@@ -104,6 +104,19 @@ class LinkFaceUserResponse(BaseModel):
     error: str | None = None
 
 
+class MergeFaceRequest(BaseModel):
+    primary_face_id: str = Field(..., min_length=1)
+    duplicate_face_id: str = Field(..., min_length=1)
+
+
+class MergeFaceResponse(BaseModel):
+    success: bool
+    primary_face_id: str
+    duplicate_face_id: str
+    record: dict | None = None
+    error: str | None = None
+
+
 class HealthResponse(BaseModel):
     status: str
     extractor_mode: str
@@ -123,3 +136,8 @@ class HealthResponse(BaseModel):
     face_db_dir: str
     face_db_path: str
     face_recognition_provider: str
+    face_match_threshold: float
+    face_create_unknown: bool
+    face_embedding_history_size: int
+    face_embedding_append_min_delta: float
+    face_match_log_top_k: int

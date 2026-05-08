@@ -1,6 +1,13 @@
 from fastapi import APIRouter
 
-from models import FaceIdentityRequest, FaceIdentityResponse, LinkFaceUserRequest, LinkFaceUserResponse
+from models import (
+    FaceIdentityRequest,
+    FaceIdentityResponse,
+    LinkFaceUserRequest,
+    LinkFaceUserResponse,
+    MergeFaceRequest,
+    MergeFaceResponse,
+)
 from services.face_identity_service import face_identity_service
 
 router = APIRouter()
@@ -31,5 +38,26 @@ async def link_face_user(request: LinkFaceUserRequest) -> LinkFaceUserResponse:
         face_id=request.face_id,
         user_id=request.user_id,
         display_name=request.display_name,
+        record=record,
+    )
+
+
+@router.post("/v1/vision/identity/merge-faces", response_model=MergeFaceResponse)
+async def merge_faces(request: MergeFaceRequest) -> MergeFaceResponse:
+    record = face_identity_service.database.merge_faces(
+        primary_face_id=request.primary_face_id,
+        duplicate_face_id=request.duplicate_face_id,
+    )
+    if record is None:
+        return MergeFaceResponse(
+            success=False,
+            primary_face_id=request.primary_face_id,
+            duplicate_face_id=request.duplicate_face_id,
+            error="face_not_found_or_same_record",
+        )
+    return MergeFaceResponse(
+        success=True,
+        primary_face_id=str(record.get("face_id") or request.primary_face_id),
+        duplicate_face_id=request.duplicate_face_id,
         record=record,
     )
