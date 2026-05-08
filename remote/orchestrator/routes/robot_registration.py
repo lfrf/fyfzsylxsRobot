@@ -40,6 +40,7 @@ router = APIRouter(prefix="/v1/robot", tags=["robot-registration"])
 
 USERNAME_PROMPT_TEXT = "\u4f60\u5e0c\u671b\u6211\u600e\u4e48\u79f0\u547c\u4f60\u5462\uff1f"
 KNOWN_USER_GREETING_TEMPLATE = "\u4f60\u597d\uff0c{display_name}\uff0c\u6211\u4eec\u5f00\u59cb\u804a\u5929\u5427\u3002"
+NO_FACE_GREETING_TEXT = "\u4f60\u597d\u5440\uff0c\u6211\u5728\u8fd9\u91cc\u3002\u4f60\u53ef\u4ee5\u76f4\u63a5\u548c\u6211\u8bf4\u8bdd\u3002"
 USERNAME_CONFIRM_TEMPLATE = "\u597d\u7684\uff0c\u6211\u8bb0\u4f4f\u4e86\u3002\u4ee5\u540e\u6211\u5c31\u53eb\u4f60{display_name}\u3002"
 USERNAME_NOT_HEARD_TEXT = "\u6211\u521a\u624d\u6ca1\u6709\u542c\u6e05\u4f60\u7684\u79f0\u547c\u3002\u6211\u4eec\u5148\u5f00\u59cb\u804a\u5929\u5427\u3002"
 
@@ -118,7 +119,7 @@ async def prepare_user(request: PrepareUserRequest) -> PrepareUserResponse:
             face_id=None,
             display_name=None,
             needs_username_registration=False,
-            reply_text="",
+            reply_text=NO_FACE_GREETING_TEXT,
             mode_policy=mode_policy,
             reason="no_face",
         )
