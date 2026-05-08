@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from time import sleep
+from typing import Any
 
 from raspirobot.audio import AudioListenWorker
 from shared.logging_utils import log_event
@@ -45,6 +46,7 @@ class RaspiRobotRuntime:
         self.work_idle_timeout_seconds = work_idle_timeout_seconds
         self.face_tracking_lifecycle = face_tracking_lifecycle
         self.eyes_driver = eyes_driver
+        self._pending_working_utterance: Any | None = None
         self._ensure_initial_state()
 
     def run_once(self) -> RuntimeLoopResult:
@@ -76,45 +78,89 @@ class RaspiRobotRuntime:
             self._stop_wake_word_provider()
             self.state_machine.transition(RobotEvent.WAKE_WORD_DETECTED)
             self._enter_preparing()
-            self._enter_working_listening()
         return RuntimeLoopResult(handled=False, state=self.state_machine.state)
 
     def _run_preparing_once(self) -> RuntimeLoopResult:
         self._enter_preparing()
-        gate_timeout = float(getattr(self.turn_manager.settings, "preparing_gate_timeout_seconds", 3.0) or 3.0)
-        gate_rms_threshold = float(getattr(self.turn_manager.settings, "vad_preparing_rms_threshold", 900.0) or 900.0)
-        gate_speech_start_frames = int(getattr(self.turn_manager.settings, "vad_preparing_speech_start_frames", 8) or 8)
-        gate_utterance = self.listener.listen_once(
-            speech_start_timeout_seconds=gate_timeout,
-            rms_threshold_override=gate_rms_threshold,
-            speech_start_frames_override=gate_speech_start_frames,
-        )
-        if gate_utterance is None:
-            log_event("preparing_gate_timeout", timeout_seconds=gate_timeout)
-            self.state_machine.transition(RobotEvent.WORK_IDLE_TIMEOUT)
-            self._enter_standby()
-            return RuntimeLoopResult(handled=False, state=self.state_machine.state)
-        log_event(
-            "preparing_gate_passed",
-            duration_ms=gate_utterance.duration_ms,
-            gate_rms_threshold=gate_rms_threshold,
-            gate_speech_start_frames=gate_speech_start_frames,
-        )
-        self._enter_working_listening()
-        return RuntimeLoopResult(handled=False, state=self.state_machine.state)
+        # Give the camera/vision upload thread a short window to publish frames
+        # before asking the remote side to resolve face identity.
+        prepare_wait_seconds = float(getattr(self.turn_manager.settings, "prepare_face_wait_seconds", 3.0) or 3.0)
+        if prepare_wait_seconds > 0:
+            sleep(min(prepare_wait_seconds, 3.0))
 
-    def _run_working_once(self) -> RuntimeLoopResult:
-        self._enter_working_listening()
-        speech_start_timeout = self.work_idle_timeout_seconds if self.wake_word_provider is not None else None
-        utterance = self.listener.listen_once(speech_start_timeout_seconds=speech_start_timeout)
-        if utterance is None:
+        try:
+            prepare_result = self.turn_manager.handle_prepare_user(turn_id="prepare")
+        except Exception as exc:
+            log_event("prepare_user_failed", error=str(exc), level="error")
+            self._complete_preparing()
+            return RuntimeLoopResult(handled=False, state=self.state_machine.state, error=str(exc))
+
+        if prepare_result.needs_username_registration and prepare_result.user_id:
+            username_timeout = float(
+                getattr(self.turn_manager.settings, "username_reply_timeout_seconds", 10.0) or 10.0
+            )
             log_event(
-                "work_idle_timeout",
+                "username_registration_listening_started",
+                user_id=prepare_result.user_id,
+                timeout_seconds=username_timeout,
+            )
+            utterance = self.listener.listen_once(speech_start_timeout_seconds=username_timeout)
+            if utterance is None:
+                log_event(
+                    "username_registration_timeout",
+                    user_id=prepare_result.user_id,
+                    timeout_seconds=username_timeout,
+                )
+            else:
+                try:
+                    self.turn_manager.handle_username_utterance(
+                        utterance.wav_path,
+                        user_id=prepare_result.user_id,
+                        turn_id="username",
+                    )
+                except Exception as exc:
+                    log_event("register_username_failed", user_id=prepare_result.user_id, error=str(exc), level="error")
+
+        first_utterance = self.listener.listen_once(speech_start_timeout_seconds=self.work_idle_timeout_seconds)
+        if first_utterance is None:
+            log_event(
+                "preparing_first_speech_timeout",
                 timeout_seconds=self.work_idle_timeout_seconds,
             )
             self.state_machine.transition(RobotEvent.WORK_IDLE_TIMEOUT)
             self._exit_to_standby()
             return RuntimeLoopResult(handled=False, state=self.state_machine.state)
+
+        log_event(
+            "preparing_first_speech_ready",
+            wav_path=str(first_utterance.wav_path),
+            duration_ms=first_utterance.duration_ms,
+        )
+        self._pending_working_utterance = first_utterance
+        self._complete_preparing()
+        return RuntimeLoopResult(handled=False, state=self.state_machine.state)
+
+    def _run_working_once(self) -> RuntimeLoopResult:
+        self._enter_working_listening()
+        if self._pending_working_utterance is not None:
+            utterance = self._pending_working_utterance
+            self._pending_working_utterance = None
+            log_event(
+                "working_pending_utterance_consumed",
+                wav_path=str(utterance.wav_path),
+                duration_ms=utterance.duration_ms,
+            )
+        else:
+            speech_start_timeout = self.work_idle_timeout_seconds if self.wake_word_provider is not None else None
+            utterance = self.listener.listen_once(speech_start_timeout_seconds=speech_start_timeout)
+            if utterance is None:
+                log_event(
+                    "work_idle_timeout",
+                    timeout_seconds=self.work_idle_timeout_seconds,
+                )
+                self.state_machine.transition(RobotEvent.WORK_IDLE_TIMEOUT)
+                self._exit_to_standby()
+                return RuntimeLoopResult(handled=False, state=self.state_machine.state)
 
         self.event_bus.publish(RuntimeEvent(RuntimeEventType.SPEECH_STARTED))
         self.state_machine.transition(RobotEvent.SPEECH_START)
@@ -211,9 +257,12 @@ class RaspiRobotRuntime:
             self.state_machine.state = RobotRuntimeState.PREPARING
             log_event("preparing_started")
         self._start_face_tracking()
-        self.state_machine.transition(RobotEvent.WAKE_ACK_DONE)
         self._set_eyes("listening")
         log_event("preparing_done")
+
+    def _complete_preparing(self) -> None:
+        self.state_machine.transition(RobotEvent.WAKE_ACK_DONE)
+        self._enter_working_listening()
 
     def _enter_working_listening(self) -> None:
         self.state_machine.state = RobotRuntimeState.WORKING

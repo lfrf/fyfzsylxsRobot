@@ -231,6 +231,7 @@ def build_runtime(
         session=session,
         logger=TurnLogger(work_dir / "turns.jsonl"),
         audio_preprocessor=audio_preprocessor,
+        settings=settings,
         audio_drop_invalid_utterance=settings.audio_drop_invalid_utterance,
         audio_drop_reasons=settings.audio_drop_reasons,
     )

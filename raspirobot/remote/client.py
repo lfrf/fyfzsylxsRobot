@@ -14,7 +14,9 @@ from shared.schemas import (
     RobotAction,
     RobotChatRequest,
     RobotChatResponse,
+    RobotInput,
     TTSResult,
+    VisionContext,
 )
 
 from raspirobot.config import load_settings
@@ -23,6 +25,30 @@ from shared.logging_utils import get_log_session_id, log_event
 
 class RemoteClientProtocol(Protocol):
     def chat_turn(self, request: RobotChatRequest) -> RobotChatResponse:
+        ...
+
+    def prepare_user(
+        self,
+        *,
+        session_id: str,
+        turn_id: str,
+        mode: str,
+        vision_context: VisionContext | None,
+        robot_state: dict[str, Any] | None = None,
+        request_options: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        ...
+
+    def register_username(
+        self,
+        *,
+        session_id: str,
+        turn_id: str,
+        user_id: str,
+        mode: str,
+        input_payload: RobotInput,
+        request_options: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         ...
 
 
@@ -58,6 +84,123 @@ class RemoteClient:
         if hasattr(request, "model_dump"):
             return request.model_dump()
         return request.dict()
+
+    def _post_json(self, endpoint: str, payload: dict[str, Any], *, log_event_name: str) -> dict[str, Any]:
+        url = urljoin(f"{self.base_url}/", endpoint.lstrip("/"))
+        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        log_session_id = str(payload.get("request_options", {}).get("log_session_id") or get_log_session_id())
+        http_request = Request(
+            url,
+            data=body,
+            headers={
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "X-Robot-Log-Session-Id": log_session_id,
+            },
+            method="POST",
+        )
+        log_event(
+            f"{log_event_name}_started",
+            url=url,
+            session_id=payload.get("session_id"),
+            turn_id=payload.get("turn_id"),
+            remote_log_session_id=log_session_id,
+            timeout_seconds=self.timeout_seconds,
+        )
+        started = perf_counter()
+        try:
+            with urlopen(http_request, timeout=self.timeout_seconds) as response:
+                raw = response.read().decode("utf-8")
+                status = getattr(response, "status", None)
+        except HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")
+            log_event(
+                f"{log_event_name}_failed",
+                url=url,
+                session_id=payload.get("session_id"),
+                turn_id=payload.get("turn_id"),
+                status=exc.code,
+                latency_ms=round((perf_counter() - started) * 1000, 2),
+                error=detail[:300],
+                level="error",
+            )
+            raise RemoteClientError(f"{endpoint} returned HTTP {exc.code}: {detail}") from exc
+        except URLError as exc:
+            log_event(
+                f"{log_event_name}_failed",
+                url=url,
+                session_id=payload.get("session_id"),
+                turn_id=payload.get("turn_id"),
+                latency_ms=round((perf_counter() - started) * 1000, 2),
+                error=str(exc.reason),
+                level="error",
+            )
+            raise RemoteClientError(f"{endpoint} is unavailable: {exc.reason}") from exc
+        except TimeoutError as exc:
+            log_event(
+                f"{log_event_name}_failed",
+                url=url,
+                session_id=payload.get("session_id"),
+                turn_id=payload.get("turn_id"),
+                latency_ms=round((perf_counter() - started) * 1000, 2),
+                error="timeout",
+                level="error",
+            )
+            raise RemoteClientError(f"{endpoint} timed out.") from exc
+
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise RemoteClientError(f"{endpoint} returned invalid JSON: {raw[:200]}") from exc
+        log_event(
+            f"{log_event_name}_succeeded",
+            url=url,
+            session_id=payload.get("session_id"),
+            turn_id=payload.get("turn_id"),
+            status=status,
+            latency_ms=round((perf_counter() - started) * 1000, 2),
+        )
+        return data
+
+    def prepare_user(
+        self,
+        *,
+        session_id: str,
+        turn_id: str,
+        mode: str,
+        vision_context: VisionContext | None,
+        robot_state: dict[str, Any] | None = None,
+        request_options: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        payload = {
+            "session_id": session_id,
+            "turn_id": turn_id,
+            "mode": mode,
+            "vision_context": _model_payload(vision_context),
+            "robot_state": robot_state,
+            "request_options": request_options or {},
+        }
+        return self._post_json("/v1/robot/prepare_user", payload, log_event_name="prepare_user_request")
+
+    def register_username(
+        self,
+        *,
+        session_id: str,
+        turn_id: str,
+        user_id: str,
+        mode: str,
+        input_payload: RobotInput,
+        request_options: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        payload = {
+            "session_id": session_id,
+            "turn_id": turn_id,
+            "user_id": user_id,
+            "mode": mode,
+            "input": _model_payload(input_payload),
+            "request_options": request_options or {},
+        }
+        return self._post_json("/v1/robot/register_username", payload, log_event_name="register_username_request")
 
     def chat_turn(self, request: RobotChatRequest) -> RobotChatResponse:
         payload = self.build_payload(request)
@@ -190,6 +333,50 @@ class MockRemoteClient:
     def send_chat_turn(self, request: RobotChatRequest) -> RobotChatResponse:
         return self.chat_turn(request)
 
+    def prepare_user(
+        self,
+        *,
+        session_id: str,
+        turn_id: str,
+        mode: str,
+        vision_context: VisionContext | None,
+        robot_state: dict[str, Any] | None = None,
+        request_options: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        return {
+            "success": True,
+            "session_id": session_id,
+            "turn_id": turn_id,
+            "face_detected": False,
+            "needs_username_registration": False,
+            "reply_text": "",
+            "tts": {"type": "none", "audio_url": None, "format": "wav"},
+            "robot_action": {"expression": "listening", "motion": "none", "speech_style": "care_gentle"},
+            "debug": {"source": "MockRemoteClient"},
+        }
+
+    def register_username(
+        self,
+        *,
+        session_id: str,
+        turn_id: str,
+        user_id: str,
+        mode: str,
+        input_payload: RobotInput,
+        request_options: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        return {
+            "success": False,
+            "session_id": session_id,
+            "turn_id": turn_id,
+            "user_id": user_id,
+            "display_name": None,
+            "reply_text": "",
+            "tts": {"type": "none", "audio_url": None, "format": "wav"},
+            "robot_action": {"expression": "listening", "motion": "none", "speech_style": "care_gentle"},
+            "debug": {"source": "MockRemoteClient"},
+        }
+
 
 def build_mode_info(mode_id: str) -> ModeInfo:
     mode_id = _normalize_mode(mode_id)
@@ -243,6 +430,16 @@ def _normalize_mode(mode_id: str | None) -> str:
 def _request_log_session_id(request: RobotChatRequest) -> str:
     options = request.request_options if isinstance(request.request_options, dict) else {}
     return str(options.get("log_session_id") or get_log_session_id())
+
+
+def _model_payload(value: Any) -> Any:
+    if value is None:
+        return None
+    if hasattr(value, "model_dump"):
+        return value.model_dump()
+    if hasattr(value, "dict"):
+        return value.dict()
+    return value
 
 
 __all__ = [
