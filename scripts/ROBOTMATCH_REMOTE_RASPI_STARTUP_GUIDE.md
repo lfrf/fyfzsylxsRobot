@@ -542,13 +542,8 @@ curl http://127.0.0.1:19100/health
 ### 5.3 终端 3：启动 TTS service，端口 19200，独立 TTS 环境
 
 ```bash
-cd /root/autodl-tmp/a22/code/fyfzsylxsRobot
-
-pkill -f "uvicorn app:app.*--port 19200" || true
-
 source /root/autodl-tmp/a22/code/fyfzsylxsRobot/scripts/env_robot.sh
 source "$A22_ENV_ROOT/avatar-service/bin/activate"
-
 cd "$A22_CODE/remote/speech-service"
 
 export ASR_PROVIDER=qwen3_asr
@@ -560,13 +555,9 @@ export TTS_PROVIDER=cosyvoice
 export TTS_MODEL="$A22_MODEL_ROOT/CosyVoice-300M-Instruct"
 export TTS_REPO_PATH="$A22_MODEL_ROOT/CosyVoice"
 export TTS_CODE_ROOT="$A22_MODEL_ROOT/CosyVoice"
-export TTS_MODE=cosyvoice_300m_instruct
-export TTS_DEVICE=cuda:0
-
-# 关键：给 inference_instruct 提供必需的 spk_id
+export TTS_MODE=cosyvoice_300m_sft
 export TTS_SPEAKER_ID=中文女
-
-# 关键：真实诊断模式
+export TTS_DEVICE=cuda:0
 export TTS_WARMUP_ENABLED=true
 export TTS_ALLOW_MOCK_FALLBACK=false
 
@@ -574,9 +565,6 @@ export TMP_DIR="$A22_TMP_ROOT/speech_tts"
 mkdir -p "$TMP_DIR"
 
 export PYTHONPATH="$A22_CODE/shared:$A22_CODE/remote/speech-service:$TTS_CODE_ROOT:$TTS_CODE_ROOT/third_party/Matcha-TTS:${PYTHONPATH:-}"
-
-export ROBOT_LOG_LEVEL=INFO
-export ROBOT_DEBUG_TRACE=true
 
 python -m uvicorn app:app --host 127.0.0.1 --port 19200 --log-level debug
 ```
@@ -645,7 +633,7 @@ source /root/autodl-tmp/a22/code/fyfzsylxsRobot/scripts/env_robot.sh
 source "$A22_ENV_ROOT/vision-service/bin/activate"
 cd "$A22_CODE/remote/vision-service"
 
-export VISION_SERVICE_PORT=20000
+export VISION_SERVICE_PORT=21000
 export FACE_RECOGNITION_PROVIDER=insightface
 export INSIGHTFACE_MODEL_NAME=buffalo_l
 export INSIGHTFACE_DET_SIZE=640,640
@@ -654,7 +642,7 @@ export FACE_STORE_RAW_IMAGES=false
 export VISION_WARMUP_ENABLED=false
 export FER_WARMUP_ENABLED=false
 
-python -m uvicorn app:app --host 127.0.0.1 --port 20000 --log-level debug
+python -m uvicorn app:app --host 127.0.0.1 --port 21000 --log-level debug
 
 ```
 

@@ -104,13 +104,10 @@ class RobotStateMachine:
             self._log_transition(event, from_state, turn_id=turn_id, busy_hint_requested=True)
             return self.state
 
+        # Legacy compatibility path (kept for non-standby legacy callers only).
         if self.state == RobotRuntimeState.IDLE and event == RobotEvent.WAKE_WORD_DETECTED:
-            self.state = RobotRuntimeState.WAKE_DETECTED
-        elif self.state == RobotRuntimeState.STANDBY and event == RobotEvent.WAKE_WORD_DETECTED:
-            self.state = RobotRuntimeState.WAKE_DETECTED
-        elif self.state == RobotRuntimeState.WAKE_DETECTED and event == RobotEvent.WAKE_ACK_DONE:
             self.state = RobotRuntimeState.PREPARING
-        elif self.state == RobotRuntimeState.PREPARING and event == RobotEvent.WAKE_ACK_DONE:
+        elif self.state == RobotRuntimeState.WAKE_DETECTED and event == RobotEvent.WAKE_ACK_DONE:
             self.state = RobotRuntimeState.WORKING
         elif self.state == RobotRuntimeState.WORKING and event == RobotEvent.WAKE_ACK_DONE:
             self.state = RobotRuntimeState.LISTENING

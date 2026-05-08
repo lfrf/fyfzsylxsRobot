@@ -386,13 +386,20 @@ class FaceTrackingLifecycle:
         self._runner_thread: tuple[Any, threading.Thread] | None = None
 
     def start(self) -> None:
+        print("[live] face tracking start requested")
         if self._runner_thread is not None:
             runner, worker = self._runner_thread
             if worker.is_alive():
+                print("[live] face tracking start skipped: already alive")
                 return
+            print("[live] face tracking restart: previous thread not alive")
             self._runner_thread = None
 
         self._runner_thread = _start_face_tracking_for_live(self.args, frame_sink=self.frame_sink)
+        if self._runner_thread is None:
+            print("[live] face tracking start failed")
+        else:
+            print("[live] face tracking start ok")
 
     def stop(self) -> None:
         if self._runner_thread is None:
@@ -403,6 +410,7 @@ class FaceTrackingLifecycle:
         runner.request_stop()
         worker.join(timeout=3.0)
         self._runner_thread = None
+        print("[live] face tracking stop done")
 
 
 def run_live_loop_with_optional_face_tracking(args: argparse.Namespace) -> None:

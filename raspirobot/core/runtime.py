@@ -62,7 +62,10 @@ class RaspiRobotRuntime:
         }:
             return self._run_working_once()
         if self.state_machine.state == RobotRuntimeState.ERROR_FALLBACK:
+            # Non-fatal remote failures should recover to WORKING/LISTENING without impacting visual lifecycle.
             self.state_machine.transition(RobotEvent.RECOVERY_DONE)
+            if self.state_machine.state != RobotRuntimeState.STANDBY:
+                self._enter_working_listening()
             return RuntimeLoopResult(handled=False, state=self.state_machine.state)
         return RuntimeLoopResult(handled=False, state=self.state_machine.state)
 
@@ -73,10 +76,12 @@ class RaspiRobotRuntime:
             self._stop_wake_word_provider()
             self.state_machine.transition(RobotEvent.WAKE_WORD_DETECTED)
             self._enter_preparing()
+            self._enter_working_listening()
         return RuntimeLoopResult(handled=False, state=self.state_machine.state)
 
     def _run_preparing_once(self) -> RuntimeLoopResult:
         self._enter_preparing()
+        self._enter_working_listening()
         return RuntimeLoopResult(handled=False, state=self.state_machine.state)
 
     def _run_working_once(self) -> RuntimeLoopResult:
@@ -141,7 +146,11 @@ class RaspiRobotRuntime:
         except Exception as exc:
             message = str(exc)
             self.event_bus.publish(RuntimeEvent(RuntimeEventType.REMOTE_REQUEST_FAILED, {"error": message}))
+            log_event("remote_request_nonfatal_error", error=message)
+            # Keep visual lifecycle alive and continue working loop.
             self.state_machine.transition(RobotEvent.SYSTEM_ERROR, error=message)
+            self.state_machine.transition(RobotEvent.RECOVERY_DONE)
+            self._enter_working_listening()
             return RuntimeLoopResult(handled=False, state=self.state_machine.state, error=message)
 
     def run_forever(self) -> None:
@@ -176,10 +185,7 @@ class RaspiRobotRuntime:
                 log_event("eyes_set_expression_failed", expression=expression, error=str(exc))
 
     def _enter_standby(self) -> None:
-        self._stop_face_tracking()
-        self._set_eyes("sleep")
-        self.state_machine.state = RobotRuntimeState.STANDBY
-        self._start_wake_word_provider()
+        self._exit_to_standby()
 
     def _enter_preparing(self) -> None:
         if self.state_machine.state != RobotRuntimeState.PREPARING:
@@ -188,6 +194,7 @@ class RaspiRobotRuntime:
         self._start_face_tracking()
         self.state_machine.transition(RobotEvent.WAKE_ACK_DONE)
         self._set_eyes("listening")
+        log_event("preparing_done")
 
     def _enter_working_listening(self) -> None:
         self.state_machine.state = RobotRuntimeState.WORKING
