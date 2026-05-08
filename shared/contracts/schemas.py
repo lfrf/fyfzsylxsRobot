@@ -253,6 +253,8 @@ class FaceIdentitySchema(BaseModel):
     bbox: FaceBoxSchema | None = None
     source: str | None = None
     embedding_model: str | None = None
+    observation_count: int | None = Field(default=None, ge=0)
+    match_count: int | None = Field(default=None, ge=0)
     seen_count: int | None = Field(default=None, ge=0)
     last_seen_at: str | None = None
 
@@ -264,6 +266,9 @@ class FaceObservationSchema(BaseModel):
     confidence: float | None = Field(default=None, ge=0.0, le=1.0)
     bbox: FaceBoxSchema | None = None
     source: str | None = None
+    observation_count: int | None = Field(default=None, ge=0)
+    match_count: int | None = Field(default=None, ge=0)
+    seen_count: int | None = Field(default=None, ge=0)
 
 
 class UserProfileBriefSchema(BaseModel):

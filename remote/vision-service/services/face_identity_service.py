@@ -41,25 +41,19 @@ class FaceIdentityService:
                 height=frame.height,
             )
             for embedding in embeddings:
-                match = self.database.match_or_create(
-                    embedding=embedding.embedding,
-                    threshold=settings.face_match_threshold,
-                    create_unknown=settings.face_create_unknown,
-                    source=embedding.source,
-                    bbox=embedding.bbox,
-                    embedding_model=embedding.embedding_model,
-                )
+                match = self._match_embedding(embedding)
                 observation = self._build_observation(embedding=embedding, match=match)
                 observations.append(observation)
-                candidates.append((embedding, match, observation))
+                if match.record is not None:
+                    candidates.append((embedding, match, observation))
 
         if not candidates:
             return FaceIdentityResponse(
                 face_identity=FaceIdentityResult(
-                    face_detected=False,
+                    face_detected=bool(observations),
                     source=self.runtime.provider,
                 ),
-                face_observations=[],
+                face_observations=observations,
                 processed_frame_count=len(frames),
                 provider=self.runtime.provider,
             )
@@ -67,7 +61,12 @@ class FaceIdentityService:
         primary_embedding, primary_match, primary_observation = self._choose_primary(candidates)
         primary_observation.is_primary = True
         primary_record = primary_match.record or {}
-        is_known = bool(primary_match.record and not primary_match.created)
+        is_known = bool(primary_record)
+        observation_count = primary_record.get("observation_count")
+        match_count = primary_record.get("match_count")
+        seen_count = primary_record.get("seen_count")
+        if seen_count is None:
+            seen_count = match_count
         return FaceIdentityResponse(
             face_identity=FaceIdentityResult(
                 face_detected=True,
@@ -78,12 +77,28 @@ class FaceIdentityService:
                 bbox=primary_embedding.bbox,
                 source=primary_embedding.source,
                 embedding_model=primary_embedding.embedding_model,
-                seen_count=primary_record.get("seen_count"),
+                observation_count=observation_count,
+                match_count=match_count,
+                seen_count=seen_count,
                 last_seen_at=primary_record.get("last_seen_at"),
             ),
             face_observations=observations,
             processed_frame_count=len(frames),
             provider=self.runtime.provider,
+        )
+
+    def _match_embedding(self, embedding: FaceEmbedding) -> FaceMatch:
+        if embedding.source == "mock":
+            best_record, best_score = self.database.find_best_match(embedding.embedding)
+            return FaceMatch(record=best_record, confidence=best_score, created=False)
+
+        return self.database.match_or_create(
+            embedding=embedding.embedding,
+            threshold=settings.face_match_threshold,
+            create_unknown=settings.face_create_unknown,
+            source=embedding.source,
+            bbox=embedding.bbox,
+            embedding_model=embedding.embedding_model,
         )
 
     def _select_frames(self, request: FaceIdentityRequest) -> list[_FramePayload]:
@@ -117,6 +132,11 @@ class FaceIdentityService:
     @staticmethod
     def _build_observation(*, embedding: FaceEmbedding, match: FaceMatch) -> FaceObservation:
         record: dict[str, Any] = match.record or {}
+        observation_count = record.get("observation_count")
+        match_count = record.get("match_count")
+        seen_count = record.get("seen_count")
+        if seen_count is None:
+            seen_count = match_count
         return FaceObservation(
             face_id=record.get("face_id"),
             user_id=record.get("user_id"),
@@ -128,7 +148,9 @@ class FaceIdentityService:
             source=embedding.source,
             frame_id=embedding.frame_id,
             embedding_model=embedding.embedding_model,
-            seen_count=record.get("seen_count"),
+            observation_count=observation_count,
+            match_count=match_count,
+            seen_count=seen_count,
             last_seen_at=record.get("last_seen_at"),
         )
 
@@ -144,12 +166,12 @@ class FaceIdentityService:
             x = float(bbox.get("x") or 0.0)
             y = float(bbox.get("y") or 0.0)
             area = w * h
+            confidence = float(embedding.confidence or 0.0)
             center_x = x + w / 2.0
             center_y = y + h / 2.0
             center_distance = ((center_x - 0.5) ** 2 + (center_y - 0.5) ** 2) ** 0.5
             center_score = max(0.0, 1.0 - center_distance)
-            confidence = float(embedding.confidence or 0.0)
-            return (center_score, area, confidence)
+            return (area, confidence, center_score)
 
         return max(candidates, key=score)
 

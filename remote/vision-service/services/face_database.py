@@ -4,7 +4,8 @@ import json
 import math
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from typing import Any
 
@@ -12,7 +13,10 @@ from config import settings
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    try:
+        return datetime.now(ZoneInfo("Asia/Shanghai")).isoformat()
+    except Exception:
+        return datetime.now().astimezone().isoformat()
 
 
 def _normalize_embedding(embedding: list[float]) -> list[float]:
@@ -85,7 +89,11 @@ class FaceDatabase:
                 best_score = score
 
         if best_record is not None and best_score is not None and best_score >= threshold:
-            best_record["seen_count"] = int(best_record.get("seen_count") or 0) + 1
+            observation_count = int(best_record.get("observation_count") or best_record.get("seen_count") or 0) + 1
+            match_count = int(best_record.get("match_count") or best_record.get("seen_count") or 0) + 1
+            best_record["observation_count"] = observation_count
+            best_record["match_count"] = match_count
+            best_record["seen_count"] = match_count
             best_record["last_seen_at"] = _now_iso()
             best_record["source"] = source or best_record.get("source")
             if bbox:
@@ -100,7 +108,9 @@ class FaceDatabase:
             "face_id": f"face_{uuid.uuid4().hex[:12]}",
             "user_id": None,
             "embedding": normalized,
-            "seen_count": 1,
+            "observation_count": 1,
+            "match_count": 0,
+            "seen_count": 0,
             "created_at": _now_iso(),
             "last_seen_at": _now_iso(),
             "source": source,
