@@ -681,7 +681,7 @@ cd "$A22_CODE"
 export SPEECH_SERVICE_BASE=http://127.0.0.1:19100
 export TTS_SERVICE_BASE=http://127.0.0.1:19200
 export VISION_SERVICE_ENABLED=true
-export VISION_SERVICE_BASE=http://127.0.0.1:20000
+export VISION_SERVICE_BASE=http://127.0.0.1:21000
 
 export PROFILE_DATA_DIR="$A22_CODE/remote/orchestrator/data/profiles"
 export PROFILE_MEMORY_ENABLED=true
@@ -707,6 +707,12 @@ python -m uvicorn app:app \
   --host 127.0.0.1 \
   --port 19000
 ```
+
+
+！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！
+cd /root/autodl-tmp/a22/code/fyfzsylxsRobot/remote/video-cache-service
+python -m uvicorn app:app --host 127.0.0.1 --port 20000 --log-level debug
+
 
 检查：
 
@@ -1171,3 +1177,47 @@ scripts/ROBOT_FULL_STARTUP_WITH_TTS_ENV.md
 ```
 
 本文用于“ASR / LLM / 单独 TTS 环境”的完整运行。
+
+
+！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！
+cd /home/pi/Desktop/code/fyfzsylxsRobot
+source /home/pi/Desktop/code/fyfzsylxsRobot/.venv/bin/activate
+
+mkdir -p /home/pi/Desktop/code/fyfzsylxsRobot/tmp/wav
+
+export ROBOT_REMOTE_BASE_URL=http://127.0.0.1:29000
+
+export ROBOT_AUDIO_WORK_DIR=/home/pi/Desktop/code/fyfzsylxsRobot/tmp/wav
+export ROBOT_AUDIO_CAPTURE_DEVICE=plughw:CARD=Lite,DEV=0
+export ROBOT_AUDIO_PLAYBACK_DEVICE=plughw:CARD=Device,DEV=0
+export ROBOT_AUDIO_SAMPLE_RATE=16000
+export ROBOT_AUDIO_CHANNELS=2
+
+amixer -D plughw:CARD=Device,DEV=0 sset Master 70% 2>/dev/null || true
+
+export ROBOT_AUDIO_PREPROCESS_ENABLED=true
+export ROBOT_AUDIO_ENABLE_NOISE_GATE=true
+export ROBOT_AUDIO_ENABLE_TRIM=true
+export ROBOT_AUDIO_NOISE_GATE_RATIO=2.0
+export ROBOT_AUDIO_POST_SPEECH_PADDING_MS=200
+export ROBOT_AUDIO_MIN_SPEECH_MS=400
+export ROBOT_AUDIO_SAVE_DEBUG_WAV=true
+export ROBOT_AUDIO_POST_PLAYBACK_COOLDOWN_MS=800
+export ROBOT_AUDIO_DROP_INVALID_UTTERANCE=true
+export ROBOT_AUDIO_DROP_REASONS=no_speech_detected,speech_too_short
+
+export ROBOT_WAKE_WORD_ENABLED=true
+export ROBOT_WAKE_WORD_MODEL_DIR=models/sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20
+export ROBOT_WAKE_WORD_DEVICE=1
+export ROBOT_WORK_IDLE_TIMEOUT_S=10
+
+export ROBOT_LOG_LEVEL=INFO
+export ROBOT_DEBUG_TRACE=true
+
+python -m raspirobot.main live \
+  --face-track \
+  --face-track-detector auto \
+  --face-track-actuation-range 270 \
+  --face-track-center-pan 135 --face-track-center-tilt 135 \
+  --face-track-pan-min-angle 0 --face-track-pan-max-angle 270 \
+  --face-track-tilt-min-angle 35 --face-track-tilt-max-angle 235
