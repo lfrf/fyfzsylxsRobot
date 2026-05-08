@@ -16,7 +16,7 @@ _INIT_CMDS: list[tuple[int, list[int] | None]] = [
     (0x11, None),    # Sleep out
     (0x3A, [0x55]),  # 16-bit color (RGB565)
     (0x36, [0x00]),  # Memory access control: top-to-bottom, left-to-right
-    (0x21, None),    # Display inversion on
+    (0x20, None),    # Display inversion off
     (0x29, None),    # Display on
 ]
 
