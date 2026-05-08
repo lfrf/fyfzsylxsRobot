@@ -68,6 +68,7 @@ class VideoBuffer:
         stream_id: str,
         window_ms: int,
         max_frames: int,
+        min_timestamp_ms: int | None = None,
     ) -> list[VideoFrameItem]:
         session_key = str(session_id)
         stream_key = str(stream_id)
@@ -90,6 +91,9 @@ class VideoBuffer:
         if window_ms > 0:
             cutoff = latest_ts - window_ms
             frames = [frame for frame in frames if frame.timestamp_ms >= cutoff]
+        if min_timestamp_ms is not None:
+            min_timestamp_ms = max(0, int(min_timestamp_ms))
+            frames = [frame for frame in frames if frame.timestamp_ms >= min_timestamp_ms]
 
         if len(frames) <= max_frames:
             return frames

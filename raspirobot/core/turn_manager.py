@@ -266,8 +266,12 @@ class TurnManager:
 
     def handle_prepare_user(self, *, turn_id: str = "prepare") -> PrepareUserResult:
         vision_context = None
-        if self.payload_builder.vision_context_provider is not None:
-            vision_context = self.payload_builder.vision_context_provider.get_context()
+        vision_provider = self.payload_builder.vision_context_provider
+        if vision_provider is not None:
+            if hasattr(vision_provider, "get_prepare_context"):
+                vision_context = vision_provider.get_prepare_context()
+            else:
+                vision_context = vision_provider.get_context()
         request_options = dict(self.payload_builder.request_options)
         request_options.setdefault("log_session_id", get_log_session_id())
         request_options.setdefault("log_timezone", "Asia/Shanghai")

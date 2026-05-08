@@ -50,6 +50,8 @@ class RemoteVisionConfig:
     query_mode: str = "latest"
     latest_window_ms: int = 6000
     latest_max_frames: int = 10
+    prepare_max_frame_age_ms: int = 3000
+    prepare_min_frames: int = 2
 
 
 class RemoteVisionContextProvider:
@@ -69,6 +71,7 @@ class RemoteVisionContextProvider:
         self._camera = None
         self._http_client = None
         self._last_face_identity: FaceIdentitySchema | None = None
+        self._fresh_epoch_started_ms: int | None = None
         # 帧注入模式：外部注入的最新帧
         self._injected_frame: Any = None
         self._injected_frame_lock = threading.Lock()
@@ -115,8 +118,33 @@ class RemoteVisionContextProvider:
         with self._injected_frame_lock:
             self._injected_frame = frame
 
+    def begin_fresh_epoch(self, *, reason: str = "prepare") -> int:
+        """Start a new visual epoch and discard any frame from the previous wake cycle."""
+        epoch_ms = int(time.time() * 1000)
+        with self._lock:
+            self._fresh_epoch_started_ms = epoch_ms
+            self._last_face_identity = None
+        with self._injected_frame_lock:
+            self._injected_frame = None
+        log_event(
+            "remote_vision_fresh_epoch_started",
+            reason=reason,
+            min_timestamp_ms=epoch_ms,
+        )
+        return epoch_ms
+
+    def reset(self, *, reason: str = "reset") -> None:
+        """Clear cached visual state so standby cannot leak an old face into the next wake."""
+        with self._lock:
+            self._fresh_epoch_started_ms = None
+            self._last_face_identity = None
+        with self._injected_frame_lock:
+            self._injected_frame = None
+        log_event("remote_vision_provider_reset", reason=reason)
+
     def stop(self) -> None:
         self._running = False
+        self.reset(reason="stop")
         if self._thread is not None:
             self._thread.join(timeout=3.0)
         if self._camera is not None:
@@ -143,7 +171,26 @@ class RemoteVisionContextProvider:
             turn_id = f"turn-{self._turn_id_counter:04d}"
             self._turn_id_counter += 1
 
-        face_identity = self._fetch_face_identity(turn_id)
+        face_identity = self._fetch_face_identity(turn_id, require_fresh=False)
+        with self._lock:
+            self._last_face_identity = face_identity
+
+        return VisionContext(
+            source="remote_vision_cache",
+            latest=None,
+            recent=[],
+            image_frames=[],
+            face_identity=face_identity,
+            face_observations=[],
+        )
+
+    def get_prepare_context(self) -> VisionContext:
+        """Fetch identity for PREPARING; stale or insufficient frames are rejected."""
+        with self._lock:
+            turn_id = f"turn-{self._turn_id_counter:04d}"
+            self._turn_id_counter += 1
+
+        face_identity = self._fetch_face_identity(turn_id, require_fresh=True)
         with self._lock:
             self._last_face_identity = face_identity
 
@@ -257,7 +304,7 @@ class RemoteVisionContextProvider:
     # 内部：从缓存取人脸识别结果
     # ------------------------------------------------------------------
 
-    def _fetch_face_identity(self, turn_id: str) -> FaceIdentitySchema | None:
+    def _fetch_face_identity(self, turn_id: str, *, require_fresh: bool) -> FaceIdentitySchema | None:
         if self._http_client is None:
             return None
         query_mode = (self.config.query_mode or "latest").strip().lower()
@@ -271,6 +318,15 @@ class RemoteVisionContextProvider:
             "window_ms": self.config.latest_window_ms,
             "max_frames": self.config.latest_max_frames,
         }
+        with self._lock:
+            min_timestamp_ms = self._fresh_epoch_started_ms
+        if query_mode == "latest":
+            if min_timestamp_ms is not None:
+                payload["min_timestamp_ms"] = min_timestamp_ms
+            if require_fresh:
+                payload["reference_timestamp_ms"] = int(time.time() * 1000)
+                payload["max_frame_age_ms"] = self.config.prepare_max_frame_age_ms
+                payload["min_frames"] = self.config.prepare_min_frames
         started = time.perf_counter()
         log_event(
             "remote_vision_from_cache_started",
@@ -279,6 +335,11 @@ class RemoteVisionContextProvider:
             stream_id=self.config.stream_id,
             window_ms=self.config.latest_window_ms,
             max_frames=self.config.latest_max_frames,
+            min_timestamp_ms=min_timestamp_ms,
+            reference_timestamp_ms=payload.get("reference_timestamp_ms"),
+            require_fresh=require_fresh,
+            max_frame_age_ms=self.config.prepare_max_frame_age_ms if query_mode == "latest" and require_fresh else None,
+            min_frames=self.config.prepare_min_frames if query_mode == "latest" and require_fresh else None,
             timeout_seconds=self.config.from_cache_timeout_s,
         )
         try:
@@ -326,6 +387,8 @@ class RemoteVisionContextProvider:
             face_payload = data.get("face_identity") or {}
             cache_query = data.get("cache_query") or {}
             video_meta = cache_query.get("video_meta") or {}
+            frame_age_ms = self._video_frame_age_ms(video_meta)
+            freshness_rejected_reason = cache_query.get("freshness_rejected_reason")
             log_event(
                 "remote_vision_from_cache_succeeded",
                 query_mode=query_mode,
@@ -335,6 +398,11 @@ class RemoteVisionContextProvider:
                 user_id=face_identity.user_id,
                 processed_frame_count=face_payload.get("processed_frame_count"),
                 cached_frame_count=video_meta.get("frame_count"),
+                video_first_timestamp_ms=video_meta.get("first_timestamp_ms"),
+                video_last_timestamp_ms=video_meta.get("last_timestamp_ms"),
+                video_last_frame_age_ms=frame_age_ms,
+                min_timestamp_ms=min_timestamp_ms,
+                freshness_rejected_reason=freshness_rejected_reason,
                 latency_ms=round((time.perf_counter() - started) * 1000, 2),
             )
             return face_identity
@@ -348,6 +416,16 @@ class RemoteVisionContextProvider:
                 latency_ms=round((time.perf_counter() - started) * 1000, 2),
             )
             logger.warning("remote_vision_from_cache_error: %s", exc)
+            return None
+
+    @staticmethod
+    def _video_frame_age_ms(video_meta: dict[str, Any]) -> int | None:
+        last_timestamp_ms = video_meta.get("last_timestamp_ms")
+        if last_timestamp_ms is None:
+            return None
+        try:
+            return max(0, int(time.time() * 1000) - int(last_timestamp_ms))
+        except (TypeError, ValueError):
             return None
 
     # ------------------------------------------------------------------

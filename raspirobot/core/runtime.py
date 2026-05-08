@@ -48,6 +48,7 @@ class RaspiRobotRuntime:
         self.eyes_driver = eyes_driver
         self._pending_working_utterance: Any | None = None
         self._strict_listening_until: float = 0.0
+        self._preparing_vision_epoch_active = False
         self._ensure_initial_state()
 
     def run_once(self) -> RuntimeLoopResult:
@@ -366,6 +367,9 @@ class RaspiRobotRuntime:
         self._exit_to_standby()
 
     def _enter_preparing(self) -> None:
+        if not self._preparing_vision_epoch_active:
+            self._begin_vision_fresh_epoch("preparing")
+            self._preparing_vision_epoch_active = True
         if self.state_machine.state != RobotRuntimeState.PREPARING:
             self.state_machine.state = RobotRuntimeState.PREPARING
             log_event("preparing_started")
@@ -385,6 +389,8 @@ class RaspiRobotRuntime:
 
     def _exit_to_standby(self) -> None:
         self._stop_face_tracking()
+        self._reset_vision_provider("standby")
+        self._preparing_vision_epoch_active = False
         self._set_eyes("sleep")
         self._start_wake_word_provider()
         self.state_machine.state = RobotRuntimeState.STANDBY
@@ -420,6 +426,27 @@ class RaspiRobotRuntime:
             self.face_tracking_lifecycle.stop()
         except Exception as exc:
             log_event("face_tracking_stop_failed", error=str(exc), level="error")
+
+    def _vision_provider(self):
+        return getattr(self.turn_manager.payload_builder, "vision_context_provider", None)
+
+    def _begin_vision_fresh_epoch(self, reason: str) -> None:
+        provider = self._vision_provider()
+        if provider is None or not hasattr(provider, "begin_fresh_epoch"):
+            return
+        try:
+            provider.begin_fresh_epoch(reason=reason)
+        except Exception as exc:
+            log_event("remote_vision_fresh_epoch_start_failed", reason=reason, error=str(exc), level="warning")
+
+    def _reset_vision_provider(self, reason: str) -> None:
+        provider = self._vision_provider()
+        if provider is None or not hasattr(provider, "reset"):
+            return
+        try:
+            provider.reset(reason=reason)
+        except Exception as exc:
+            log_event("remote_vision_provider_reset_failed", reason=reason, error=str(exc), level="warning")
 
     def _mark_remote_result_ready(self, response) -> None:
         self.event_bus.publish(

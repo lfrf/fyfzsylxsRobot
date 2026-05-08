@@ -111,12 +111,14 @@ async def query_latest_video(
     stream_id: str = Query(..., min_length=1),
     window_ms: int = Query(6000, ge=0),
     max_frames: int = Query(10, ge=1, le=60),
+    min_timestamp_ms: int | None = Query(default=None, ge=0),
 ) -> VideoQueryResponse:
     frames = video_buffer.query_latest_frames(
         session_id=session_id,
         stream_id=stream_id,
         window_ms=window_ms,
         max_frames=max_frames,
+        min_timestamp_ms=min_timestamp_ms,
     )
     return _build_response(
         session_id=session_id,

@@ -147,6 +147,8 @@ def build_vision_provider(settings: Settings):
         query_mode=os.getenv("ROBOT_VISION_QUERY_MODE", "latest"),
         latest_window_ms=int(os.getenv("ROBOT_VISION_LATEST_WINDOW_MS", "6000")),
         latest_max_frames=int(os.getenv("ROBOT_VISION_LATEST_MAX_FRAMES", "10")),
+        prepare_max_frame_age_ms=int(os.getenv("ROBOT_VISION_PREPARE_MAX_FRAME_AGE_MS", "3000")),
+        prepare_min_frames=int(os.getenv("ROBOT_VISION_PREPARE_MIN_FRAMES", "2")),
     )
     provider = RemoteVisionContextProvider(config)
     return provider, provider  # (vision_context_provider, lifecycle_handle)
