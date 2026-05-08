@@ -42,7 +42,7 @@ except Exception:  # pragma: no cover - optional runtime backend
     Picamera2 = None  # type: ignore[assignment]
 
 
-STANDBY_TILT_OFFSET_DEG = 8.0
+STANDBY_TILT_OFFSET_DEG = 12.0
 
 
 def _require_cv2() -> None:
