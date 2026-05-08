@@ -6,18 +6,25 @@
   "face_ids": [],
   "facts": [],
   "interaction_style": {},
-  "last_seen_at": "2026-05-08T10:55:47Z",
+  "last_seen_at": "2026-05-08T12:47:47Z",
   "learning_goals": [],
-  "preferences": {},
-  "preferred_mode": null,
+  "preferences": {
+    "used_mode_care": 6
+  },
+  "preferred_mode": "care",
   "privacy": {
     "consent_profile_memory": true,
     "store_face_embedding": true,
     "store_raw_images": false
   },
   "profile_summary": "",
-  "recent_topics": [],
-  "seen_count": 4,
+  "recent_topics": [
+    "刘心爽",
+    "刘心爽，刘心爽",
+    "听我说话吗",
+    "嗯"
+  ],
+  "seen_count": 10,
   "user_id": "anonymous_demo-session-001",
   "username_registered_at": "2026-05-08T10:54:49Z"
 }
