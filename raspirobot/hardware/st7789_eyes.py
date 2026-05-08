@@ -127,23 +127,10 @@ class _ST7789Display:
         self._last_expression = "neutral"
         self._lock = Lock()
 
-        # 局部刷新区域：只刷新眼睛内容所在的区域，减少传输数据量
-        # 在旋转后的坐标系中，眼睛内容约在中心 192×192 区域
-        pad = 8  # 边距
-        cx, cy = width // 2, height // 2
-        half = 96 + pad  # 192/2 + 边距
-        self._partial_rect: tuple[int, int, int, int] | None = (
-            max(0, cx - half),
-            max(0, cy - half),
-            min(width - 1, cx + half - 1),
-            min(height - 1, cy + half - 1),
-        )
-        px0, py0, px1, py1 = self._partial_rect
-        self._partial_w = px1 - px0 + 1
-        self._partial_h = py1 - py0 + 1
-        self._blank = bytearray(self._partial_w * self._partial_h * 2)
+        # 全屏刷新：GIF/PNG 素材会完整刷新到 240×320 屏幕，避免中间局部刷新裁掉全屏素材。
+        self._partial_rect: tuple[int, int, int, int] | None = None
 
-        # 初始化屏幕（复位已由外部统一完成），先整屏清黑一次，避免局部刷新外的区域保留随机显存。
+        # 初始化屏幕（复位已由外部统一完成），先整屏清黑一次。
         self._init()
         self._clear_screen()
 
