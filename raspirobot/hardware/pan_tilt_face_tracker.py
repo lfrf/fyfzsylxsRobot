@@ -82,7 +82,7 @@ class CameraConfig:
     height: int = 240
     use_picamera2: bool = True
     cv2_device_index: int = 0
-    hflip: bool = False
+    hflip: bool = True
     vflip: bool = False
 
 
