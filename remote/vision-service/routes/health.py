@@ -34,4 +34,9 @@ async def health() -> HealthResponse:
         face_embedding_history_size=settings.face_embedding_history_size,
         face_embedding_append_min_delta=settings.face_embedding_append_min_delta,
         face_match_log_top_k=settings.face_match_log_top_k,
+        face_registered_priority_min_score=settings.face_registered_priority_min_score,
+        face_registered_priority_margin=settings.face_registered_priority_margin,
+        face_unknown_confirm_observations=settings.face_unknown_confirm_observations,
+        face_auto_merge_enabled=settings.face_auto_merge_enabled,
+        face_auto_merge_margin=settings.face_auto_merge_margin,
     )

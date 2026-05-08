@@ -30,8 +30,7 @@ class FaceIdentityService:
 
     def extract_identity(self, request: FaceIdentityRequest) -> FaceIdentityResponse:
         frames = self._select_frames(request)
-        observations: list[FaceObservation] = []
-        candidates: list[tuple[FaceEmbedding, FaceMatch, FaceObservation]] = []
+        extracted_embeddings: list[FaceEmbedding] = []
 
         for frame in frames:
             embeddings = self.runtime.extract(
@@ -40,40 +39,46 @@ class FaceIdentityService:
                 width=frame.width,
                 height=frame.height,
             )
-            for embedding in embeddings:
-                match = self._match_embedding(embedding)
-                observation = self._build_observation(embedding=embedding, match=match)
-                observations.append(observation)
-                if match.record is not None:
-                    candidates.append((embedding, match, observation))
+            extracted_embeddings.extend(embeddings)
 
-        if not candidates:
+        if not extracted_embeddings:
             return FaceIdentityResponse(
                 face_identity=FaceIdentityResult(
-                    face_detected=bool(observations),
+                    face_detected=False,
                     needs_username_registration=False,
                     source=self.runtime.provider,
                 ),
-                face_observations=observations,
+                face_observations=[],
                 processed_frame_count=len(frames),
                 provider=self.runtime.provider,
             )
 
-        primary_embedding, primary_match, primary_observation = self._choose_primary(candidates)
+        primary_embedding = self._choose_primary_embedding(extracted_embeddings)
+        primary_match = self._match_embeddings(extracted_embeddings)
+        observations = [
+            self._build_observation(embedding=embedding, match=primary_match) for embedding in extracted_embeddings
+        ]
+        primary_observation = min(
+            observations,
+            key=lambda observation: 0 if observation.frame_id == primary_embedding.frame_id else 1,
+        )
         primary_observation.is_primary = True
         primary_record = primary_match.record or {}
-        is_known = bool(primary_record)
+        is_ready = primary_match.ready_for_registration
+        is_known = bool(primary_record and not primary_match.created and is_ready)
         observation_count = primary_record.get("observation_count")
         match_count = primary_record.get("match_count")
         seen_count = primary_record.get("seen_count")
         if seen_count is None:
             seen_count = match_count
-        needs_username_registration = not bool(primary_record.get("user_id")) or not bool(primary_record.get("display_name"))
+        needs_username_registration = bool(is_ready) and (
+            not bool(primary_record.get("user_id")) or not bool(primary_record.get("display_name"))
+        )
         return FaceIdentityResponse(
             face_identity=FaceIdentityResult(
                 face_detected=True,
-                face_id=primary_record.get("face_id"),
-                user_id=primary_record.get("user_id"),
+                face_id=primary_record.get("face_id") if is_ready else None,
+                user_id=primary_record.get("user_id") if is_ready else None,
                 is_known=is_known,
                 needs_username_registration=needs_username_registration,
                 match_confidence=primary_match.confidence,
@@ -90,18 +95,23 @@ class FaceIdentityService:
             provider=self.runtime.provider,
         )
 
-    def _match_embedding(self, embedding: FaceEmbedding) -> FaceMatch:
-        if embedding.source == "mock":
-            best_record, best_score = self.database.find_best_match(embedding.embedding)
+    def _match_embeddings(self, embeddings: list[FaceEmbedding]) -> FaceMatch:
+        if embeddings and all(embedding.source == "mock" for embedding in embeddings):
+            best_record, best_score = self.database.find_best_match(embeddings[0].embedding)
             return FaceMatch(record=best_record, confidence=best_score, created=False)
 
-        return self.database.match_or_create(
-            embedding=embedding.embedding,
+        return self.database.match_or_create_many(
+            embeddings=[
+                {
+                    "embedding": embedding.embedding,
+                    "source": embedding.source,
+                    "bbox": embedding.bbox,
+                    "embedding_model": embedding.embedding_model,
+                }
+                for embedding in embeddings
+            ],
             threshold=settings.face_match_threshold,
             create_unknown=settings.face_create_unknown,
-            source=embedding.source,
-            bbox=embedding.bbox,
-            embedding_model=embedding.embedding_model,
         )
 
     def _select_frames(self, request: FaceIdentityRequest) -> list[_FramePayload]:
@@ -158,11 +168,8 @@ class FaceIdentityService:
         )
 
     @staticmethod
-    def _choose_primary(
-        candidates: list[tuple[FaceEmbedding, FaceMatch, FaceObservation]]
-    ) -> tuple[FaceEmbedding, FaceMatch, FaceObservation]:
-        def score(candidate: tuple[FaceEmbedding, FaceMatch, FaceObservation]) -> tuple[float, float, float]:
-            embedding = candidate[0]
+    def _choose_primary_embedding(embeddings: list[FaceEmbedding]) -> FaceEmbedding:
+        def score(embedding: FaceEmbedding) -> tuple[float, float, float]:
             bbox = embedding.bbox or {}
             w = float(bbox.get("w") or 0.0)
             h = float(bbox.get("h") or 0.0)
@@ -176,7 +183,7 @@ class FaceIdentityService:
             center_score = max(0.0, 1.0 - center_distance)
             return (area, confidence, center_score)
 
-        return max(candidates, key=score)
+        return max(embeddings, key=score)
 
 
 face_identity_service = FaceIdentityService()

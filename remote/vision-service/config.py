@@ -90,6 +90,17 @@ class Settings:
             1.0,
         )
         self.face_match_log_top_k = max(1, int(os.getenv("FACE_MATCH_LOG_TOP_K", "3")))
+        self.face_registered_priority_min_score = min(
+            max(float(os.getenv("FACE_REGISTERED_PRIORITY_MIN_SCORE", "0.40")), 0.0),
+            1.0,
+        )
+        self.face_registered_priority_margin = min(
+            max(float(os.getenv("FACE_REGISTERED_PRIORITY_MARGIN", "0.035")), 0.0),
+            1.0,
+        )
+        self.face_unknown_confirm_observations = max(1, int(os.getenv("FACE_UNKNOWN_CONFIRM_OBSERVATIONS", "2")))
+        self.face_auto_merge_enabled = _env_bool("FACE_AUTO_MERGE_ENABLED", "true")
+        self.face_auto_merge_margin = min(max(float(os.getenv("FACE_AUTO_MERGE_MARGIN", "0.05")), 0.0), 1.0)
         self.insightface_model_name = (
             os.getenv("INSIGHTFACE_MODEL_NAME", os.getenv("FACE_INSIGHTFACE_MODEL", "buffalo_l")).strip()
             or "buffalo_l"

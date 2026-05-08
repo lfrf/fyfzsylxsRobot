@@ -141,3 +141,8 @@ class HealthResponse(BaseModel):
     face_embedding_history_size: int
     face_embedding_append_min_delta: float
     face_match_log_top_k: int
+    face_registered_priority_min_score: float
+    face_registered_priority_margin: float
+    face_unknown_confirm_observations: int
+    face_auto_merge_enabled: bool
+    face_auto_merge_margin: float
