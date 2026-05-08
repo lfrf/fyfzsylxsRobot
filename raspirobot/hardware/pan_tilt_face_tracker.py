@@ -42,6 +42,9 @@ except Exception:  # pragma: no cover - optional runtime backend
     Picamera2 = None  # type: ignore[assignment]
 
 
+STANDBY_TILT_OFFSET_DEG = 8.0
+
+
 def _require_cv2() -> None:
     if cv2 is None:
         raise RuntimeError("opencv-python is required. Install: pip install opencv-python") from _CV2_IMPORT_ERROR
@@ -153,9 +156,16 @@ class PanTiltServoDriver:
             self.config.tilt_spec.center_angle_deg,
         )
 
-    def restore_center_smooth(self, *, step_deg: float = 3.0, step_interval_s: float = 0.03) -> int:
-        target_pan = self.config.pan_spec.center_angle_deg
-        target_tilt = self.config.tilt_spec.center_angle_deg
+    def move_to_pose_smooth(
+        self,
+        pan_deg: float,
+        tilt_deg: float,
+        *,
+        step_deg: float = 3.0,
+        step_interval_s: float = 0.03,
+    ) -> int:
+        target_pan = self._clip(pan_deg, self.config.pan_spec)
+        target_tilt = self._clip(tilt_deg, self.config.tilt_spec)
         start_pan = self.pan_deg
         start_tilt = self.tilt_deg
         max_delta = max(abs(target_pan - start_pan), abs(target_tilt - start_tilt))
@@ -169,8 +179,30 @@ class PanTiltServoDriver:
             if index < steps:
                 time.sleep(max(0.0, step_interval_s))
 
-        self.restore_center()
+        self.set_pose(target_pan, target_tilt)
         return steps
+
+    def restore_center_smooth(self, *, step_deg: float = 3.0, step_interval_s: float = 0.03) -> int:
+        return self.move_to_pose_smooth(
+            self.config.pan_spec.center_angle_deg,
+            self.config.tilt_spec.center_angle_deg,
+            step_deg=step_deg,
+            step_interval_s=step_interval_s,
+        )
+
+    def restore_standby_pose_smooth(
+        self,
+        *,
+        standby_tilt_offset_deg: float = STANDBY_TILT_OFFSET_DEG,
+        step_deg: float = 3.0,
+        step_interval_s: float = 0.03,
+    ) -> int:
+        return self.move_to_pose_smooth(
+            self.config.pan_spec.center_angle_deg,
+            self.config.tilt_spec.center_angle_deg + standby_tilt_offset_deg,
+            step_deg=step_deg,
+            step_interval_s=step_interval_s,
+        )
 
     def set_pose(self, pan_deg: float, tilt_deg: float) -> None:
         pan_deg = self._clip(pan_deg, self.config.pan_spec)
@@ -577,16 +609,19 @@ class FaceTrackingPanTiltRunner:
                     target_tilt_deg=self.servo.config.tilt_spec.center_angle_deg,
                 )
                 restore_steps = self.servo.restore_center_smooth()
+                standby_steps = self.servo.restore_standby_pose_smooth()
                 restore_elapsed_ms = int((time.time() - restore_started_at) * 1000)
                 log_event(
-                    "face_tracking_servo_restore_center_done",
+                    "face_tracking_servo_restore_standby_pose_done",
                     pan_deg=self.servo.pan_deg,
                     tilt_deg=self.servo.tilt_deg,
                     pan_hw_deg=self.servo.pan_hw_deg,
                     tilt_hw_deg=self.servo.tilt_hw_deg,
                     pan_zero_offset_deg=self.servo.config.pan_zero_offset_deg,
                     tilt_zero_offset_deg=self.servo.config.tilt_zero_offset_deg,
-                    restore_steps=restore_steps,
+                    center_restore_steps=restore_steps,
+                    standby_restore_steps=standby_steps,
+                    standby_tilt_offset_deg=STANDBY_TILT_OFFSET_DEG,
                     restore_elapsed_ms=restore_elapsed_ms,
                 )
             except Exception as exc:
