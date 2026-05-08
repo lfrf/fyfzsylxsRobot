@@ -6,10 +6,10 @@
   "face_ids": [],
   "facts": [],
   "interaction_style": {},
-  "last_seen_at": "2026-05-08T12:47:47Z",
+  "last_seen_at": "2026-05-08T12:57:11Z",
   "learning_goals": [],
   "preferences": {
-    "used_mode_care": 6
+    "used_mode_care": 12
   },
   "preferred_mode": "care",
   "privacy": {
@@ -22,9 +22,10 @@
     "刘心爽",
     "刘心爽，刘心爽",
     "听我说话吗",
+    "你不该先问我我的名字吗",
     "嗯"
   ],
-  "seen_count": 10,
+  "seen_count": 12,
   "user_id": "anonymous_demo-session-001",
   "username_registered_at": "2026-05-08T10:54:49Z"
 }
