@@ -89,6 +89,21 @@ class FaceIdentityResponse(BaseModel):
     provider: str
 
 
+class LinkFaceUserRequest(BaseModel):
+    face_id: str = Field(..., min_length=1)
+    user_id: str = Field(..., min_length=1)
+    display_name: str | None = None
+
+
+class LinkFaceUserResponse(BaseModel):
+    success: bool
+    face_id: str
+    user_id: str
+    display_name: str | None = None
+    record: dict | None = None
+    error: str | None = None
+
+
 class HealthResponse(BaseModel):
     status: str
     extractor_mode: str
@@ -105,3 +120,6 @@ class HealthResponse(BaseModel):
     fer_provider: str
     fer_model_name: str
     fer_device: str
+    face_db_dir: str
+    face_db_path: str
+    face_recognition_provider: str

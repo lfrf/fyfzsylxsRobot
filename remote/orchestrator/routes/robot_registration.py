@@ -6,6 +6,7 @@ from pathlib import Path
 from time import perf_counter
 from uuid import uuid4
 
+import httpx
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
@@ -20,6 +21,7 @@ for candidate in SHARED_PATH_CANDIDATES:
 
 from clients.asr_client import asr_client  # noqa: E402
 from clients.tts_client import tts_client  # noqa: E402
+from config import settings  # noqa: E402
 from contracts.schemas import (  # noqa: E402
     EmotionResult,
     RobotAction,
@@ -31,7 +33,7 @@ from contracts.schemas import (  # noqa: E402
 )
 from logging_utils import log_event  # noqa: E402
 from services.mode_policy import get_mode_service  # noqa: E402
-from services.profile import user_profile_service  # noqa: E402
+from services.profile import profile_store, user_profile_service  # noqa: E402
 from services.robot_action_service import robot_action_service  # noqa: E402
 
 router = APIRouter(prefix="/v1/robot", tags=["robot-registration"])
@@ -121,10 +123,19 @@ async def prepare_user(request: PrepareUserRequest) -> PrepareUserResponse:
             reason="no_face",
         )
 
-    identity = user_profile_service.resolve_identity(_IdentityRequest(request))
-    profile = identity.profile
+    face_id = str(face_identity.face_id)
+    existing_user_id = profile_store.get_user_id_for_face(face_id)
+    if existing_user_id:
+        profile = profile_store.ensure_user(existing_user_id, face_id=face_id)
+    else:
+        profile = profile_store.create_user_for_face(face_id)
     display_name = getattr(profile, "display_name", None)
     needs_username_registration = not bool(getattr(profile, "username_registered_at", None)) or not bool(display_name)
+    sync_result = _sync_vision_face_user(
+        face_id=face_id,
+        user_id=profile.user_id,
+        display_name=None if needs_username_registration else display_name,
+    )
     reply_text = (
         USERNAME_PROMPT_TEXT
         if needs_username_registration
@@ -136,13 +147,14 @@ async def prepare_user(request: PrepareUserRequest) -> PrepareUserResponse:
         trace_id=trace_id,
         started=started,
         face_detected=True,
-        user_id=identity.user_id,
-        face_id=identity.face_id,
+        user_id=profile.user_id,
+        face_id=face_id,
         display_name=display_name,
         needs_username_registration=needs_username_registration,
         reply_text=reply_text,
         mode_policy=mode_policy,
         reason="needs_username" if needs_username_registration else "known_user",
+        extra_debug={"vision_sync": sync_result},
     )
 
 
@@ -165,10 +177,15 @@ async def register_username(request: RegisterUsernameRequest) -> RegisterUsernam
         profile = user_profile_service.update_display_name(request.user_id, nickname)
         reply_text = USERNAME_CONFIRM_TEMPLATE.format(display_name=profile.display_name)
         display_name = profile.display_name
+        sync_results = [
+            _sync_vision_face_user(face_id=face_id, user_id=profile.user_id, display_name=profile.display_name)
+            for face_id in profile.face_ids
+        ]
         success = True
     else:
         reply_text = USERNAME_NOT_HEARD_TEXT
         display_name = None
+        sync_results = []
         success = False
 
     emotion = EmotionResult(label="neutral", confidence=1.0)
@@ -206,15 +223,9 @@ async def register_username(request: RegisterUsernameRequest) -> RegisterUsernam
             "latency_ms": round((perf_counter() - started) * 1000, 2),
             "asr_source": asr_result.source,
             "tts_source": tts_result.source,
+            "vision_sync": sync_results,
         },
     )
-
-
-class _IdentityRequest:
-    def __init__(self, request: PrepareUserRequest) -> None:
-        self.session_id = request.session_id
-        self.request_options = request.request_options
-        self.vision_context = request.vision_context
 
 
 def _prepare_response(
@@ -230,6 +241,7 @@ def _prepare_response(
     reply_text: str,
     mode_policy,
     reason: str,
+    extra_debug: dict | None = None,
 ) -> PrepareUserResponse:
     emotion = EmotionResult(label="neutral", confidence=1.0)
     robot_action = robot_action_service.for_chat(mode_policy, emotion)
@@ -278,8 +290,45 @@ def _prepare_response(
             "reason": reason,
             "latency_ms": round((perf_counter() - started) * 1000, 2),
             "tts_source": tts_source,
+            **(extra_debug or {}),
         },
     )
+
+
+def _sync_vision_face_user(*, face_id: str, user_id: str, display_name: str | None) -> dict:
+    if not settings.vision_service_enabled or not settings.vision_service_base:
+        return {"success": False, "skipped": True, "reason": "vision_service_disabled"}
+    url = f"{settings.vision_service_base.rstrip('/')}/v1/vision/identity/link-user"
+    payload = {
+        "face_id": face_id,
+        "user_id": user_id,
+        "display_name": display_name,
+    }
+    try:
+        with httpx.Client(timeout=settings.vision_service_timeout_seconds) as client:
+            response = client.post(url, json=payload)
+            response.raise_for_status()
+        body = response.json()
+        log_event(
+            "vision_face_user_sync_done",
+            face_id=face_id,
+            user_id=user_id,
+            display_name=display_name,
+            success=body.get("success"),
+            url=url,
+        )
+        return {"success": bool(body.get("success")), "url": url, "error": body.get("error")}
+    except Exception as exc:
+        log_event(
+            "vision_face_user_sync_failed",
+            face_id=face_id,
+            user_id=user_id,
+            display_name=display_name,
+            url=url,
+            error=str(exc),
+            level="warning",
+        )
+        return {"success": False, "url": url, "error": str(exc)}
 
 
 def _extract_nickname(text: str | None) -> str | None:

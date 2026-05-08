@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from fastapi import APIRouter
 
 from config import settings
@@ -24,4 +26,7 @@ async def health() -> HealthResponse:
         fer_provider=settings.fer_provider,
         fer_model_name=settings.fer_model_name,
         fer_device=settings.fer_device,
+        face_db_dir=settings.face_db_dir,
+        face_db_path=str(Path(settings.face_db_dir) / "faces.json"),
+        face_recognition_provider=settings.face_recognition_provider,
     )

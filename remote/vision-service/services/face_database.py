@@ -55,6 +55,35 @@ class FaceDatabase:
                 return record
         return None
 
+    def link_user(self, *, face_id: str, user_id: str, display_name: str | None = None) -> dict[str, Any] | None:
+        data = self._load()
+        for record in data.get("faces", []):
+            if record.get("face_id") != face_id:
+                continue
+            record["user_id"] = user_id
+            if display_name is not None:
+                record["display_name"] = display_name
+            record["last_seen_at"] = _now_iso()
+            self._save(data)
+            return record
+        record = {
+            "face_id": face_id,
+            "user_id": user_id,
+            "display_name": display_name,
+            "embedding": [],
+            "observation_count": 0,
+            "match_count": 0,
+            "seen_count": 0,
+            "created_at": _now_iso(),
+            "last_seen_at": _now_iso(),
+            "source": "orchestrator_link_user",
+            "embedding_model": None,
+            "last_bbox": None,
+        }
+        data.setdefault("faces", []).append(record)
+        self._save(data)
+        return record
+
     def find_best_match(self, embedding: list[float]) -> tuple[dict[str, Any] | None, float | None]:
         best_record: dict[str, Any] | None = None
         best_score: float | None = None
