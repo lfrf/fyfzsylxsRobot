@@ -9,6 +9,8 @@ from shared.logging_utils import log_event
 class RobotRuntimeState(str, Enum):
     IDLE = "IDLE"
     STANDBY = "STANDBY"          # 待机：唤醒词监听中，OLED 显示 sleep
+    PREPARING = "PREPARING"      # 预备：启动视觉/识别链路，不处理语音输入
+    WORKING = "WORKING"          # 工作：正常交互主状态，内部包含 LISTENING/RECORDING/... 循环
     WAKE_DETECTED = "WAKE_DETECTED"
     LISTENING = "LISTENING"
     RECORDING = "RECORDING"
@@ -77,6 +79,26 @@ class RobotStateMachine:
             self._log_transition(event, from_state, turn_id=turn_id)
             return self.state
 
+        if self.state == RobotRuntimeState.STANDBY and event == RobotEvent.WAKE_WORD_DETECTED:
+            self.state = RobotRuntimeState.PREPARING
+            self._log_transition(event, from_state, turn_id=turn_id)
+            return self.state
+
+        if self.state == RobotRuntimeState.PREPARING and event == RobotEvent.WAKE_ACK_DONE:
+            self.state = RobotRuntimeState.WORKING
+            self._log_transition(event, from_state, turn_id=turn_id)
+            return self.state
+
+        if self.state == RobotRuntimeState.WORKING and event == RobotEvent.SPEECH_START:
+            self.state = RobotRuntimeState.RECORDING
+            self._log_transition(event, from_state, turn_id=turn_id)
+            return self.state
+
+        if self.state == RobotRuntimeState.WORKING and event == RobotEvent.NEW_SPEECH_INPUT:
+            self.state = RobotRuntimeState.LISTENING
+            self._log_transition(event, from_state, turn_id=turn_id)
+            return self.state
+
         if event == RobotEvent.NEW_SPEECH_INPUT and self.state in BUSY_STATES:
             self.busy_hint_requested = True
             self._log_transition(event, from_state, turn_id=turn_id, busy_hint_requested=True)
@@ -87,6 +109,10 @@ class RobotStateMachine:
         elif self.state == RobotRuntimeState.STANDBY and event == RobotEvent.WAKE_WORD_DETECTED:
             self.state = RobotRuntimeState.WAKE_DETECTED
         elif self.state == RobotRuntimeState.WAKE_DETECTED and event == RobotEvent.WAKE_ACK_DONE:
+            self.state = RobotRuntimeState.PREPARING
+        elif self.state == RobotRuntimeState.PREPARING and event == RobotEvent.WAKE_ACK_DONE:
+            self.state = RobotRuntimeState.WORKING
+        elif self.state == RobotRuntimeState.WORKING and event == RobotEvent.WAKE_ACK_DONE:
             self.state = RobotRuntimeState.LISTENING
         elif self.state == RobotRuntimeState.LISTENING and event == RobotEvent.SPEECH_START:
             self.state = RobotRuntimeState.RECORDING

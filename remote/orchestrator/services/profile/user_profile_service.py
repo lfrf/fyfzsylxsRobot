@@ -67,6 +67,8 @@ class UserProfileService:
                 is_anonymous=False,
                 profile=profile,
             )
+            if not profile.display_name or profile.display_name == "未命名用户":
+                identity.is_anonymous = True
             self._log_identity(identity)
             return identity
 
@@ -189,6 +191,19 @@ class UserProfileService:
             display_name=identity.display_name,
             is_anonymous=identity.is_anonymous,
         )
+
+    def update_display_name(self, user_id: str, display_name: str) -> Any:
+        profile = self.store.update_display_name(user_id, display_name)
+        identity = IdentityResolution(
+            user_id=profile.user_id,
+            identity_source="username_registered",
+            face_id=profile.face_ids[0] if profile.face_ids else None,
+            display_name=profile.display_name,
+            is_anonymous=False,
+            profile=profile,
+        )
+        self._log_identity(identity)
+        return profile
 
     def _event_tags(self, text: str, mode_id: str) -> list[str]:
         tags = [f"mode:{mode_id}"]

@@ -84,6 +84,19 @@ class RobotChatService:
             mode_id=current_mode,
         )
 
+        username_registration = self._maybe_handle_username_registration(
+            identity=identity,
+            request=request,
+            asr_text=asr_text,
+            current_mode=current_mode,
+            trace_id=trace_id,
+            total_started=total_started,
+            asr_result=asr_result,
+            profile_context_result=profile_context_result,
+        )
+        if username_registration is not None:
+            return username_registration
+
         # ===== GAME MODE LOGIC (highest priority for exits) =====
         # Check for game exit intent (highest priority) - return to care mode
         if game_state_service.detect_exit_intent(asr_text):
@@ -555,6 +568,125 @@ class RobotChatService:
             request_options=request.request_options,
         )
 
+    def _maybe_handle_username_registration(
+        self,
+        *,
+        identity,
+        request: RobotChatRequest,
+        asr_text: str,
+        current_mode: str,
+        trace_id: str,
+        total_started: float,
+        asr_result,
+        profile_context_result,
+    ):
+        profile = getattr(identity, "profile", None)
+        display_name = getattr(profile, "display_name", None) if profile else None
+        needs_registration = bool(identity and identity.user_id and (identity.is_anonymous or not display_name or display_name == "未命名用户"))
+        if not needs_registration:
+            return None
+
+        prompt_text = "你希望我怎么称呼你呢？"
+        return self._build_username_prompt_response(
+            identity=identity,
+            request=request,
+            asr_text=asr_text,
+            current_mode=current_mode,
+            trace_id=trace_id,
+            total_started=total_started,
+            asr_result=asr_result,
+            profile_context_result=profile_context_result,
+            prompt_text=prompt_text,
+        )
+
+    def _build_username_prompt_response(
+        self,
+        *,
+        identity,
+        request: RobotChatRequest,
+        asr_text: str,
+        current_mode: str,
+        trace_id: str,
+        total_started: float,
+        asr_result,
+        profile_context_result,
+        prompt_text: str,
+    ) -> RobotChatResponse:
+        emotion = EmotionResult(label="neutral", confidence=1.0)
+        policy = get_mode_service(current_mode).get_policy()
+        rag_route = self.rag.route_for_mode(policy)
+        robot_action = self.actions.for_chat(policy, emotion)
+        tts_client_result = self.tts.synthesize(
+            text=prompt_text,
+            session_id=request.session_id,
+            turn_id=request.turn_id,
+            mode=policy.mode_id,
+            speech_style=policy.speech_style,
+        )
+        memory_result = self._record_profile_turn(
+            identity=identity,
+            request=request,
+            mode_id=policy.mode_id,
+            asr_text=asr_text,
+            reply_text=prompt_text,
+            emotion=emotion,
+        )
+        response = RobotChatResponse(
+            success=True,
+            session_id=request.session_id,
+            turn_id=request.turn_id,
+            mode=policy.to_mode_info(),
+            mode_switch=ModeSwitchResult(
+                switched=False,
+                from_mode=current_mode,
+                to_mode=current_mode,
+                reason="username registration prompt",
+                confirmation_text=prompt_text,
+            ),
+            mode_changed=False,
+            active_rag_namespace=rag_route.namespace,
+            asr_text=asr_text,
+            reply_text=prompt_text,
+            emotion=emotion,
+            tts=tts_client_result.tts,
+            robot_action=robot_action,
+            debug=self._build_debug(
+                trace_id=trace_id,
+                total_started=total_started,
+                asr_result=asr_result,
+                llm_result=None,
+                tts_result=tts_client_result,
+                speech_service_url=getattr(self.asr, "base_url", None),
+                tts_service_url=getattr(self.tts, "base_url", None),
+                llm_api_base=getattr(self.llm, "api_base", None),
+                rag_route_source=rag_route.source,
+                rag_context_used=False,
+                rag_matched_files=[],
+                rag_context_chars=0,
+                rag_used_default_docs=False,
+                requested_mode=request.mode,
+                current_mode=current_mode,
+                display_name=getattr(getattr(identity, "profile", None), "display_name", None),
+                active_rag_namespace=rag_route.namespace,
+                llm_skipped="username_registration",
+                profile_debug=self._profile_debug(
+                    identity=identity,
+                    profile_context_result=profile_context_result,
+                    memory_result=memory_result,
+                ),
+            ),
+        )
+        self._log_response_ready(
+            response,
+            trace_id=trace_id,
+            asr_source=asr_result.source,
+            llm_source="skipped:username_registration",
+            tts_source=tts_client_result.source,
+            rag_context_used=False,
+            rag_matched_files=[],
+        )
+        return response
+
     def _profile_debug(self, *, identity, profile_context_result, memory_result=None) -> dict:
         return {
             "used": bool(identity and identity.user_id),
@@ -579,6 +711,21 @@ class RobotChatService:
         if llm_result is None:
             return fallback
         return getattr(llm_result, "source", None) or fallback
+
+    def handle_username_registration(self, *, user_id: str, display_name: str, request: RobotChatRequest | None = None) -> dict:
+        profile = self.profile_service.update_display_name(user_id, display_name)
+        log_event(
+            "username_registration_completed",
+            user_id=profile.user_id,
+            display_name=profile.display_name,
+            request_session_id=getattr(request, "session_id", None),
+            request_turn_id=getattr(request, "turn_id", None),
+        )
+        return {
+            "user_id": profile.user_id,
+            "display_name": profile.display_name,
+            "username_registered_at": profile.username_registered_at,
+        }
 
     def _build_debug(
         self,

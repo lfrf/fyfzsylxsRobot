@@ -62,6 +62,8 @@ class ProfileStore:
 
         profile.last_seen_at = now
         profile.seen_count += 1
+        if display_name and display_name != "未命名用户" and not profile.username_registered_at:
+            profile.username_registered_at = now
         if face_id:
             safe_face_id = safe_identifier(face_id, fallback="face")
             if safe_face_id not in profile.face_ids:
@@ -78,6 +80,17 @@ class ProfileStore:
         user_id = f"user_{safe_face_id}"
         profile = self.ensure_user(user_id, display_name=display_name, face_id=safe_face_id)
         self.map_face_to_user(safe_face_id, profile.user_id)
+        return profile
+
+    def update_display_name(self, user_id: str, display_name: str) -> UserProfile:
+        safe_user_id = safe_identifier(user_id, fallback="anonymous")
+        profile = self.get_profile(safe_user_id)
+        if profile is None:
+            profile = UserProfile(user_id=safe_user_id, display_name=display_name, created_at=utc_now_iso())
+        profile.display_name = display_name
+        profile.username_registered_at = utc_now_iso()
+        profile.last_seen_at = utc_now_iso()
+        self.save_profile(profile)
         return profile
 
     def save_profile(self, profile: UserProfile) -> None:

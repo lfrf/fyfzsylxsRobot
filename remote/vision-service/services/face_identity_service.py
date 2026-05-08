@@ -51,6 +51,7 @@ class FaceIdentityService:
             return FaceIdentityResponse(
                 face_identity=FaceIdentityResult(
                     face_detected=bool(observations),
+                    needs_username_registration=False,
                     source=self.runtime.provider,
                 ),
                 face_observations=observations,
@@ -67,12 +68,14 @@ class FaceIdentityService:
         seen_count = primary_record.get("seen_count")
         if seen_count is None:
             seen_count = match_count
+        needs_username_registration = not bool(primary_record.get("user_id")) or not bool(primary_record.get("display_name"))
         return FaceIdentityResponse(
             face_identity=FaceIdentityResult(
                 face_detected=True,
                 face_id=primary_record.get("face_id"),
                 user_id=primary_record.get("user_id"),
                 is_known=is_known,
+                needs_username_registration=needs_username_registration,
                 match_confidence=primary_match.confidence,
                 bbox=primary_embedding.bbox,
                 source=primary_embedding.source,

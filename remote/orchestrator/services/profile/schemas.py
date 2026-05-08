@@ -41,6 +41,7 @@ class UserProfile(BaseModel):
     seen_count: int = Field(default=0, ge=0)
     preferred_mode: str | None = None
     profile_summary: str = Field(default="")
+    username_registered_at: str | None = None
     preferences: dict[str, Any] = Field(default_factory=dict)
     facts: list[UserFact] = Field(default_factory=list)
     recent_topics: list[str] = Field(default_factory=list)

@@ -248,6 +248,7 @@ class FaceIdentitySchema(BaseModel):
     face_id: str | None = None
     user_id: str | None = None
     is_known: bool = False
+    needs_username_registration: bool = False
     match_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
     display_name: str | None = None
     bbox: FaceBoxSchema | None = None

@@ -48,33 +48,48 @@ class RaspiRobotRuntime:
         self._ensure_initial_state()
 
     def run_once(self) -> RuntimeLoopResult:
-        # 待机模式：等待唤醒词
         if self.state_machine.state == RobotRuntimeState.STANDBY:
-            self._start_wake_word_provider()
-            if self.wake_word_provider is not None and self.wake_word_provider.poll():
-                log_event("wake_word_triggered")
-                self._stop_wake_word_provider()
-                self._start_face_tracking()
-                self.state_machine.transition(RobotEvent.WAKE_WORD_DETECTED)
-                self.state_machine.transition(RobotEvent.WAKE_ACK_DONE)
-                self._set_eyes("listening")
+            return self._run_standby_once()
+        if self.state_machine.state == RobotRuntimeState.PREPARING:
+            return self._run_preparing_once()
+        if self.state_machine.state in {
+            RobotRuntimeState.WORKING,
+            RobotRuntimeState.LISTENING,
+            RobotRuntimeState.RECORDING,
+            RobotRuntimeState.UPLOADING,
+            RobotRuntimeState.THINKING,
+            RobotRuntimeState.SPEAKING,
+        }:
+            return self._run_working_once()
+        if self.state_machine.state == RobotRuntimeState.ERROR_FALLBACK:
+            self.state_machine.transition(RobotEvent.RECOVERY_DONE)
             return RuntimeLoopResult(handled=False, state=self.state_machine.state)
+        return RuntimeLoopResult(handled=False, state=self.state_machine.state)
 
-        if not self.state_machine.can_accept_speech():
-            self.state_machine.transition(RobotEvent.NEW_SPEECH_INPUT)
-            return RuntimeLoopResult(handled=False, state=self.state_machine.state)
+    def _run_standby_once(self) -> RuntimeLoopResult:
+        self._start_wake_word_provider()
+        if self.wake_word_provider is not None and self.wake_word_provider.poll():
+            log_event("wake_word_triggered")
+            self._stop_wake_word_provider()
+            self.state_machine.transition(RobotEvent.WAKE_WORD_DETECTED)
+            self._enter_preparing()
+        return RuntimeLoopResult(handled=False, state=self.state_machine.state)
 
-        self._stop_wake_word_provider()
+    def _run_preparing_once(self) -> RuntimeLoopResult:
+        self._enter_preparing()
+        return RuntimeLoopResult(handled=False, state=self.state_machine.state)
+
+    def _run_working_once(self) -> RuntimeLoopResult:
+        self._enter_working_listening()
         speech_start_timeout = self.work_idle_timeout_seconds if self.wake_word_provider is not None else None
         utterance = self.listener.listen_once(speech_start_timeout_seconds=speech_start_timeout)
         if utterance is None:
-            if self.wake_word_provider is not None:
-                log_event(
-                    "work_idle_timeout",
-                    timeout_seconds=self.work_idle_timeout_seconds,
-                )
-                self.state_machine.transition(RobotEvent.WORK_IDLE_TIMEOUT)
-                self._enter_standby()
+            log_event(
+                "work_idle_timeout",
+                timeout_seconds=self.work_idle_timeout_seconds,
+            )
+            self.state_machine.transition(RobotEvent.WORK_IDLE_TIMEOUT)
+            self._exit_to_standby()
             return RuntimeLoopResult(handled=False, state=self.state_machine.state)
 
         self.event_bus.publish(RuntimeEvent(RuntimeEventType.SPEECH_STARTED))
@@ -102,7 +117,6 @@ class RaspiRobotRuntime:
             self.event_bus.publish(RuntimeEvent(RuntimeEventType.PLAYBACK_DONE))
             self.state_machine.transition(RobotEvent.PLAYBACK_DONE)
 
-            # Apply post-playback cooldown if configured
             if self.post_playback_cooldown_ms > 0:
                 log_event(
                     "playback_cooldown_started",
@@ -164,7 +178,28 @@ class RaspiRobotRuntime:
     def _enter_standby(self) -> None:
         self._stop_face_tracking()
         self._set_eyes("sleep")
+        self.state_machine.state = RobotRuntimeState.STANDBY
         self._start_wake_word_provider()
+
+    def _enter_preparing(self) -> None:
+        if self.state_machine.state != RobotRuntimeState.PREPARING:
+            self.state_machine.state = RobotRuntimeState.PREPARING
+            log_event("preparing_started")
+        self._start_face_tracking()
+        self.state_machine.transition(RobotEvent.WAKE_ACK_DONE)
+        self._set_eyes("listening")
+
+    def _enter_working_listening(self) -> None:
+        self.state_machine.state = RobotRuntimeState.WORKING
+        self._stop_wake_word_provider()
+        self._set_eyes("listening")
+        log_event("working_listening_ready")
+
+    def _exit_to_standby(self) -> None:
+        self._stop_face_tracking()
+        self._set_eyes("sleep")
+        self._start_wake_word_provider()
+        self.state_machine.state = RobotRuntimeState.STANDBY
 
     def _start_wake_word_provider(self) -> None:
         if self.wake_word_provider is None:
