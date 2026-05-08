@@ -61,5 +61,47 @@ class VideoBuffer:
         with self._lock:
             return list(self._frames.get(key, deque()))
 
+    def query_latest_frames(
+        self,
+        *,
+        session_id: str,
+        stream_id: str,
+        window_ms: int,
+        max_frames: int,
+    ) -> list[VideoFrameItem]:
+        session_key = str(session_id)
+        stream_key = str(stream_id)
+        window_ms = max(0, int(window_ms))
+        max_frames = max(1, int(max_frames))
+
+        with self._lock:
+            frames = [
+                frame
+                for (stored_session_id, _turn_id, stored_stream_id), bucket in self._frames.items()
+                if stored_session_id == session_key and stored_stream_id == stream_key
+                for frame in bucket
+            ]
+
+        if not frames:
+            return []
+
+        frames.sort(key=lambda frame: frame.timestamp_ms)
+        latest_ts = frames[-1].timestamp_ms
+        if window_ms > 0:
+            cutoff = latest_ts - window_ms
+            frames = [frame for frame in frames if frame.timestamp_ms >= cutoff]
+
+        if len(frames) <= max_frames:
+            return frames
+
+        if max_frames == 1:
+            return [frames[-1]]
+
+        # Uniform sampling keeps coverage across the recent window instead of
+        # returning only adjacent frames that may share the same blur/pose.
+        last_index = len(frames) - 1
+        indexes = [round(index * last_index / (max_frames - 1)) for index in range(max_frames)]
+        return [frames[index] for index in indexes]
+
 
 video_buffer = VideoBuffer()

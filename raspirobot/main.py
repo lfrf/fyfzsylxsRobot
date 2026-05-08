@@ -143,6 +143,10 @@ def build_vision_provider(settings: Settings):
         stream_id=os.getenv("ROBOT_VISION_STREAM_ID", "video-main"),
         upload_every_n_frames=int(os.getenv("ROBOT_VISION_UPLOAD_EVERY", "3")),
         capture_interval_s=float(os.getenv("ROBOT_VISION_CAPTURE_INTERVAL_S", "0.2")),
+        from_cache_timeout_s=float(os.getenv("ROBOT_VISION_FROM_CACHE_TIMEOUT_S", "30")),
+        query_mode=os.getenv("ROBOT_VISION_QUERY_MODE", "latest"),
+        latest_window_ms=int(os.getenv("ROBOT_VISION_LATEST_WINDOW_MS", "6000")),
+        latest_max_frames=int(os.getenv("ROBOT_VISION_LATEST_MAX_FRAMES", "10")),
     )
     provider = RemoteVisionContextProvider(config)
     return provider, provider  # (vision_context_provider, lifecycle_handle)

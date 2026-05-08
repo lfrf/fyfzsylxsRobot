@@ -39,19 +39,13 @@ class VideoQueryResponse(BaseModel):
     frames: list[VideoFrameOut] = Field(default_factory=list)
 
 
-@router.get("/query", response_model=VideoQueryResponse)
-async def query_video(
-    session_id: str = Query(..., min_length=1),
-    turn_id: str = Query(..., min_length=1),
-    stream_id: str = Query(..., min_length=1),
+def _build_response(
+    *,
+    session_id: str,
+    turn_id: str | int,
+    stream_id: str,
+    frames,
 ) -> VideoQueryResponse:
-    # Try numeric turn_id as well, in case frames were stored with int key
-    frames = video_buffer.query_frames(session_id=session_id, turn_id=turn_id, stream_id=stream_id)
-    if not frames:
-        try:
-            frames = video_buffer.query_frames(session_id=session_id, turn_id=int(turn_id), stream_id=stream_id)
-        except (ValueError, TypeError):
-            pass
     if frames:
         first_ts = min(frame.timestamp_ms for frame in frames)
         last_ts = max(frame.timestamp_ms for frame in frames)
@@ -73,15 +67,60 @@ async def query_video(
         turn_id=turn_id,
         stream_id=stream_id,
         video_meta=meta,
-        frames=[VideoFrameOut(
-            session_id=frame.session_id,
-            turn_id=frame.turn_id,
-            stream_id=frame.stream_id,
-            frame_id=frame.frame_id,
-            timestamp_ms=frame.timestamp_ms,
-            width=frame.width,
-            height=frame.height,
-            mime_type=frame.mime_type,
-            image_base64=frame.image_base64,
-        ) for frame in frames],
+        frames=[
+            VideoFrameOut(
+                session_id=frame.session_id,
+                turn_id=frame.turn_id,
+                stream_id=frame.stream_id,
+                frame_id=frame.frame_id,
+                timestamp_ms=frame.timestamp_ms,
+                width=frame.width,
+                height=frame.height,
+                mime_type=frame.mime_type,
+                image_base64=frame.image_base64,
+            )
+            for frame in frames
+        ],
+    )
+
+
+@router.get("/query", response_model=VideoQueryResponse)
+async def query_video(
+    session_id: str = Query(..., min_length=1),
+    turn_id: str = Query(..., min_length=1),
+    stream_id: str = Query(..., min_length=1),
+) -> VideoQueryResponse:
+    # Try numeric turn_id as well, in case frames were stored with int key
+    frames = video_buffer.query_frames(session_id=session_id, turn_id=turn_id, stream_id=stream_id)
+    if not frames:
+        try:
+            frames = video_buffer.query_frames(session_id=session_id, turn_id=int(turn_id), stream_id=stream_id)
+        except (ValueError, TypeError):
+            pass
+    return _build_response(
+        session_id=session_id,
+        turn_id=turn_id,
+        stream_id=stream_id,
+        frames=frames,
+    )
+
+
+@router.get("/query-latest", response_model=VideoQueryResponse)
+async def query_latest_video(
+    session_id: str = Query(..., min_length=1),
+    stream_id: str = Query(..., min_length=1),
+    window_ms: int = Query(6000, ge=0),
+    max_frames: int = Query(10, ge=1, le=60),
+) -> VideoQueryResponse:
+    frames = video_buffer.query_latest_frames(
+        session_id=session_id,
+        stream_id=stream_id,
+        window_ms=window_ms,
+        max_frames=max_frames,
+    )
+    return _build_response(
+        session_id=session_id,
+        turn_id="latest",
+        stream_id=stream_id,
+        frames=frames,
     )

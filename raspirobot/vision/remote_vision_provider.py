@@ -16,10 +16,11 @@ import base64
 import logging
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from shared.contracts.schemas import FaceBoxSchema, FaceIdentitySchema, FaceObservationSchema, VisionContext
+from shared.logging_utils import log_event
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +46,10 @@ class RemoteVisionConfig:
     capture_interval_s: float = 0.2
     # HTTP 超时
     upload_timeout_s: float = 5.0
-    from_cache_timeout_s: float = 10.0
+    from_cache_timeout_s: float = 30.0
+    query_mode: str = "latest"
+    latest_window_ms: int = 6000
+    latest_max_frames: int = 10
 
 
 class RemoteVisionContextProvider:
@@ -256,26 +260,57 @@ class RemoteVisionContextProvider:
     def _fetch_face_identity(self, turn_id: str) -> FaceIdentitySchema | None:
         if self._http_client is None:
             return None
+        query_mode = (self.config.query_mode or "latest").strip().lower()
+        if query_mode not in {"turn", "latest"}:
+            query_mode = "latest"
+        payload = {
+            "session_id": self.config.session_id,
+            "turn_id": turn_id,
+            "stream_id": self.config.stream_id,
+            "query_mode": query_mode,
+            "window_ms": self.config.latest_window_ms,
+            "max_frames": self.config.latest_max_frames,
+        }
+        started = time.perf_counter()
+        log_event(
+            "remote_vision_from_cache_started",
+            query_mode=query_mode,
+            turn_id=turn_id,
+            stream_id=self.config.stream_id,
+            window_ms=self.config.latest_window_ms,
+            max_frames=self.config.latest_max_frames,
+            timeout_seconds=self.config.from_cache_timeout_s,
+        )
         try:
             resp = self._http_client.post(
                 self.config.from_cache_url,
-                json={
-                    "session_id": self.config.session_id,
-                    "turn_id": turn_id,
-                    "stream_id": self.config.stream_id,
-                },
+                json=payload,
                 timeout=self.config.from_cache_timeout_s,
             )
             if resp.status_code != 200:
-                logger.warning("remote_vision_from_cache_failed status=%d", resp.status_code)
+                log_event(
+                    "remote_vision_from_cache_failed",
+                    level="warning",
+                    query_mode=query_mode,
+                    turn_id=turn_id,
+                    status_code=resp.status_code,
+                    latency_ms=round((time.perf_counter() - started) * 1000, 2),
+                )
                 return None
             data = resp.json()
             fi = (data.get("face_identity") or {}).get("face_identity")
             if fi is None:
+                log_event(
+                    "remote_vision_from_cache_empty",
+                    level="warning",
+                    query_mode=query_mode,
+                    turn_id=turn_id,
+                    latency_ms=round((time.perf_counter() - started) * 1000, 2),
+                )
                 return None
             bbox_raw = fi.get("bbox")
             bbox = FaceBoxSchema(**bbox_raw) if bbox_raw else None
-            return FaceIdentitySchema(
+            face_identity = FaceIdentitySchema(
                 face_detected=bool(fi.get("face_detected", False)),
                 face_id=fi.get("face_id"),
                 user_id=fi.get("user_id"),
@@ -288,7 +323,30 @@ class RemoteVisionContextProvider:
                 seen_count=fi.get("seen_count"),
                 last_seen_at=fi.get("last_seen_at"),
             )
+            face_payload = data.get("face_identity") or {}
+            cache_query = data.get("cache_query") or {}
+            video_meta = cache_query.get("video_meta") or {}
+            log_event(
+                "remote_vision_from_cache_succeeded",
+                query_mode=query_mode,
+                turn_id=turn_id,
+                face_detected=face_identity.face_detected,
+                face_id=face_identity.face_id,
+                user_id=face_identity.user_id,
+                processed_frame_count=face_payload.get("processed_frame_count"),
+                cached_frame_count=video_meta.get("frame_count"),
+                latency_ms=round((time.perf_counter() - started) * 1000, 2),
+            )
+            return face_identity
         except Exception as exc:
+            log_event(
+                "remote_vision_from_cache_error",
+                level="warning",
+                query_mode=query_mode,
+                turn_id=turn_id,
+                error=str(exc),
+                latency_ms=round((time.perf_counter() - started) * 1000, 2),
+            )
             logger.warning("remote_vision_from_cache_error: %s", exc)
             return None
 

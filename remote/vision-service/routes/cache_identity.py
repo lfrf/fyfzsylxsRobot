@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 import httpx
 from fastapi import APIRouter
@@ -15,8 +15,11 @@ router = APIRouter()
 
 class VideoCacheQueryRequest(BaseModel):
     session_id: str = Field(..., min_length=1)
-    turn_id: str | int
+    turn_id: str | int | None = None
     stream_id: str = Field(..., min_length=1)
+    query_mode: Literal["turn", "latest"] = "turn"
+    window_ms: int = Field(default=6000, ge=0)
+    max_frames: int = Field(default=10, ge=1, le=60)
 
 
 class CacheIdentityResponse(BaseModel):
@@ -26,16 +29,24 @@ class CacheIdentityResponse(BaseModel):
 
 @router.post("/v1/vision/identity/from-cache", response_model=CacheIdentityResponse)
 async def extract_face_identity_from_cache(request: VideoCacheQueryRequest) -> CacheIdentityResponse:
-    query_url = f"{settings.video_cache_base_url.rstrip('/')}/v1/video/query"
+    video_cache_base = settings.video_cache_base_url.rstrip("/")
+    if request.query_mode == "latest":
+        query_url = f"{video_cache_base}/v1/video/query-latest"
+        params = {
+            "session_id": request.session_id,
+            "stream_id": request.stream_id,
+            "window_ms": request.window_ms,
+            "max_frames": request.max_frames,
+        }
+    else:
+        query_url = f"{video_cache_base}/v1/video/query"
+        params = {
+            "session_id": request.session_id,
+            "turn_id": request.turn_id if request.turn_id is not None else "turn-0000",
+            "stream_id": request.stream_id,
+        }
     async with httpx.AsyncClient(timeout=60.0) as client:
-        response = await client.get(
-            query_url,
-            params={
-                "session_id": request.session_id,
-                "turn_id": request.turn_id,
-                "stream_id": request.stream_id,
-            },
-        )
+        response = await client.get(query_url, params=params)
         response.raise_for_status()
         cache_data = response.json()
 
@@ -47,7 +58,7 @@ async def extract_face_identity_from_cache(request: VideoCacheQueryRequest) -> C
     ]
     face_request = FaceIdentityRequest(
         session_id=request.session_id,
-        turn_id=request.turn_id,
+        turn_id=request.turn_id if request.turn_id is not None else request.query_mode,
         video_frames=normalized_frames,
         video_meta=cache_data.get("video_meta"),
     )
