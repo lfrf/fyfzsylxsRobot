@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import math
+import sys
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
@@ -13,6 +14,21 @@ from typing import Any
 from config import settings
 
 logger = logging.getLogger(__name__)
+
+
+def _configure_face_diagnostic_logger() -> None:
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+    if any(getattr(handler, "_robotmatch_face_diagnostics", False) for handler in logger.handlers):
+        return
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setLevel(logging.INFO)
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s"))
+    handler._robotmatch_face_diagnostics = True  # type: ignore[attr-defined]
+    logger.addHandler(handler)
+
+
+_configure_face_diagnostic_logger()
 
 
 def _now_iso() -> str:
