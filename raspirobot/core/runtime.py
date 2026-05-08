@@ -81,6 +81,25 @@ class RaspiRobotRuntime:
 
     def _run_preparing_once(self) -> RuntimeLoopResult:
         self._enter_preparing()
+        gate_timeout = float(getattr(self.turn_manager.settings, "preparing_gate_timeout_seconds", 3.0) or 3.0)
+        gate_rms_threshold = float(getattr(self.turn_manager.settings, "vad_preparing_rms_threshold", 900.0) or 900.0)
+        gate_speech_start_frames = int(getattr(self.turn_manager.settings, "vad_preparing_speech_start_frames", 8) or 8)
+        gate_utterance = self.listener.listen_once(
+            speech_start_timeout_seconds=gate_timeout,
+            rms_threshold_override=gate_rms_threshold,
+            speech_start_frames_override=gate_speech_start_frames,
+        )
+        if gate_utterance is None:
+            log_event("preparing_gate_timeout", timeout_seconds=gate_timeout)
+            self.state_machine.transition(RobotEvent.WORK_IDLE_TIMEOUT)
+            self._enter_standby()
+            return RuntimeLoopResult(handled=False, state=self.state_machine.state)
+        log_event(
+            "preparing_gate_passed",
+            duration_ms=gate_utterance.duration_ms,
+            gate_rms_threshold=gate_rms_threshold,
+            gate_speech_start_frames=gate_speech_start_frames,
+        )
         self._enter_working_listening()
         return RuntimeLoopResult(handled=False, state=self.state_machine.state)
 

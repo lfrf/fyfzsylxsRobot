@@ -42,7 +42,13 @@ class AudioListenWorker:
             sample_width=input_provider.sample_width,
         )
 
-    def listen_once(self, *, speech_start_timeout_seconds: float | None = None) -> Utterance | None:
+    def listen_once(
+        self,
+        *,
+        speech_start_timeout_seconds: float | None = None,
+        rms_threshold_override: float | None = None,
+        speech_start_frames_override: int | None = None,
+    ) -> Utterance | None:
         log_event(
             "listening_started",
             sample_rate=self.input_provider.sample_rate,
@@ -53,6 +59,8 @@ class AudioListenWorker:
         )
         listen_started_at = time()
         config = self.vad.config
+        speech_start_frames = max(1, int(speech_start_frames_override or config.speech_start_frames))
+        rms_threshold = float(rms_threshold_override if rms_threshold_override is not None else config.rms_threshold)
         pre_roll_frames = max(0, int(config.pre_roll_ms / max(1, config.frame_ms)))
         pre_roll: deque[AudioFrame] = deque(maxlen=pre_roll_frames)
         utterance_frames: list[AudioFrame] = []
@@ -73,12 +81,12 @@ class AudioListenWorker:
                 )
                 return None
 
-            voiced = self.vad.is_voiced(frame)
+            voiced = self.vad.rms(frame) >= rms_threshold
 
             if started_at is None:
                 if voiced:
                     voiced_streak += 1
-                    if voiced_streak >= config.speech_start_frames:
+                    if voiced_streak >= speech_start_frames:
                         started_at = frame.timestamp or time()
                         log_event(
                             "speech_started",

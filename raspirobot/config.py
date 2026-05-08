@@ -25,6 +25,9 @@ class Settings:
     vad_silence_timeout_ms: int
     vad_max_utterance_seconds: float
     vad_pre_roll_ms: int
+    vad_preparing_rms_threshold: float
+    vad_preparing_speech_start_frames: int
+    preparing_gate_timeout_seconds: float
     audio_work_dir: str
     live_loop_sleep_seconds: float
     # Audio preprocessing fields (disabled by default for backward compatibility)
@@ -93,6 +96,9 @@ def load_settings() -> Settings:
         vad_silence_timeout_ms=int(os.getenv("ROBOT_VAD_SILENCE_TIMEOUT_MS", "900")),
         vad_max_utterance_seconds=float(os.getenv("ROBOT_VAD_MAX_UTTERANCE_SECONDS", "15")),
         vad_pre_roll_ms=int(os.getenv("ROBOT_VAD_PRE_ROLL_MS", "300")),
+        vad_preparing_rms_threshold=float(os.getenv("ROBOT_VAD_PREPARING_RMS_THRESHOLD", "900")),
+        vad_preparing_speech_start_frames=int(os.getenv("ROBOT_VAD_PREPARING_SPEECH_START_FRAMES", "8")),
+        preparing_gate_timeout_seconds=float(os.getenv("ROBOT_PREPARING_GATE_TIMEOUT_SECONDS", "3.0")),
         audio_work_dir=os.getenv("ROBOT_AUDIO_WORK_DIR", "/tmp/raspirobot_audio").strip() or "/tmp/raspirobot_audio",
         live_loop_sleep_seconds=float(os.getenv("ROBOT_LIVE_LOOP_SLEEP_SECONDS", "0.05")),
         # Audio preprocessing - disabled by default for backward compatibility
