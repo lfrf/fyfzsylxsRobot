@@ -153,6 +153,25 @@ class PanTiltServoDriver:
             self.config.tilt_spec.center_angle_deg,
         )
 
+    def restore_center_smooth(self, *, step_deg: float = 3.0, step_interval_s: float = 0.03) -> int:
+        target_pan = self.config.pan_spec.center_angle_deg
+        target_tilt = self.config.tilt_spec.center_angle_deg
+        start_pan = self.pan_deg
+        start_tilt = self.tilt_deg
+        max_delta = max(abs(target_pan - start_pan), abs(target_tilt - start_tilt))
+        steps = max(1, int(np.ceil(max_delta / max(step_deg, 0.1))))
+
+        for index in range(1, steps + 1):
+            ratio = index / steps
+            pan = start_pan + (target_pan - start_pan) * ratio
+            tilt = start_tilt + (target_tilt - start_tilt) * ratio
+            self.set_pose(pan, tilt)
+            if index < steps:
+                time.sleep(max(0.0, step_interval_s))
+
+        self.restore_center()
+        return steps
+
     def set_pose(self, pan_deg: float, tilt_deg: float) -> None:
         pan_deg = self._clip(pan_deg, self.config.pan_spec)
         tilt_deg = self._clip(tilt_deg, self.config.tilt_spec)
@@ -549,7 +568,16 @@ class FaceTrackingPanTiltRunner:
                         break
         finally:
             try:
-                self.servo.restore_center()
+                restore_started_at = time.time()
+                log_event(
+                    "face_tracking_servo_restore_center_started",
+                    pan_deg=self.servo.pan_deg,
+                    tilt_deg=self.servo.tilt_deg,
+                    target_pan_deg=self.servo.config.pan_spec.center_angle_deg,
+                    target_tilt_deg=self.servo.config.tilt_spec.center_angle_deg,
+                )
+                restore_steps = self.servo.restore_center_smooth()
+                restore_elapsed_ms = int((time.time() - restore_started_at) * 1000)
                 log_event(
                     "face_tracking_servo_restore_center_done",
                     pan_deg=self.servo.pan_deg,
@@ -558,6 +586,8 @@ class FaceTrackingPanTiltRunner:
                     tilt_hw_deg=self.servo.tilt_hw_deg,
                     pan_zero_offset_deg=self.servo.config.pan_zero_offset_deg,
                     tilt_zero_offset_deg=self.servo.config.tilt_zero_offset_deg,
+                    restore_steps=restore_steps,
+                    restore_elapsed_ms=restore_elapsed_ms,
                 )
             except Exception as exc:
                 log_event(
