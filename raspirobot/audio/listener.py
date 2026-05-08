@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
+import math
 from time import time
 from typing import Literal
 
@@ -60,11 +61,17 @@ class AudioListenWorker:
         speech_start_timeout_seconds: float | None = None,
         rms_threshold_override: float | None = None,
         speech_start_frames_override: int | None = None,
+        dynamic_noise_enabled: bool = False,
+        dynamic_noise_calibration_ms: int = 0,
+        dynamic_noise_ratio: float = 2.2,
     ) -> Utterance | None:
         result = self.listen_once_result(
             speech_start_timeout_seconds=speech_start_timeout_seconds,
             rms_threshold_override=rms_threshold_override,
             speech_start_frames_override=speech_start_frames_override,
+            dynamic_noise_enabled=dynamic_noise_enabled,
+            dynamic_noise_calibration_ms=dynamic_noise_calibration_ms,
+            dynamic_noise_ratio=dynamic_noise_ratio,
         )
         return result.utterance if result.kind == "utterance" else None
 
@@ -74,6 +81,9 @@ class AudioListenWorker:
         speech_start_timeout_seconds: float | None = None,
         rms_threshold_override: float | None = None,
         speech_start_frames_override: int | None = None,
+        dynamic_noise_enabled: bool = False,
+        dynamic_noise_calibration_ms: int = 0,
+        dynamic_noise_ratio: float = 2.2,
     ) -> ListenResult:
         log_event(
             "listening_started",
@@ -87,6 +97,11 @@ class AudioListenWorker:
         config = self.vad.config
         speech_start_frames = max(1, int(speech_start_frames_override or config.speech_start_frames))
         rms_threshold = float(rms_threshold_override if rms_threshold_override is not None else config.rms_threshold)
+        base_rms_threshold = rms_threshold
+        calibration_target_ms = max(0, int(dynamic_noise_calibration_ms if dynamic_noise_enabled else 0))
+        calibration_frames: list[AudioFrame] = []
+        calibration_ms = 0
+        calibrated = calibration_target_ms <= 0
         pre_roll_frames = max(0, int(config.pre_roll_ms / max(1, config.frame_ms)))
         pre_roll: deque[AudioFrame] = deque(maxlen=pre_roll_frames)
         utterance_frames: list[AudioFrame] = []
@@ -113,6 +128,26 @@ class AudioListenWorker:
                         elapsed_ms=int((time() - listen_started_at) * 1000),
                         frames_emitted=frames_seen,
                     )
+
+                if not calibrated:
+                    calibration_frames.append(frame)
+                    calibration_ms += frame.duration_ms
+                    pre_roll.append(frame)
+                    if calibration_ms < calibration_target_ms:
+                        continue
+                    noise_floor_rms = self._noise_floor_rms(calibration_frames)
+                    dynamic_threshold = noise_floor_rms * max(0.0, float(dynamic_noise_ratio))
+                    rms_threshold = max(rms_threshold, dynamic_threshold)
+                    calibrated = True
+                    log_event(
+                        "vad_dynamic_noise_calibrated",
+                        calibration_ms=calibration_ms,
+                        noise_floor_rms=round(noise_floor_rms, 2),
+                        base_rms_threshold=round(base_rms_threshold, 2),
+                        effective_rms_threshold=round(rms_threshold, 2),
+                        dynamic_noise_ratio=dynamic_noise_ratio,
+                    )
+                    continue
 
                 voiced = self.vad.rms(frame) >= rms_threshold
 
@@ -209,6 +244,14 @@ class AudioListenWorker:
             elapsed_ms=int((time() - listen_started_at) * 1000),
             frames_emitted=frames_seen,
         )
+
+    def _noise_floor_rms(self, frames: list[AudioFrame]) -> float:
+        values = sorted(self.vad.rms(frame) for frame in frames)
+        if not values:
+            return 0.0
+        cutoff = max(1, int(math.ceil(len(values) * 0.3)))
+        low_values = values[:cutoff]
+        return sum(low_values) / len(low_values)
 
     def _save_utterance(self, frames: list[AudioFrame], started_at: float) -> Utterance:
         ended_at = time()

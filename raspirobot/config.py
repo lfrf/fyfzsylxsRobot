@@ -46,6 +46,16 @@ class Settings:
     audio_post_playback_cooldown_ms: int
     audio_capture_retry_count: int
     audio_capture_retry_cooldown_ms: int
+    vad_dynamic_noise_enabled: bool
+    vad_dynamic_noise_calibration_ms: int
+    vad_dynamic_noise_ratio: float
+    vad_post_playback_strict_ms: int
+    vad_post_playback_rms_threshold: float
+    vad_post_playback_speech_start_frames: int
+    audio_weak_speech_drop_enabled: bool
+    audio_weak_speech_min_ratio: float
+    audio_weak_speech_min_mean_rms: float
+    audio_weak_speech_short_tokens: str
     # Invalid utterance drop configuration
     audio_drop_invalid_utterance: bool
     audio_drop_reasons: str
@@ -122,6 +132,16 @@ def load_settings() -> Settings:
         audio_post_playback_cooldown_ms=int(os.getenv("ROBOT_AUDIO_POST_PLAYBACK_COOLDOWN_MS", "0")),
         audio_capture_retry_count=max(0, int(os.getenv("ROBOT_AUDIO_CAPTURE_RETRY_COUNT", "2"))),
         audio_capture_retry_cooldown_ms=max(0, int(os.getenv("ROBOT_AUDIO_CAPTURE_RETRY_COOLDOWN_MS", "700"))),
+        vad_dynamic_noise_enabled=_bool_env("ROBOT_VAD_DYNAMIC_NOISE_ENABLED", default=True),
+        vad_dynamic_noise_calibration_ms=max(0, int(os.getenv("ROBOT_VAD_DYNAMIC_NOISE_CALIBRATION_MS", "500"))),
+        vad_dynamic_noise_ratio=float(os.getenv("ROBOT_VAD_DYNAMIC_NOISE_RATIO", "2.2")),
+        vad_post_playback_strict_ms=max(0, int(os.getenv("ROBOT_VAD_POST_PLAYBACK_STRICT_MS", "2500"))),
+        vad_post_playback_rms_threshold=float(os.getenv("ROBOT_VAD_POST_PLAYBACK_RMS_THRESHOLD", "1400")),
+        vad_post_playback_speech_start_frames=max(1, int(os.getenv("ROBOT_VAD_POST_PLAYBACK_SPEECH_START_FRAMES", "10"))),
+        audio_weak_speech_drop_enabled=_bool_env("ROBOT_AUDIO_WEAK_SPEECH_DROP_ENABLED", default=True),
+        audio_weak_speech_min_ratio=float(os.getenv("ROBOT_AUDIO_WEAK_SPEECH_MIN_RATIO", "0.18")),
+        audio_weak_speech_min_mean_rms=float(os.getenv("ROBOT_AUDIO_WEAK_SPEECH_MIN_MEAN_RMS", "900")),
+        audio_weak_speech_short_tokens=os.getenv("ROBOT_AUDIO_WEAK_SPEECH_SHORT_TOKENS", "嗯,啊,呃,哦,额").strip(),
         audio_drop_invalid_utterance=_bool_env("ROBOT_AUDIO_DROP_INVALID_UTTERANCE", default=False),
         audio_drop_reasons=os.getenv("ROBOT_AUDIO_DROP_REASONS", "no_speech_detected,speech_too_short").strip(),
         eyes_provider=os.getenv("ROBOT_EYES_PROVIDER", "mock").strip().lower() or "mock",

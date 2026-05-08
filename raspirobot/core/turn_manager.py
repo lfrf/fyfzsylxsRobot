@@ -156,6 +156,24 @@ class TurnManager:
         )
 
         response = self.remote_client.chat_turn(request)
+        weak_speech_reason = self._weak_speech_rejection_reason(response.asr_text, preprocess_result)
+        if weak_speech_reason:
+            log_event(
+                "utterance_dropped_after_asr",
+                raw_wav_path=str(raw_wav_path),
+                reason=weak_speech_reason,
+                asr_text=response.asr_text,
+                speech_frames=preprocess_result.speech_frames if preprocess_result else None,
+                muted_frames=preprocess_result.muted_frames if preprocess_result else None,
+                speech_mean_rms=preprocess_result.speech_mean_rms if preprocess_result else None,
+                speech_peak_rms=preprocess_result.speech_peak_rms if preprocess_result else None,
+                raw_duration_ms=preprocess_result.raw_duration_ms if preprocess_result else None,
+            )
+            raise UtteranceRejected(
+                weak_speech_reason,
+                wav_path=raw_wav_path,
+                preprocess_result=preprocess_result,
+            )
         self.session.apply_mode(response.mode.mode_id if response.mode else None)
         self.payload_builder.mode_id = self.session.mode_id
 
@@ -222,6 +240,29 @@ class TurnManager:
             }
         )
         return TurnResult(response=response, playback=playback)
+
+    def _weak_speech_rejection_reason(self, asr_text: str, preprocess_result: Any) -> str | None:
+        if not getattr(self.settings, "audio_weak_speech_drop_enabled", True):
+            return None
+        if preprocess_result is None:
+            return None
+        text = (asr_text or "").strip()
+        normalized = text.strip(" \u3000\uff0c\u3002\uff01\uff1f!?~\uff5e\u2026,.")
+        short_tokens = {
+            token.strip()
+            for token in str(getattr(self.settings, "audio_weak_speech_short_tokens", "")).split(",")
+            if token.strip()
+        }
+        if normalized not in short_tokens:
+            return None
+        total_frames = int((preprocess_result.speech_frames or 0) + (preprocess_result.muted_frames or 0))
+        speech_ratio = (float(preprocess_result.speech_frames or 0) / total_frames) if total_frames > 0 else 0.0
+        min_ratio = float(getattr(self.settings, "audio_weak_speech_min_ratio", 0.18) or 0.18)
+        min_mean_rms = float(getattr(self.settings, "audio_weak_speech_min_mean_rms", 900) or 900)
+        speech_mean_rms = float(preprocess_result.speech_mean_rms or 0.0)
+        if speech_ratio <= min_ratio or speech_mean_rms <= min_mean_rms:
+            return "weak_short_asr"
+        return None
 
     def handle_prepare_user(self, *, turn_id: str = "prepare") -> PrepareUserResult:
         vision_context = None

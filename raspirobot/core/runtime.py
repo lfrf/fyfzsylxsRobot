@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from time import sleep
+from time import monotonic, sleep
 from typing import Any
 
 from raspirobot.audio import AudioListenWorker, ListenResult
@@ -47,6 +47,7 @@ class RaspiRobotRuntime:
         self.face_tracking_lifecycle = face_tracking_lifecycle
         self.eyes_driver = eyes_driver
         self._pending_working_utterance: Any | None = None
+        self._strict_listening_until: float = 0.0
         self._ensure_initial_state()
 
     def run_once(self) -> RuntimeLoopResult:
@@ -132,6 +133,7 @@ class RaspiRobotRuntime:
                     level="error",
                 )
 
+        self._mark_post_playback_strict_window()
         first_result = self._listen_once_with_recovery(
             speech_start_timeout_seconds=self.work_idle_timeout_seconds,
             context="preparing_first_speech",
@@ -241,6 +243,7 @@ class RaspiRobotRuntime:
                     cooldown_ms=self.post_playback_cooldown_ms,
                 )
 
+            self._mark_post_playback_strict_window()
             return RuntimeLoopResult(handled=True, state=self.state_machine.state, turn=turn)
         except UtteranceRejected as exc:
             log_event(
@@ -273,7 +276,33 @@ class RaspiRobotRuntime:
         attempts = retry_count + 1
         last_result: ListenResult | None = None
         for attempt_index in range(attempts):
-            result = self.listener.listen_once_result(speech_start_timeout_seconds=speech_start_timeout_seconds)
+            settings = getattr(self.turn_manager, "settings", None)
+            strict_active = monotonic() < self._strict_listening_until
+            rms_threshold_override = None
+            speech_start_frames_override = None
+            if strict_active:
+                rms_threshold_override = max(
+                    float(getattr(settings, "vad_rms_threshold", 0) or 0),
+                    float(getattr(settings, "vad_post_playback_rms_threshold", 1400) or 1400),
+                )
+                speech_start_frames_override = max(
+                    int(getattr(settings, "vad_speech_start_frames", 1) or 1),
+                    int(getattr(settings, "vad_post_playback_speech_start_frames", 10) or 10),
+                )
+                log_event(
+                    "post_playback_strict_vad_active",
+                    context=context,
+                    rms_threshold=rms_threshold_override,
+                    speech_start_frames=speech_start_frames_override,
+                )
+            result = self.listener.listen_once_result(
+                speech_start_timeout_seconds=speech_start_timeout_seconds,
+                rms_threshold_override=rms_threshold_override,
+                speech_start_frames_override=speech_start_frames_override,
+                dynamic_noise_enabled=bool(getattr(settings, "vad_dynamic_noise_enabled", True)),
+                dynamic_noise_calibration_ms=int(getattr(settings, "vad_dynamic_noise_calibration_ms", 500) or 0),
+                dynamic_noise_ratio=float(getattr(settings, "vad_dynamic_noise_ratio", 2.2) or 2.2),
+            )
             if result.kind in {"utterance", "timeout"}:
                 return result
             last_result = result
@@ -293,6 +322,14 @@ class RaspiRobotRuntime:
             if attempt_index < retry_count and retry_cooldown_ms > 0:
                 sleep(retry_cooldown_ms / 1000.0)
         return last_result or ListenResult(kind="capture_error", error="listen failed before producing a result")
+
+    def _mark_post_playback_strict_window(self) -> None:
+        settings = getattr(self.turn_manager, "settings", None)
+        strict_ms = max(0, int(getattr(settings, "vad_post_playback_strict_ms", 2500) or 0))
+        if strict_ms <= 0:
+            return
+        self._strict_listening_until = monotonic() + strict_ms / 1000.0
+        log_event("post_playback_strict_vad_window_started", strict_ms=strict_ms)
 
     def run_forever(self) -> None:
         while True:
