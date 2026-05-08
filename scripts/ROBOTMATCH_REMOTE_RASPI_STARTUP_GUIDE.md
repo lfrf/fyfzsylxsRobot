@@ -647,7 +647,11 @@ export FACE_MATCH_LOG_TOP_K=5
 export VISION_WARMUP_ENABLED=false
 export FER_WARMUP_ENABLED=false
 
-python -m uvicorn app:app --host 127.0.0.1 --port 21000 --log-level debug
+python -m uvicorn app:app \
+  --host 127.0.0.1 \
+  --port 21000 \
+  --log-level debug \
+  2>&1 | tee /root/autodl-tmp/a22/code/fyfzsylxsRobot/logs/vision-service.log
 
 
 ```
