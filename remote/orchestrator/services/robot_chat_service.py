@@ -1,3 +1,6 @@
+raspirobot/hardware/pan_tilt_face_tracker.pyimport re
+import time
+from dataclasses import dataclass
 from time import perf_counter
 from uuid import uuid4
 
@@ -22,6 +25,15 @@ from services.response_policy_service import ResponsePolicyService, response_pol
 from services.robot_action_service import RobotActionService, robot_action_service
 from services.games.game_state_service import game_state_service
 from services.profile import UserProfileService, user_profile_service
+
+
+@dataclass
+class _PendingUsernameRegistration:
+    session_id: str
+    user_id: str
+    created_at: float
+    expires_at: float
+    retries: int = 0
 
 
 class RobotChatService:
@@ -49,6 +61,11 @@ class RobotChatService:
         self.response_policy = response_policy or response_policy_service
         self.mode_chain_router = mode_chain_router_instance or mode_chain_router
         self.profile_service = profile_service or user_profile_service
+        self._pending_username_by_session: dict[str, _PendingUsernameRegistration] = {}
+        self._username_prompt_retry_limit = 2
+        self._username_prompt_cooldown_seconds = 90.0
+        self._username_pending_ttl_seconds = 60.0
+        self._username_prompt_history: dict[str, list[float]] = {}
 
     def handle_chat_turn(self, request: RobotChatRequest) -> RobotChatResponse:
         log_session_id = self._request_log_session_id(request)
@@ -580,11 +597,75 @@ class RobotChatService:
         asr_result,
         profile_context_result,
     ):
+        now = time.time()
+        session_id = str(request.session_id)
         profile = getattr(identity, "profile", None)
         display_name = getattr(profile, "display_name", None) if profile else None
+
+        # A2: consume pending registration first (transaction-like flow).
+        pending = self._pending_username_by_session.get(session_id)
+        if pending is not None:
+            if now > pending.expires_at:
+                self._pending_username_by_session.pop(session_id, None)
+            else:
+                nickname = self._extract_nickname(asr_text)
+                if nickname:
+                    self.handle_username_registration(user_id=pending.user_id, display_name=nickname, request=request)
+                    self._pending_username_by_session.pop(session_id, None)
+                    confirm_text = f"好的，我记住了。那我就叫你{nickname}。"
+                    return self._build_username_prompt_response(
+                        identity=identity,
+                        request=request,
+                        asr_text=asr_text,
+                        current_mode=current_mode,
+                        trace_id=trace_id,
+                        total_started=total_started,
+                        asr_result=asr_result,
+                        profile_context_result=profile_context_result,
+                        prompt_text=confirm_text,
+                    )
+                pending.retries += 1
+                if pending.retries > self._username_prompt_retry_limit:
+                    # A3: too many failures, stop blocking main flow
+                    self._pending_username_by_session.pop(session_id, None)
+                    return None
+                return self._build_username_prompt_response(
+                    identity=identity,
+                    request=request,
+                    asr_text=asr_text,
+                    current_mode=current_mode,
+                    trace_id=trace_id,
+                    total_started=total_started,
+                    asr_result=asr_result,
+                    profile_context_result=profile_context_result,
+                    prompt_text="我没听清你的昵称。你希望我怎么称呼你呢？",
+                )
+
+        # A1: strict trigger gate - require valid visual identity (face + user)
+        has_face_identity = bool(getattr(identity, "face_id", None) and getattr(identity, "user_id", None))
+        if not has_face_identity:
+            return None
+
         needs_registration = bool(identity and identity.user_id and (identity.is_anonymous or not display_name or display_name == "未命名用户"))
         if not needs_registration:
             return None
+
+        # A3: cooldown for repeated prompts per user
+        user_id = str(identity.user_id)
+        history = [ts for ts in self._username_prompt_history.get(user_id, []) if now - ts <= self._username_prompt_cooldown_seconds]
+        self._username_prompt_history[user_id] = history
+        if len(history) >= self._username_prompt_retry_limit:
+            return None
+
+        history.append(now)
+        self._username_prompt_history[user_id] = history
+        self._pending_username_by_session[session_id] = _PendingUsernameRegistration(
+            session_id=session_id,
+            user_id=user_id,
+            created_at=now,
+            expires_at=now + self._username_pending_ttl_seconds,
+            retries=0,
+        )
 
         prompt_text = "你希望我怎么称呼你呢？"
         return self._build_username_prompt_response(
@@ -686,6 +767,22 @@ class RobotChatService:
             rag_matched_files=[],
         )
         return response
+
+    def _extract_nickname(self, asr_text: str) -> str | None:
+        text = (asr_text or "").strip().replace("。", "").replace("，", " ")
+        if not text:
+            return None
+        patterns = [
+            r"(?:叫我|称呼我|你可以叫我|我叫)\s*([\u4e00-\u9fa5A-Za-z0-9_\-]{1,12})",
+            r"([\u4e00-\u9fa5A-Za-z0-9_\-]{1,12})",
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, text)
+            if match:
+                candidate = match.group(1).strip()
+                if candidate and candidate not in {"嗯", "啊", "哦"}:
+                    return candidate
+        return None
 
     def _profile_debug(self, *, identity, profile_context_result, memory_result=None) -> dict:
         return {
