@@ -1,5 +1,6 @@
 from .input_provider import (
     AudioFrame,
+    AudioCaptureError,
     AudioInputProvider,
     FileAudioInputProvider,
     LocalCommandAudioInputProvider,
@@ -7,7 +8,7 @@ from .input_provider import (
     make_silence_pcm,
     make_sine_pcm,
 )
-from .listener import AudioListenWorker, Utterance
+from .listener import AudioListenWorker, ListenResult, Utterance
 from .output_provider import AudioOutputProvider, LocalCommandAudioOutputProvider, MockAudioOutputProvider, PlaybackResult
 from .player import AudioPlayer, MockAudioPlayer
 from .recorder import AudioRecorder, MockAudioRecorder, WavRecorder
@@ -18,6 +19,7 @@ from .wav_utils import WavInfo, read_wav_info, write_wav
 
 __all__ = [
     "AudioFrame",
+    "AudioCaptureError",
     "AudioInputProvider",
     "AudioListenWorker",
     "AudioOutputProvider",
@@ -28,6 +30,7 @@ __all__ = [
     "FileAudioInputProvider",
     "LocalCommandAudioInputProvider",
     "LocalCommandAudioOutputProvider",
+    "ListenResult",
     "MockAudioInputProvider",
     "MockAudioOutputProvider",
     "MockAudioPlayer",

@@ -4,11 +4,12 @@ from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
 from time import time
+from typing import Literal
 
 from raspirobot.utils import ensure_dir, utc_compact_timestamp
 from shared.logging_utils import log_event
 
-from .input_provider import AudioFrame, AudioInputProvider
+from .input_provider import AudioCaptureError, AudioFrame, AudioInputProvider
 from .recorder import WavRecorder
 from .vad import EnergyVAD
 from .wav_utils import WavInfo
@@ -22,6 +23,17 @@ class Utterance:
     duration_ms: int
     frame_count: int
     wav_info: WavInfo
+
+
+@dataclass(frozen=True)
+class ListenResult:
+    kind: Literal["utterance", "timeout", "capture_error", "input_ended"]
+    utterance: Utterance | None = None
+    error: str | None = None
+    elapsed_ms: int | None = None
+    returncode: int | None = None
+    frames_emitted: int = 0
+    stderr_tail: str = ""
 
 
 class AudioListenWorker:
@@ -49,6 +61,20 @@ class AudioListenWorker:
         rms_threshold_override: float | None = None,
         speech_start_frames_override: int | None = None,
     ) -> Utterance | None:
+        result = self.listen_once_result(
+            speech_start_timeout_seconds=speech_start_timeout_seconds,
+            rms_threshold_override=rms_threshold_override,
+            speech_start_frames_override=speech_start_frames_override,
+        )
+        return result.utterance if result.kind == "utterance" else None
+
+    def listen_once_result(
+        self,
+        *,
+        speech_start_timeout_seconds: float | None = None,
+        rms_threshold_override: float | None = None,
+        speech_start_frames_override: int | None = None,
+    ) -> ListenResult:
         log_event(
             "listening_started",
             sample_rate=self.input_provider.sample_rate,
@@ -68,71 +94,121 @@ class AudioListenWorker:
         silence_ms = 0
         recorded_ms = 0
         started_at: float | None = None
+        frames_seen = 0
 
-        for frame in self.input_provider.frames():
-            if (
-                started_at is None
-                and speech_start_timeout_seconds is not None
-                and time() - listen_started_at >= speech_start_timeout_seconds
-            ):
-                log_event(
-                    "speech_start_timeout",
-                    timeout_seconds=speech_start_timeout_seconds,
-                )
-                return None
+        try:
+            for frame in self.input_provider.frames():
+                frames_seen += 1
+                if (
+                    started_at is None
+                    and speech_start_timeout_seconds is not None
+                    and time() - listen_started_at >= speech_start_timeout_seconds
+                ):
+                    log_event(
+                        "speech_start_timeout",
+                        timeout_seconds=speech_start_timeout_seconds,
+                    )
+                    return ListenResult(
+                        kind="timeout",
+                        elapsed_ms=int((time() - listen_started_at) * 1000),
+                        frames_emitted=frames_seen,
+                    )
 
-            voiced = self.vad.rms(frame) >= rms_threshold
+                voiced = self.vad.rms(frame) >= rms_threshold
 
-            if started_at is None:
-                if voiced:
-                    voiced_streak += 1
-                    if voiced_streak >= speech_start_frames:
-                        started_at = frame.timestamp or time()
-                        log_event(
-                            "speech_started",
-                            sample_rate=frame.sample_rate,
-                            channels=frame.channels,
-                            rms=round(self.vad.rms(frame), 2),
-                        )
-                        utterance_frames.extend(pre_roll)
-                        utterance_frames.append(frame)
-                        recorded_ms = sum(item.duration_ms for item in utterance_frames)
-                        silence_ms = 0
+                if started_at is None:
+                    if voiced:
+                        voiced_streak += 1
+                        if voiced_streak >= speech_start_frames:
+                            started_at = frame.timestamp or time()
+                            log_event(
+                                "speech_started",
+                                sample_rate=frame.sample_rate,
+                                channels=frame.channels,
+                                rms=round(self.vad.rms(frame), 2),
+                            )
+                            utterance_frames.extend(pre_roll)
+                            utterance_frames.append(frame)
+                            recorded_ms = sum(item.duration_ms for item in utterance_frames)
+                            silence_ms = 0
+                        else:
+                            pre_roll.append(frame)
                     else:
+                        voiced_streak = 0
                         pre_roll.append(frame)
+                    continue
+
+                utterance_frames.append(frame)
+                recorded_ms += frame.duration_ms
+                if voiced:
+                    silence_ms = 0
                 else:
-                    voiced_streak = 0
-                    pre_roll.append(frame)
-                continue
+                    silence_ms += frame.duration_ms
 
-            utterance_frames.append(frame)
-            recorded_ms += frame.duration_ms
-            if voiced:
-                silence_ms = 0
-            else:
-                silence_ms += frame.duration_ms
+                if silence_ms >= config.silence_timeout_ms:
+                    log_event(
+                        "speech_ended",
+                        reason="silence_timeout",
+                        silence_ms=silence_ms,
+                        recorded_ms=recorded_ms,
+                    )
+                    return ListenResult(
+                        kind="utterance",
+                        utterance=self._save_utterance(utterance_frames, started_at),
+                        elapsed_ms=int((time() - listen_started_at) * 1000),
+                        frames_emitted=frames_seen,
+                    )
 
-            if silence_ms >= config.silence_timeout_ms:
-                log_event(
-                    "speech_ended",
-                    reason="silence_timeout",
-                    silence_ms=silence_ms,
-                    recorded_ms=recorded_ms,
-                )
-                return self._save_utterance(utterance_frames, started_at)
-
-            if recorded_ms >= int(config.max_utterance_seconds * 1000):
-                log_event(
-                    "speech_ended",
-                    reason="max_utterance_seconds",
-                    recorded_ms=recorded_ms,
-                )
-                return self._save_utterance(utterance_frames, started_at)
+                if recorded_ms >= int(config.max_utterance_seconds * 1000):
+                    log_event(
+                        "speech_ended",
+                        reason="max_utterance_seconds",
+                        recorded_ms=recorded_ms,
+                    )
+                    return ListenResult(
+                        kind="utterance",
+                        utterance=self._save_utterance(utterance_frames, started_at),
+                        elapsed_ms=int((time() - listen_started_at) * 1000),
+                        frames_emitted=frames_seen,
+                    )
+        except AudioCaptureError as exc:
+            log_event(
+                "audio_capture_error",
+                error=str(exc),
+                returncode=exc.returncode,
+                elapsed_ms=exc.elapsed_ms,
+                frames_emitted=exc.frames_emitted,
+                stderr_tail=exc.stderr_tail,
+                level="error",
+            )
+            return ListenResult(
+                kind="capture_error",
+                error=str(exc),
+                elapsed_ms=exc.elapsed_ms,
+                returncode=exc.returncode,
+                frames_emitted=exc.frames_emitted,
+                stderr_tail=exc.stderr_tail,
+            )
 
         if started_at is not None and utterance_frames:
             log_event("speech_ended", reason="input_stream_ended")
-            return self._save_utterance(utterance_frames, started_at)
-        return None
+            return ListenResult(
+                kind="utterance",
+                utterance=self._save_utterance(utterance_frames, started_at),
+                elapsed_ms=int((time() - listen_started_at) * 1000),
+                frames_emitted=frames_seen,
+            )
+
+        log_event(
+            "audio_input_ended_without_speech",
+            elapsed_ms=int((time() - listen_started_at) * 1000),
+            frames_emitted=frames_seen,
+        )
+        return ListenResult(
+            kind="input_ended",
+            elapsed_ms=int((time() - listen_started_at) * 1000),
+            frames_emitted=frames_seen,
+        )
 
     def _save_utterance(self, frames: list[AudioFrame], started_at: float) -> Utterance:
         ended_at = time()

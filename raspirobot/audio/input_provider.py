@@ -12,6 +12,23 @@ from typing import Iterable, Iterator, Protocol
 from shared.logging_utils import log_event
 
 
+class AudioCaptureError(RuntimeError):
+    def __init__(
+        self,
+        message: str,
+        *,
+        returncode: int | None = None,
+        elapsed_ms: int | None = None,
+        frames_emitted: int = 0,
+        stderr_tail: str = "",
+    ) -> None:
+        super().__init__(message)
+        self.returncode = returncode
+        self.elapsed_ms = elapsed_ms
+        self.frames_emitted = frames_emitted
+        self.stderr_tail = stderr_tail
+
+
 @dataclass(frozen=True)
 class AudioFrame:
     pcm: bytes
@@ -131,11 +148,17 @@ class LocalCommandAudioInputProvider:
         )
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         assert process.stdout is not None
+        started_at = time()
+        frames_emitted = 0
+        bytes_emitted = 0
+        stderr_tail = ""
         try:
             while True:
                 pcm = process.stdout.read(bytes_per_frame)
                 if not pcm:
                     break
+                frames_emitted += 1
+                bytes_emitted += len(pcm)
                 yield AudioFrame(
                     pcm=pcm,
                     sample_rate=self.sample_rate,
@@ -152,11 +175,31 @@ class LocalCommandAudioInputProvider:
                     process.wait(timeout=2)
                 except subprocess.TimeoutExpired:
                     process.kill()
+                    process.wait(timeout=2)
+            elapsed_ms = int((time() - started_at) * 1000)
+            if process.stderr is not None:
+                try:
+                    stderr_text = process.stderr.read().decode(errors="replace")
+                    stderr_tail = stderr_text[-500:].strip()
+                except Exception:
+                    stderr_tail = ""
             log_event(
                 "audio_capture_process_stopped",
                 provider="local_command",
                 returncode=process.poll(),
+                elapsed_ms=elapsed_ms,
+                frames_emitted=frames_emitted,
+                bytes_emitted=bytes_emitted,
+                stderr_tail=stderr_tail,
             )
+            if frames_emitted == 0 and process.poll() not in (0, None):
+                raise AudioCaptureError(
+                    "audio capture process exited before producing frames",
+                    returncode=process.poll(),
+                    elapsed_ms=elapsed_ms,
+                    frames_emitted=frames_emitted,
+                    stderr_tail=stderr_tail,
+                )
 
 
 def make_sine_pcm(

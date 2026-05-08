@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from time import sleep
 from typing import Any
 
-from raspirobot.audio import AudioListenWorker
+from raspirobot.audio import AudioListenWorker, ListenResult
 from shared.logging_utils import log_event
 
 from .event_bus import EventBus
@@ -104,25 +104,39 @@ class RaspiRobotRuntime:
                 user_id=prepare_result.user_id,
                 timeout_seconds=username_timeout,
             )
-            utterance = self.listener.listen_once(speech_start_timeout_seconds=username_timeout)
-            if utterance is None:
+            username_result = self._listen_once_with_recovery(
+                speech_start_timeout_seconds=username_timeout,
+                context="username_registration",
+            )
+            if username_result.kind == "utterance" and username_result.utterance is not None:
+                try:
+                    self.turn_manager.handle_username_utterance(
+                        username_result.utterance.wav_path,
+                        user_id=prepare_result.user_id,
+                        turn_id="username",
+                    )
+                except Exception as exc:
+                    log_event("register_username_failed", user_id=prepare_result.user_id, error=str(exc), level="error")
+            elif username_result.kind == "timeout":
                 log_event(
                     "username_registration_timeout",
                     user_id=prepare_result.user_id,
                     timeout_seconds=username_timeout,
                 )
             else:
-                try:
-                    self.turn_manager.handle_username_utterance(
-                        utterance.wav_path,
-                        user_id=prepare_result.user_id,
-                        turn_id="username",
-                    )
-                except Exception as exc:
-                    log_event("register_username_failed", user_id=prepare_result.user_id, error=str(exc), level="error")
+                log_event(
+                    "username_registration_capture_unavailable",
+                    user_id=prepare_result.user_id,
+                    listen_result=username_result.kind,
+                    error=username_result.error,
+                    level="error",
+                )
 
-        first_utterance = self.listener.listen_once(speech_start_timeout_seconds=self.work_idle_timeout_seconds)
-        if first_utterance is None:
+        first_result = self._listen_once_with_recovery(
+            speech_start_timeout_seconds=self.work_idle_timeout_seconds,
+            context="preparing_first_speech",
+        )
+        if first_result.kind == "timeout":
             log_event(
                 "preparing_first_speech_timeout",
                 timeout_seconds=self.work_idle_timeout_seconds,
@@ -130,7 +144,18 @@ class RaspiRobotRuntime:
             self.state_machine.transition(RobotEvent.WORK_IDLE_TIMEOUT)
             self._exit_to_standby()
             return RuntimeLoopResult(handled=False, state=self.state_machine.state)
+        if first_result.kind != "utterance" or first_result.utterance is None:
+            log_event(
+                "preparing_first_speech_capture_unavailable",
+                listen_result=first_result.kind,
+                error=first_result.error,
+                level="error",
+            )
+            self.state_machine.transition(RobotEvent.SYSTEM_ERROR, error=first_result.error or first_result.kind)
+            self.state_machine.transition(RobotEvent.RECOVERY_DONE)
+            return RuntimeLoopResult(handled=False, state=self.state_machine.state, error=first_result.error)
 
+        first_utterance = first_result.utterance
         log_event(
             "preparing_first_speech_ready",
             wav_path=str(first_utterance.wav_path),
@@ -152,8 +177,11 @@ class RaspiRobotRuntime:
             )
         else:
             speech_start_timeout = self.work_idle_timeout_seconds if self.wake_word_provider is not None else None
-            utterance = self.listener.listen_once(speech_start_timeout_seconds=speech_start_timeout)
-            if utterance is None:
+            listen_result = self._listen_once_with_recovery(
+                speech_start_timeout_seconds=speech_start_timeout,
+                context="working",
+            )
+            if listen_result.kind == "timeout":
                 log_event(
                     "work_idle_timeout",
                     timeout_seconds=self.work_idle_timeout_seconds,
@@ -161,6 +189,21 @@ class RaspiRobotRuntime:
                 self.state_machine.transition(RobotEvent.WORK_IDLE_TIMEOUT)
                 self._exit_to_standby()
                 return RuntimeLoopResult(handled=False, state=self.state_machine.state)
+            if listen_result.kind != "utterance" or listen_result.utterance is None:
+                log_event(
+                    "working_audio_capture_unavailable",
+                    listen_result=listen_result.kind,
+                    error=listen_result.error,
+                    returncode=listen_result.returncode,
+                    elapsed_ms=listen_result.elapsed_ms,
+                    frames_emitted=listen_result.frames_emitted,
+                    level="error",
+                )
+                self.state_machine.transition(RobotEvent.SYSTEM_ERROR, error=listen_result.error or listen_result.kind)
+                self.state_machine.transition(RobotEvent.RECOVERY_DONE)
+                self._enter_working_listening()
+                return RuntimeLoopResult(handled=False, state=self.state_machine.state, error=listen_result.error)
+            utterance = listen_result.utterance
 
         self.event_bus.publish(RuntimeEvent(RuntimeEventType.SPEECH_STARTED))
         self.state_machine.transition(RobotEvent.SPEECH_START)
@@ -217,6 +260,39 @@ class RaspiRobotRuntime:
             self.state_machine.transition(RobotEvent.RECOVERY_DONE)
             self._enter_working_listening()
             return RuntimeLoopResult(handled=False, state=self.state_machine.state, error=message)
+
+    def _listen_once_with_recovery(
+        self,
+        *,
+        speech_start_timeout_seconds: float | None,
+        context: str,
+    ) -> ListenResult:
+        settings = getattr(self.turn_manager, "settings", None)
+        retry_count = max(0, int(getattr(settings, "audio_capture_retry_count", 2) or 0))
+        retry_cooldown_ms = max(0, int(getattr(settings, "audio_capture_retry_cooldown_ms", 700) or 0))
+        attempts = retry_count + 1
+        last_result: ListenResult | None = None
+        for attempt_index in range(attempts):
+            result = self.listener.listen_once_result(speech_start_timeout_seconds=speech_start_timeout_seconds)
+            if result.kind in {"utterance", "timeout"}:
+                return result
+            last_result = result
+            log_event(
+                "audio_listen_recoverable_error",
+                context=context,
+                attempt_index=attempt_index + 1,
+                attempts=attempts,
+                listen_result=result.kind,
+                error=result.error,
+                returncode=result.returncode,
+                elapsed_ms=result.elapsed_ms,
+                frames_emitted=result.frames_emitted,
+                stderr_tail=result.stderr_tail,
+                level="error",
+            )
+            if attempt_index < retry_count and retry_cooldown_ms > 0:
+                sleep(retry_cooldown_ms / 1000.0)
+        return last_result or ListenResult(kind="capture_error", error="listen failed before producing a result")
 
     def run_forever(self) -> None:
         while True:

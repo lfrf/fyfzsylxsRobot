@@ -44,6 +44,8 @@ class Settings:
     audio_save_debug_wav: bool
     # Post-playback cooldown configuration
     audio_post_playback_cooldown_ms: int
+    audio_capture_retry_count: int
+    audio_capture_retry_cooldown_ms: int
     # Invalid utterance drop configuration
     audio_drop_invalid_utterance: bool
     audio_drop_reasons: str
@@ -118,6 +120,8 @@ def load_settings() -> Settings:
         audio_min_rms=float(os.getenv("ROBOT_AUDIO_MIN_RMS", "80")),
         audio_save_debug_wav=_bool_env("ROBOT_AUDIO_SAVE_DEBUG_WAV", default=False),
         audio_post_playback_cooldown_ms=int(os.getenv("ROBOT_AUDIO_POST_PLAYBACK_COOLDOWN_MS", "0")),
+        audio_capture_retry_count=max(0, int(os.getenv("ROBOT_AUDIO_CAPTURE_RETRY_COUNT", "2"))),
+        audio_capture_retry_cooldown_ms=max(0, int(os.getenv("ROBOT_AUDIO_CAPTURE_RETRY_COOLDOWN_MS", "700"))),
         audio_drop_invalid_utterance=_bool_env("ROBOT_AUDIO_DROP_INVALID_UTTERANCE", default=False),
         audio_drop_reasons=os.getenv("ROBOT_AUDIO_DROP_REASONS", "no_speech_detected,speech_too_short").strip(),
         eyes_provider=os.getenv("ROBOT_EYES_PROVIDER", "mock").strip().lower() or "mock",
