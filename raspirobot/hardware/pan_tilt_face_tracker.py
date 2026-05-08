@@ -83,7 +83,7 @@ class CameraConfig:
     use_picamera2: bool = True
     cv2_device_index: int = 0
     hflip: bool = False
-    vflip: bool = True
+    vflip: bool = False
 
 
 @dataclass(frozen=True)
