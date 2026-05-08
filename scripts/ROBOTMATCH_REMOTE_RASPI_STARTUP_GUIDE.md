@@ -639,10 +639,16 @@ export INSIGHTFACE_MODEL_NAME=buffalo_l
 export INSIGHTFACE_DET_SIZE=640,640
 export INSIGHTFACE_CTX_ID=0
 export FACE_STORE_RAW_IMAGES=false
+export FACE_CREATE_UNKNOWN=true
+export FACE_MATCH_THRESHOLD=0.45
+export FACE_EMBEDDING_HISTORY_SIZE=8
+export FACE_EMBEDDING_APPEND_MIN_DELTA=0.02
+export FACE_MATCH_LOG_TOP_K=5
 export VISION_WARMUP_ENABLED=false
 export FER_WARMUP_ENABLED=false
 
 python -m uvicorn app:app --host 127.0.0.1 --port 21000 --log-level debug
+
 
 ```
 
