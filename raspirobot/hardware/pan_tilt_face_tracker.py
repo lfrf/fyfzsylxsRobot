@@ -5,6 +5,8 @@ import threading
 import time
 from dataclasses import dataclass, field
 
+from shared.logging_utils import log_event
+
 try:
     import cv2
 except Exception as exc:  # pragma: no cover - runtime dependency
@@ -143,7 +145,13 @@ class PanTiltServoDriver:
         self.tilt_deg = config.tilt_spec.center_angle_deg
         self.pan_hw_deg = self.pan_deg
         self.tilt_hw_deg = self.tilt_deg
-        self.set_pose(self.pan_deg, self.tilt_deg)
+        self.restore_center()
+
+    def restore_center(self) -> None:
+        self.set_pose(
+            self.config.pan_spec.center_angle_deg,
+            self.config.tilt_spec.center_angle_deg,
+        )
 
     def set_pose(self, pan_deg: float, tilt_deg: float) -> None:
         pan_deg = self._clip(pan_deg, self.config.pan_spec)
@@ -540,6 +548,23 @@ class FaceTrackingPanTiltRunner:
                         self._stop_event.set()
                         break
         finally:
+            try:
+                self.servo.restore_center()
+                log_event(
+                    "face_tracking_servo_restore_center_done",
+                    pan_deg=self.servo.pan_deg,
+                    tilt_deg=self.servo.tilt_deg,
+                    pan_hw_deg=self.servo.pan_hw_deg,
+                    tilt_hw_deg=self.servo.tilt_hw_deg,
+                    pan_zero_offset_deg=self.servo.config.pan_zero_offset_deg,
+                    tilt_zero_offset_deg=self.servo.config.tilt_zero_offset_deg,
+                )
+            except Exception as exc:
+                log_event(
+                    "face_tracking_servo_restore_center_failed",
+                    error=str(exc),
+                    level="warning",
+                )
             self.camera.stop()
             if self.show_window:
                 cv2.destroyAllWindows()
