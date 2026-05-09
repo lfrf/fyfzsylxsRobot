@@ -51,6 +51,17 @@ class RemoteClientProtocol(Protocol):
     ) -> dict[str, Any]:
         ...
 
+    def standby_prompt(
+        self,
+        *,
+        session_id: str,
+        turn_id: str,
+        mode: str,
+        text: str,
+        request_options: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        ...
+
 
 class RemoteClientError(RuntimeError):
     pass
@@ -201,6 +212,24 @@ class RemoteClient:
             "request_options": request_options or {},
         }
         return self._post_json("/v1/robot/register_username", payload, log_event_name="register_username_request")
+
+    def standby_prompt(
+        self,
+        *,
+        session_id: str,
+        turn_id: str,
+        mode: str,
+        text: str,
+        request_options: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        payload = {
+            "session_id": session_id,
+            "turn_id": turn_id,
+            "mode": mode,
+            "text": text,
+            "request_options": request_options or {},
+        }
+        return self._post_json("/v1/robot/standby_prompt", payload, log_event_name="standby_prompt_request")
 
     def chat_turn(self, request: RobotChatRequest) -> RobotChatResponse:
         payload = self.build_payload(request)
@@ -374,6 +403,25 @@ class MockRemoteClient:
             "reply_text": "",
             "tts": {"type": "none", "audio_url": None, "format": "wav"},
             "robot_action": {"expression": "listening", "motion": "none", "speech_style": "care_gentle"},
+            "debug": {"source": "MockRemoteClient"},
+        }
+
+    def standby_prompt(
+        self,
+        *,
+        session_id: str,
+        turn_id: str,
+        mode: str,
+        text: str,
+        request_options: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        return {
+            "success": True,
+            "session_id": session_id,
+            "turn_id": turn_id,
+            "reply_text": text,
+            "tts": {"type": "none", "audio_url": None, "format": "wav"},
+            "robot_action": {"expression": "sleep", "motion": "none", "speech_style": "care_gentle"},
             "debug": {"source": "MockRemoteClient"},
         }
 

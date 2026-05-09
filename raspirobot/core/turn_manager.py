@@ -351,6 +351,31 @@ class TurnManager:
         )
         return PrepareUserResult(response=response, playback=playback)
 
+    def handle_standby_prompt(self, *, text: str, turn_id: str = "standby") -> PrepareUserResult:
+        request_options = dict(self.payload_builder.request_options)
+        request_options.setdefault("log_session_id", get_log_session_id())
+        request_options.setdefault("log_timezone", "Asia/Shanghai")
+        response = self.remote_client.standby_prompt(
+            session_id=self.session.session_id,
+            turn_id=turn_id,
+            mode=self.session.mode_id,
+            text=text,
+            request_options=request_options,
+        )
+        self._dispatch_prepare_response(response)
+        playback = self.audio_output.play_audio_url(
+            _nested_get(response, "tts", "audio_url"),
+            base_url=getattr(self.remote_client, "base_url", None),
+        )
+        log_event(
+            "standby_prompt_response_received",
+            session_id=response.get("session_id"),
+            turn_id=response.get("turn_id"),
+            reply_text=response.get("reply_text"),
+            tts_audio_url=_nested_get(response, "tts", "audio_url"),
+        )
+        return PrepareUserResult(response=response, playback=playback)
+
     def _dispatch_prepare_response(self, response: dict[str, Any]) -> None:
         action_payload = response.get("robot_action") or {}
         if isinstance(action_payload, RobotAction):

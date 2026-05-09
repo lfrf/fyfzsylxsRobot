@@ -148,6 +148,7 @@ class RaspiRobotRuntime:
                 timeout_seconds=self.work_idle_timeout_seconds,
             )
             self.state_machine.transition(RobotEvent.WORK_IDLE_TIMEOUT)
+            self._play_standby_prompt("preparing_first_speech_timeout")
             self._exit_to_standby()
             return RuntimeLoopResult(handled=False, state=self.state_machine.state)
         if first_result.kind != "utterance" or first_result.utterance is None:
@@ -193,6 +194,7 @@ class RaspiRobotRuntime:
                     timeout_seconds=self.work_idle_timeout_seconds,
                 )
                 self.state_machine.transition(RobotEvent.WORK_IDLE_TIMEOUT)
+                self._play_standby_prompt("work_idle_timeout")
                 self._exit_to_standby()
                 return RuntimeLoopResult(handled=False, state=self.state_machine.state)
             if listen_result.kind != "utterance" or listen_result.utterance is None:
@@ -397,10 +399,16 @@ class RaspiRobotRuntime:
         self._stop_face_tracking()
         self._reset_vision_provider("standby")
         self._preparing_vision_epoch_active = False
-        log_event("standby_prompt", text=STANDBY_PROMPT_TEXT)
         self._set_eyes("sleep")
         self._start_wake_word_provider()
         self.state_machine.state = RobotRuntimeState.STANDBY
+
+    def _play_standby_prompt(self, reason: str) -> None:
+        log_event("standby_prompt_started", reason=reason, text=STANDBY_PROMPT_TEXT)
+        try:
+            self.turn_manager.handle_standby_prompt(text=STANDBY_PROMPT_TEXT, turn_id="standby")
+        except Exception as exc:
+            log_event("standby_prompt_failed", reason=reason, error=str(exc), level="warning")
 
     def _start_wake_word_provider(self) -> None:
         if self.wake_word_provider is None:

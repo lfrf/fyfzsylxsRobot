@@ -91,6 +91,24 @@ class RegisterUsernameResponse(BaseModel):
     debug: dict = Field(default_factory=dict)
 
 
+class StandbyPromptRequest(BaseModel):
+    session_id: str = Field(..., min_length=1)
+    turn_id: str = Field(default="standby")
+    mode: str = Field(default="care")
+    text: str = Field(default="\u6211\u5148\u4f11\u606f\u5566\uff0c\u9700\u8981\u6211\u65f6\u518d\u53eb\u6211\u3002")
+    request_options: dict = Field(default_factory=dict)
+
+
+class StandbyPromptResponse(BaseModel):
+    success: bool = True
+    session_id: str
+    turn_id: str
+    reply_text: str = ""
+    tts: TTSResult = Field(default_factory=TTSResult)
+    robot_action: RobotAction = Field(default_factory=RobotAction)
+    debug: dict = Field(default_factory=dict)
+
+
 @router.post("/prepare_user", response_model=PrepareUserResponse)
 async def prepare_user(request: PrepareUserRequest) -> PrepareUserResponse:
     started = perf_counter()
@@ -225,6 +243,45 @@ async def register_username(request: RegisterUsernameRequest) -> RegisterUsernam
             "asr_source": asr_result.source,
             "tts_source": tts_result.source,
             "vision_sync": sync_results,
+        },
+    )
+
+
+@router.post("/standby_prompt", response_model=StandbyPromptResponse)
+async def standby_prompt(request: StandbyPromptRequest) -> StandbyPromptResponse:
+    started = perf_counter()
+    trace_id = uuid4().hex
+    mode_policy = get_mode_service(request.mode).get_policy()
+    reply_text = request.text.strip() or "\u6211\u5148\u4f11\u606f\u5566\uff0c\u9700\u8981\u6211\u65f6\u518d\u53eb\u6211\u3002"
+    emotion = EmotionResult(label="neutral", confidence=1.0)
+    robot_action = robot_action_service.for_chat(mode_policy, emotion)
+    tts_result = tts_client.synthesize(
+        text=reply_text,
+        session_id=request.session_id,
+        turn_id=request.turn_id,
+        mode=mode_policy.mode_id,
+        speech_style=mode_policy.speech_style,
+    )
+    log_event(
+        "standby_prompt_done",
+        trace_id=trace_id,
+        session_id=request.session_id,
+        turn_id=request.turn_id,
+        reply_text=reply_text,
+        tts_audio_url=tts_result.tts.audio_url,
+    )
+    return StandbyPromptResponse(
+        success=True,
+        session_id=request.session_id,
+        turn_id=request.turn_id,
+        reply_text=reply_text,
+        tts=tts_result.tts,
+        robot_action=robot_action,
+        debug={
+            "trace_id": trace_id,
+            "reason": "standby_prompt",
+            "latency_ms": round((perf_counter() - started) * 1000, 2),
+            "tts_source": tts_result.source,
         },
     )
 
