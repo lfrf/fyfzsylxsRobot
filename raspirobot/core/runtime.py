@@ -13,6 +13,9 @@ from .state_machine import RobotEvent, RobotRuntimeState, RobotStateMachine
 from .turn_manager import TurnManager, TurnResult, UtteranceRejected
 
 
+STANDBY_PROMPT_TEXT = "我先休息啦，需要我时再叫我。"
+
+
 @dataclass
 class RuntimeLoopResult:
     handled: bool
@@ -394,6 +397,7 @@ class RaspiRobotRuntime:
         self._stop_face_tracking()
         self._reset_vision_provider("standby")
         self._preparing_vision_epoch_active = False
+        log_event("standby_prompt", text=STANDBY_PROMPT_TEXT)
         self._set_eyes("sleep")
         self._start_wake_word_provider()
         self.state_machine.state = RobotRuntimeState.STANDBY
