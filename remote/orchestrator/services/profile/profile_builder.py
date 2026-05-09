@@ -66,6 +66,13 @@ class ProfileBuilder:
         return SummaryUpdateResult(updated=True, summarized_count=len(events))
 
     def _apply_event_rules(self, profile: UserProfile, event: MemoryEvent) -> None:
+        if event.memory_type == "noise":
+            return
+        patch = event.metadata.get("quality", {}).get("extracted", {}).get("profile_patch", {})
+        if patch:
+            self.apply_profile_patch(profile, patch)
+            return
+
         text = f"{event.asr_text} {event.reply_text}".strip()
         now = utc_now_iso()
         if any(token in text for token in ("累", "疲惫", "困", "没精神")):
@@ -95,6 +102,33 @@ class ProfileBuilder:
         if topic:
             self._append_unique(profile.recent_topics, topic)
         profile.last_seen_at = event.timestamp
+
+    def apply_profile_patch(self, profile: UserProfile, patch: dict) -> None:
+        now = utc_now_iso()
+        display_name = str(patch.get("display_name") or "").strip()
+        if display_name:
+            profile.display_name = display_name[:12]
+            self._upsert_fact(profile, key="name", value=profile.display_name, updated_at=now)
+
+        preferences = patch.get("preferences") if isinstance(patch.get("preferences"), dict) else {}
+        for key, value in preferences.items():
+            if key in {"prefers_short_replies", "prefers_detailed_explanations"}:
+                profile.interaction_style[key] = value
+            else:
+                profile.preferences[key] = value
+
+        for value in patch.get("facts") or []:
+            text = str(value or "").strip()
+            if text:
+                self._upsert_fact(profile, key=f"fact_{len(profile.facts) + 1}", value=text[:60], updated_at=now)
+        for value in patch.get("learning_goals") or []:
+            self._append_unique(profile.learning_goals, str(value)[:60])
+            self._append_unique(profile.recent_topics, "学习")
+        for value in patch.get("emotional_notes") or []:
+            self._append_unique(profile.emotional_notes, str(value)[:60])
+        for value in patch.get("recent_topics") or []:
+            self._append_unique(profile.recent_topics, str(value)[:32])
+        profile.last_seen_at = now
 
     def _update_preferred_mode(self, profile: UserProfile, events: list[MemoryEvent]) -> None:
         mode_counts = Counter(event.mode for event in events if event.mode)

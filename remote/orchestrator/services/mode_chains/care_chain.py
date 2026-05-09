@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from logging_utils import log_event
+from services.output_control import mode_output_director, reply_history_tracker
 
 from .base import BaseModeChain, ModeChainResult, ModeTurnContext
 
@@ -30,6 +31,17 @@ class CareModeChain(BaseModeChain):
         }
 
         try:
+            output_plan = mode_output_director.plan(
+                mode_id="care",
+                session_id=context.session_id,
+                turn_id=context.turn_id,
+                asr_text=context.asr_text,
+                rag_context=context.rag_context,
+                profile_context=context.metadata.get("profile_context"),
+                metadata=context.metadata,
+            )
+            debug_info["output_control"] = output_plan.debug
+
             # 1. Generate LLM reply using care policy and RAG
             llm_result = llm_client.generate_reply(
                 session_id=context.session_id,
@@ -37,8 +49,9 @@ class CareModeChain(BaseModeChain):
                 asr_text=context.asr_text,
                 mode_policy=context.mode_policy,
                 rag_route=context.rag_route,
-                rag_context=context.rag_context,
-                user_profile_context=context.metadata.get("profile_context"),
+                rag_context=output_plan.rag_guidance,
+                user_profile_context=output_plan.profile_context,
+                output_control_context=output_plan.to_prompt_context(),
             )
             debug_info["llm_source"] = llm_result.source
 
@@ -52,13 +65,19 @@ class CareModeChain(BaseModeChain):
             debug_info["response_policy_rules"] = response_result.rules_applied
             debug_info["response_policy_original_chars"] = response_result.original_chars
             debug_info["response_policy_final_chars"] = response_result.final_chars
+            reply_history_tracker.record(
+                context.session_id,
+                "care",
+                output_plan.strategy_id,
+                response_result.reply_text,
+            )
 
             # 3. Return handled result
             result = ModeChainResult(
                 handled=True,
                 reply_text=response_result.reply_text,
                 llm_result=llm_result,
-                rag_context=context.rag_context,
+                rag_context=output_plan.rag_guidance,
                 debug=debug_info,
             )
 
@@ -68,6 +87,7 @@ class CareModeChain(BaseModeChain):
                 turn_id=context.turn_id,
                 reply_text_len=len(response_result.reply_text),
                 response_policy_changed=response_result.changed,
+                strategy_id=output_plan.strategy_id,
             )
 
             return result

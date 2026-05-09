@@ -567,6 +567,9 @@ class RobotChatService:
             "face_id": getattr(identity, "face_id", None),
             "profile_context_chars": getattr(profile_context_result, "chars", 0) or 0,
             "memory_written": bool(getattr(memory_result, "written", False)),
+            "memory_type": getattr(memory_result, "memory_type", None),
+            "memory_importance": getattr(memory_result, "importance", None),
+            "memory_noise_reason": getattr(memory_result, "noise_reason", None),
             "summary_updated": bool(getattr(memory_result, "summary_updated", False)),
         }
 
@@ -617,6 +620,12 @@ class RobotChatService:
         llm_source = llm_skipped or (llm_result.source if llm_result else None)
         llm_latency = None if llm_result is None else llm_result.latency_ms
         llm_fallback = False if llm_result is None else llm_result.fallback
+        memory_quality_debug = {
+            "memory_type": None if profile_debug is None else profile_debug.get("memory_type"),
+            "importance": None if profile_debug is None else profile_debug.get("memory_importance"),
+            "noise_reason": None if profile_debug is None else profile_debug.get("memory_noise_reason"),
+            "written": False if profile_debug is None else bool(profile_debug.get("memory_written")),
+        }
         return {
             "trace_id": trace_id,
             "source": "robot_chat_service",
@@ -678,6 +687,7 @@ class RobotChatService:
                 "memory_written": False,
                 "summary_updated": False,
             },
+            "memory_quality": memory_quality_debug,
         }
 
     def _log_response_ready(

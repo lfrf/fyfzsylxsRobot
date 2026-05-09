@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from config import settings
 from logging_utils import log_event
 
 
@@ -26,10 +27,10 @@ class ResponsePolicyService:
 
     # Character limits per mode
     CHAR_LIMITS = {
-        "care": 120,
-        "accompany": 120,
-        "learning": 220,
-        "game": 150,
+        "care": settings.care_max_chars,
+        "accompany": settings.accompany_max_chars,
+        "learning": settings.learning_max_chars,
+        "game": settings.game_max_chars,
     }
 
     # High-risk keywords that require mentioning family/doctor

@@ -4,6 +4,7 @@ from typing import Any
 
 from config import settings
 from logging_utils import log_event
+from services.output_control import memory_quality_classifier
 
 from .memory_store import MemoryStore, memory_store
 from .profile_builder import ProfileBuilder, profile_builder
@@ -113,6 +114,33 @@ class UserProfileService:
         if not settings.profile_memory_enabled:
             return MemoryWriteResult(written=False, summary_updated=False)
         try:
+            quality = None
+            quality_payload = {}
+            if settings.memory_quality_enabled:
+                quality = memory_quality_classifier.classify(
+                    asr_text,
+                    reply_text=reply_text,
+                    mode_id=mode_id,
+                    emotion=emotion_label,
+                )
+                quality_payload = quality.to_dict()
+                if not quality.should_write_memory:
+                    log_event(
+                        "memory_event_filtered",
+                        user_id=user_id,
+                        session_id=session_id,
+                        turn_id=turn_id,
+                        memory_type=quality.memory_type,
+                        noise_reason=quality.noise_reason,
+                    )
+                    return MemoryWriteResult(
+                        written=False,
+                        summary_updated=False,
+                        memory_type=quality.memory_type,
+                        importance=quality.importance,
+                        noise_reason=quality.noise_reason,
+                    )
+
             event = MemoryEvent(
                 user_id=user_id,
                 session_id=session_id,
@@ -123,8 +151,23 @@ class UserProfileService:
                 emotion=emotion_label,
                 face_id=face_id,
                 tags=self._event_tags(asr_text, mode_id),
+                importance=quality.importance if quality else 0.5,
+                memory_type=quality.memory_type if quality else "interaction",
+                metadata={"quality": quality_payload} if quality_payload else {},
             )
             self.memories.append_event(event)
+            if quality and quality.should_update_profile:
+                profile = self.store.get_profile(user_id)
+                patch_payload = quality_payload.get("extracted", {}).get("profile_patch", {})
+                if profile is not None and patch_payload:
+                    self.builder.apply_profile_patch(profile, patch_payload)
+                    self.store.save_profile(profile)
+                    log_event(
+                        "profile_patch_extracted",
+                        user_id=user_id,
+                        memory_id=event.memory_id,
+                        patch=patch_payload,
+                    )
             unsummarized_count = self.memories.count_unsummarized(user_id)
             summary_updated = False
             options = request_options if isinstance(request_options, dict) else {}
@@ -142,6 +185,8 @@ class UserProfileService:
             return MemoryWriteResult(
                 written=True,
                 memory_id=event.memory_id,
+                memory_type=event.memory_type,
+                importance=event.importance,
                 summary_updated=summary_updated,
                 unsummarized_count=unsummarized_count,
             )

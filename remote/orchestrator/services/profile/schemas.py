@@ -71,6 +71,7 @@ class MemoryEvent(BaseModel):
     tags: list[str] = Field(default_factory=list)
     importance: float = Field(default=0.5, ge=0.0, le=1.0)
     memory_type: str = Field(default="interaction")
+    metadata: dict[str, Any] = Field(default_factory=dict)
     summarized: bool = False
     source: str = Field(default="robot_chat_turn")
 
@@ -87,6 +88,9 @@ class IdentityResolution(BaseModel):
 class MemoryWriteResult(BaseModel):
     written: bool = False
     memory_id: str | None = None
+    memory_type: str | None = None
+    importance: float | None = None
+    noise_reason: str | None = None
     summary_updated: bool = False
     unsummarized_count: int = 0
     error: str | None = None

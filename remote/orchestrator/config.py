@@ -114,7 +114,10 @@ class Settings:
             os.getenv("PROFILE_DATA_DIR", str(default_profile_data_dir)).strip()
             or str(default_profile_data_dir)
         )
-        self.profile_context_max_chars = max(100, int(os.getenv("PROFILE_CONTEXT_MAX_CHARS", "800")))
+        self.profile_context_max_chars = max(
+            100,
+            int(os.getenv("ROBOT_PROFILE_CONTEXT_MAX_CHARS", os.getenv("PROFILE_CONTEXT_MAX_CHARS", "800"))),
+        )
         self.profile_summarize_every_turns = max(1, int(os.getenv("PROFILE_SUMMARIZE_EVERY_TURNS", "5")))
         self.profile_summary_provider = (
             os.getenv("PROFILE_SUMMARY_PROVIDER", "rules").strip().lower() or "rules"
@@ -125,6 +128,46 @@ class Settings:
             "yes",
             "on",
         }
+        self.output_control_enabled = os.getenv("ROBOT_OUTPUT_CONTROL_ENABLED", "true").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+        self.care_strategy_enabled = os.getenv("ROBOT_CARE_STRATEGY_ENABLED", "true").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+        self.reply_history_size = max(1, int(os.getenv("ROBOT_REPLY_HISTORY_SIZE", "5")))
+        self.care_rag_max_chars = max(100, int(os.getenv("ROBOT_CARE_RAG_MAX_CHARS", "800")))
+        self.care_rag_structured_guidance = os.getenv(
+            "ROBOT_CARE_RAG_STRUCTURED_GUIDANCE", "true"
+        ).strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+        self.memory_quality_enabled = os.getenv("ROBOT_MEMORY_QUALITY_ENABLED", "true").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+        self.profile_context_composer_enabled = os.getenv(
+            "ROBOT_PROFILE_CONTEXT_COMPOSER_ENABLED", "true"
+        ).strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+        self.care_max_chars = max(60, int(os.getenv("ROBOT_CARE_MAX_CHARS", "160")))
+        self.accompany_max_chars = max(60, int(os.getenv("ROBOT_ACCOMPANY_MAX_CHARS", "160")))
+        self.learning_max_chars = max(100, int(os.getenv("ROBOT_LEARNING_MAX_CHARS", "240")))
+        self.game_max_chars = max(60, int(os.getenv("ROBOT_GAME_MAX_CHARS", "160")))
         self.system_prompt = os.getenv(
             "LLM_SYSTEM_PROMPT",
             (

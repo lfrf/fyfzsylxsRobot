@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from config import settings
+from services.output_control import profile_context_composer
 
 from .memory_store import MemoryStore, memory_store
 from .profile_builder import ProfileBuilder, profile_builder
@@ -27,12 +28,21 @@ class ProfilePromptBuilder:
         if profile is None:
             return ProfileContextResult(context="", chars=0, user_id=user_id)
         recent_events = self.memories.read_events(user_id, include_summarized=True)[-5:]
-        context = self.builder.build_context(
-            profile=profile,
-            recent_events=recent_events,
-            mode_id=mode_id,
-            max_chars=settings.profile_context_max_chars,
-        )
+        if settings.profile_context_composer_enabled:
+            context = profile_context_composer.compose(
+                profile=profile,
+                recent_memories=recent_events,
+                current_text="",
+                mode_id=mode_id,
+                max_chars=settings.profile_context_max_chars,
+            )
+        else:
+            context = self.builder.build_context(
+                profile=profile,
+                recent_events=recent_events,
+                mode_id=mode_id,
+                max_chars=settings.profile_context_max_chars,
+            )
         return ProfileContextResult(context=context, chars=len(context), user_id=user_id)
 
 

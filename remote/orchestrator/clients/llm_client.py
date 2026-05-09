@@ -47,6 +47,7 @@ class LLMClient:
         rag_route: RagRoute,
         rag_context: str | None = None,
         user_profile_context: str | None = None,
+        output_control_context: str | None = None,
     ) -> LLMResult:
         service_url = f"{self.api_base}/chat/completions" if self.api_base else None
         log_event(
@@ -64,11 +65,13 @@ class LLMClient:
             rag_route,
             rag_context,
             user_profile_context=user_profile_context,
+            output_control_context=output_control_context,
         )
         self._log_prompt_built(
             mode_policy=mode_policy,
             rag_context=rag_context,
             user_profile_context=user_profile_context,
+            output_control_context=output_control_context,
             system_prompt=system_prompt,
         )
         if self.use_mock or not self.api_base or settings.llm_provider == "mock":
@@ -138,6 +141,7 @@ class LLMClient:
         rag_context: str | None,
         *,
         user_profile_context: str | None = None,
+        output_control_context: str | None = None,
     ) -> str:
         parts = [
             settings.system_prompt,
@@ -169,6 +173,11 @@ class LLMClient:
         ])
         if rag_context:
             parts.append(f"Optional retrieved context:\n{rag_context}")
+        if output_control_context:
+            parts.append(
+                f"{output_control_context}\n"
+                "Follow this guidance silently. Do not mention strategy_id, output control, or internal policy."
+            )
         if user_profile_context:
             parts.append(
                 "User profile context:\n"
@@ -220,6 +229,7 @@ class LLMClient:
         mode_policy: ModePolicy,
         rag_context: str | None,
         user_profile_context: str | None,
+        output_control_context: str | None,
         system_prompt: str,
     ) -> None:
         prompt_sections = [
@@ -236,6 +246,8 @@ class LLMClient:
         ])
         if rag_context:
             prompt_sections.append("rag_context")
+        if output_control_context:
+            prompt_sections.append("output_control_context")
         if user_profile_context:
             prompt_sections.append("user_profile_context")
         log_event(
@@ -249,6 +261,8 @@ class LLMClient:
             rag_context_chars=len(rag_context or ""),
             profile_context_used=bool(user_profile_context),
             profile_context_chars=len(user_profile_context or ""),
+            output_control_used=bool(output_control_context),
+            output_control_chars=len(output_control_context or ""),
             speech_style=mode_policy.speech_style,
             prompt_chars=len(system_prompt),
             prompt_sections=prompt_sections,
