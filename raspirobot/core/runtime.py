@@ -373,8 +373,11 @@ class RaspiRobotRuntime:
         if self.state_machine.state != RobotRuntimeState.PREPARING:
             self.state_machine.state = RobotRuntimeState.PREPARING
             log_event("preparing_started")
-        self._start_face_tracking()
+        # Wake visual feedback must happen before face tracking starts, otherwise
+        # the first face-tracking frames can still be accompanied by sleep eyes.
         self._set_eyes("listening")
+        log_event("preparing_eyes_ready", expression="listening")
+        self._start_face_tracking()
         log_event("preparing_done")
 
     def _complete_preparing(self) -> None:
