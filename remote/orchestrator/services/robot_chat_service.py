@@ -353,7 +353,11 @@ class RobotChatService:
             rag_namespace=rag_route.namespace,
             speech_style=policy.speech_style,
         )
-        rag_context = self.rag_client.retrieve_context(namespace=rag_route.namespace, query=asr_text)
+        rag_context = self.rag_client.retrieve_context(
+            namespace=rag_route.namespace,
+            query=asr_text,
+            session_id=request.session_id,
+        )
         rag_matched_files = list(getattr(self.rag_client, "last_matched_files", []))
         rag_context_chars = int(getattr(self.rag_client, "last_context_chars", len(rag_context or "")) or 0)
         rag_used_default_docs = bool(getattr(self.rag_client, "last_used_default_docs", False))
