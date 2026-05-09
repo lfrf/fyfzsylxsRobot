@@ -32,6 +32,8 @@ from contracts.schemas import (  # noqa: E402
     VisionContext,
 )
 from logging_utils import log_event  # noqa: E402
+from services.games.game_state_service import game_state_service  # noqa: E402
+from services.mode_manager import mode_manager  # noqa: E402
 from services.mode_policy import get_mode_service  # noqa: E402
 from services.profile import profile_store, user_profile_service  # noqa: E402
 from services.robot_action_service import robot_action_service  # noqa: E402
@@ -106,6 +108,23 @@ class StandbyPromptResponse(BaseModel):
     reply_text: str = ""
     tts: TTSResult = Field(default_factory=TTSResult)
     robot_action: RobotAction = Field(default_factory=RobotAction)
+    debug: dict = Field(default_factory=dict)
+
+
+class SessionResetRequest(BaseModel):
+    session_id: str = Field(..., min_length=1)
+    turn_id: str = Field(default="standby-reset")
+    target_mode: str = Field(default="care")
+    reason: str | None = None
+    request_options: dict = Field(default_factory=dict)
+
+
+class SessionResetResponse(BaseModel):
+    success: bool = True
+    session_id: str
+    turn_id: str
+    mode: str = "care"
+    reason: str | None = None
     debug: dict = Field(default_factory=dict)
 
 
@@ -282,6 +301,34 @@ async def standby_prompt(request: StandbyPromptRequest) -> StandbyPromptResponse
             "reason": "standby_prompt",
             "latency_ms": round((perf_counter() - started) * 1000, 2),
             "tts_source": tts_result.source,
+        },
+    )
+
+
+@router.post("/session/reset", response_model=SessionResetResponse)
+async def reset_session_context(request: SessionResetRequest) -> SessionResetResponse:
+    started = perf_counter()
+    trace_id = uuid4().hex
+    target_mode = mode_manager.set_session_mode(request.session_id, request.target_mode)
+    game_state_service.reset(request.session_id)
+    log_event(
+        "session_context_reset_done",
+        trace_id=trace_id,
+        session_id=request.session_id,
+        turn_id=request.turn_id,
+        target_mode=target_mode,
+        reason=request.reason,
+    )
+    return SessionResetResponse(
+        success=True,
+        session_id=request.session_id,
+        turn_id=request.turn_id,
+        mode=target_mode,
+        reason=request.reason,
+        debug={
+            "trace_id": trace_id,
+            "reason": request.reason,
+            "latency_ms": round((perf_counter() - started) * 1000, 2),
         },
     )
 

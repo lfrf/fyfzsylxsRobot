@@ -22,3 +22,14 @@ class SessionManager:
             old_mode = self.mode_id
             self.mode_id = mode_id
             log_event("session_mode_applied", session_id=self.session_id, old_mode=old_mode, new_mode=self.mode_id)
+
+    def reset_mode(self, mode_id: str = "care", *, reason: str | None = None) -> None:
+        old_mode = self.mode_id
+        self.mode_id = mode_id
+        log_event(
+            "session_mode_reset",
+            session_id=self.session_id,
+            old_mode=old_mode,
+            new_mode=self.mode_id,
+            reason=reason,
+        )

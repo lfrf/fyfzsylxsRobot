@@ -148,6 +148,7 @@ class RaspiRobotRuntime:
                 timeout_seconds=self.work_idle_timeout_seconds,
             )
             self.state_machine.transition(RobotEvent.WORK_IDLE_TIMEOUT)
+            self._reset_session_context("preparing_first_speech_timeout")
             self._play_standby_prompt("preparing_first_speech_timeout")
             self._exit_to_standby()
             return RuntimeLoopResult(handled=False, state=self.state_machine.state)
@@ -194,6 +195,7 @@ class RaspiRobotRuntime:
                     timeout_seconds=self.work_idle_timeout_seconds,
                 )
                 self.state_machine.transition(RobotEvent.WORK_IDLE_TIMEOUT)
+                self._reset_session_context("work_idle_timeout")
                 self._play_standby_prompt("work_idle_timeout")
                 self._exit_to_standby()
                 return RuntimeLoopResult(handled=False, state=self.state_machine.state)
@@ -409,6 +411,10 @@ class RaspiRobotRuntime:
             self.turn_manager.handle_standby_prompt(text=STANDBY_PROMPT_TEXT, turn_id="standby")
         except Exception as exc:
             log_event("standby_prompt_failed", reason=reason, error=str(exc), level="warning")
+
+    def _reset_session_context(self, reason: str) -> None:
+        self._pending_working_utterance = None
+        self.turn_manager.reset_session_context(target_mode="care", reason=reason)
 
     def _start_wake_word_provider(self) -> None:
         if self.wake_word_provider is None:

@@ -62,6 +62,17 @@ class RemoteClientProtocol(Protocol):
     ) -> dict[str, Any]:
         ...
 
+    def reset_session_context(
+        self,
+        *,
+        session_id: str,
+        turn_id: str,
+        target_mode: str = "care",
+        reason: str | None = None,
+        request_options: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        ...
+
 
 class RemoteClientError(RuntimeError):
     pass
@@ -230,6 +241,24 @@ class RemoteClient:
             "request_options": request_options or {},
         }
         return self._post_json("/v1/robot/standby_prompt", payload, log_event_name="standby_prompt_request")
+
+    def reset_session_context(
+        self,
+        *,
+        session_id: str,
+        turn_id: str,
+        target_mode: str = "care",
+        reason: str | None = None,
+        request_options: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        payload = {
+            "session_id": session_id,
+            "turn_id": turn_id,
+            "target_mode": target_mode,
+            "reason": reason,
+            "request_options": request_options or {},
+        }
+        return self._post_json("/v1/robot/session/reset", payload, log_event_name="session_reset_request")
 
     def chat_turn(self, request: RobotChatRequest) -> RobotChatResponse:
         payload = self.build_payload(request)
@@ -422,6 +451,24 @@ class MockRemoteClient:
             "reply_text": text,
             "tts": {"type": "none", "audio_url": None, "format": "wav"},
             "robot_action": {"expression": "sleep", "motion": "none", "speech_style": "care_gentle"},
+            "debug": {"source": "MockRemoteClient"},
+        }
+
+    def reset_session_context(
+        self,
+        *,
+        session_id: str,
+        turn_id: str,
+        target_mode: str = "care",
+        reason: str | None = None,
+        request_options: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        return {
+            "success": True,
+            "session_id": session_id,
+            "turn_id": turn_id,
+            "mode": target_mode,
+            "reason": reason,
             "debug": {"source": "MockRemoteClient"},
         }
 

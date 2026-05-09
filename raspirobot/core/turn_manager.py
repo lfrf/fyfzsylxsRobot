@@ -376,6 +376,45 @@ class TurnManager:
         )
         return PrepareUserResult(response=response, playback=playback)
 
+    def reset_session_context(
+        self,
+        *,
+        target_mode: str = "care",
+        reason: str | None = None,
+        turn_id: str = "standby-reset",
+    ) -> None:
+        request_options = dict(self.payload_builder.request_options)
+        request_options.setdefault("log_session_id", get_log_session_id())
+        request_options.setdefault("log_timezone", "Asia/Shanghai")
+        try:
+            response = self.remote_client.reset_session_context(
+                session_id=self.session.session_id,
+                turn_id=turn_id,
+                target_mode=target_mode,
+                reason=reason,
+                request_options=request_options,
+            )
+            log_event(
+                "remote_session_context_reset",
+                session_id=response.get("session_id"),
+                turn_id=response.get("turn_id"),
+                target_mode=response.get("mode") or target_mode,
+                reason=reason,
+                success=response.get("success"),
+            )
+        except Exception as exc:
+            log_event(
+                "remote_session_context_reset_failed",
+                session_id=self.session.session_id,
+                turn_id=turn_id,
+                target_mode=target_mode,
+                reason=reason,
+                error=str(exc),
+                level="warning",
+            )
+        self.session.reset_mode(target_mode, reason=reason)
+        self.payload_builder.mode_id = self.session.mode_id
+
     def _dispatch_prepare_response(self, response: dict[str, Any]) -> None:
         action_payload = response.get("robot_action") or {}
         if isinstance(action_payload, RobotAction):
